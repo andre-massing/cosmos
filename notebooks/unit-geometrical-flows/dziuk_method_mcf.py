@@ -28,7 +28,7 @@ mesh.Curve(order_g)
 order_p = 2
 V = VectorH1(mesh, order=order_p)
 
-# Displace to apply to mesh which is 0 for initial mesh
+# Displacement to apply deform initial mesh to final mesh
 dXh = GridFunction(V)
 dXh.vec[:] = 0
 
@@ -75,4 +75,3 @@ with TaskManager():
         
         t += tau
         i += 1
-# %% Alternative version where mesh is deformed
