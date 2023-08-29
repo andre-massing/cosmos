@@ -19,11 +19,9 @@ tau = 2e-4
 order_g = 2
 geo = OCCGeometry(sphere)
 
-# maxh = 0.8
 maxh = 0.15
 mesh = Mesh(geo.GenerateMesh(maxh=maxh))
 mesh.Curve(order_g)
-# Draw(mesh)
 
 # %% Define mixed function space for parametrization and curvature
 order_p = 2
@@ -62,7 +60,6 @@ Minv = M.mat.Inverse(V.FreeDofs(), inverse="sparsecholesky")
 
 l = LinearForm(V)
 l += -tau*InnerProduct(grad(Xhold).Trace(), grad(Y).Trace())*ds(deformation=dXh)
-# l += -tau*InnerProduct(grad(Idh).Trace(), grad(Y).Trace())*ds(deformation=dXh)
 l.Assemble()
 
 #  %% Time loop
