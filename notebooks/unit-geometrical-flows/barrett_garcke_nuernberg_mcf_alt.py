@@ -49,19 +49,19 @@ Idh = GridFunction(V)
 Idh.Set( CF( (x,y,z) ), definedon=mesh.Boundaries(".*"))
 
 # Compute averaged/continuous normal field
-nu_weighted = GridFunction(V)
 
 # This is on the reference manifold, but should computed 
 # on the deformed manifold...
 use_weighted_normal = True
 if use_weighted_normal:
+    nu = GridFunction(V)
     nu.Set(specialcf.normal(3), definedon=mesh.Boundaries(".*"))
 else:
     nu = specialcf.normal(3)
 # %% Define weak form
 X, eta = V.TnT()
 
-mass_lumped = False
+mass_lumped = True
 # time step
 # tau = 0.125*maxh**2
 tau = 2e-4
@@ -71,20 +71,20 @@ l = LinearForm(V)
 
 if not mass_lumped : 
     print("Using standard inner products ...")
-    M += (InnerProduct(X,nu_weighted)*InnerProduct(eta, nu_weighted))*ds(deformation=dXh)
+    M += (InnerProduct(X,nu)*InnerProduct(eta, nu))*ds(deformation=dXh)
     M += tau*InnerProduct(grad(X).Trace(), grad(eta).Trace())*ds(deformation=dXh)
     
-    l += (InnerProduct(CF((x,y,z)),nu_weighted)*InnerProduct(eta, nu_weighted))*ds(deformation=dXh)
+    l += (InnerProduct(CF((x,y,z)),nu)*InnerProduct(eta, nu))*ds(deformation=dXh)
 else:
     # We follow BGN more closely and define a mass lumped inner product
     # Define simplified quadrature rule for mass lamping
     print("Using mass-lumped inner products ...")
     ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6] )
     ds_lumping = ds(intrules = { TRIG : ir }, deformation=dXh)
-    M += (InnerProduct(X,nu_weighted)*InnerProduct(eta, nu_weighted))*ds_lumping
+    M += (InnerProduct(X,nu)*InnerProduct(eta, nu))*ds_lumping
     M += tau*InnerProduct(grad(X).Trace(), grad(eta).Trace())*ds(deformation=dXh)
     
-    l += (InnerProduct(CF((x,y,z)),nu_weighted)*InnerProduct(eta, nu_weighted))*ds_lumping
+    l += (InnerProduct(CF((x,y,z)),nu)*InnerProduct(eta, nu))*ds_lumping
 
 M.Assemble()
 Minv = M.mat.Inverse(V.FreeDofs(), inverse="sparsecholesky")
