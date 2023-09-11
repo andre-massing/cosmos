@@ -22,9 +22,8 @@ geo = OCCGeometry(sphere)
 maxh = 0.15
 mesh = Mesh(geo.GenerateMesh(maxh=maxh))
 mesh.Curve(order_g)
-# Draw(mesh)
 
-# %% Define mixed function space for parametrization and curvature
+# %% Define function space for parametrization
 order_p = 2
 V = VectorH1(mesh, order=order_p)
 
