@@ -71,7 +71,7 @@ def import_stl_mesh(fname, maxh):
                           edgecornerangle=30)
     mesh = Mesh(ngmesh)
     # mesh.Curve(4)
-    return mesh
+    return mesh, geo
 
 def generate_cylinder():
     pass
