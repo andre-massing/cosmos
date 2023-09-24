@@ -4,22 +4,35 @@ from netgen.occ import *
 from ngsolve.webgui import Draw
 ngsglobals.msg_level = 2
 
-# %% Define geometry and mesh it
-R = 1
-sphere = Sphere((0,0,0),R).faces[0]
+import sys
+sys.path.insert(0, "../../")
+from sandbox.generate_surface_meshes import *
 
-# Radius of exact solution at time t
-ex_R = lambda t : sqrt(R**2-4*t)
-# Extinction time
-Tend = R**2/4
-
-# Mesh geometry with curved elements of order 2
+# shape = "sphere"
+shape = "torus"
 order_g = 1
-geo = OCCGeometry(sphere)
-
 maxh = 0.1
-mesh = Mesh(geo.GenerateMesh(maxh=maxh))
-mesh.Curve(order_g)
+
+# %% Define geometry and mesh it
+if shape == "sphere" :
+    R = 1
+    sphere = Sphere((0,0,0),R).faces[0]
+
+    # Radius of exact solution at time t
+    ex_R = lambda t : sqrt(R**2-4*t)
+    # Extinction time
+    Tend = R**2/4
+    geo = OCCGeometry(sphere)
+
+    mesh = Mesh(geo.GenerateMesh(maxh=maxh))
+    mesh.Curve(order_g)
+else :
+    # Mesh geometry with curved elements of order 2
+    # Torus mesh
+    mesh = generate_torus_mesh(maxh=maxh)
+    mesh.Curve(order_g)
+    Tend = 0.11
+
 Draw(mesh)
 
 # %% Define mixed function space for parametrization and curvature
@@ -29,17 +42,14 @@ Q = H1(mesh, order=order_p)
 W = V*Q
 
 # Displacement to deform initial mesh into final mesh
-# TODO: Check whether we can simply take dXh = GridFunction(V)
-#       instead of full mixed space W
 dXh = GridFunction(V)
 dXh.vec[:] = 0
 
 # Combined parameter mapping and discrete mean curvature as grid function
 Xkappah = GridFunction(W)
 Xh, kappah = Xkappah.components
-# Setting Inital deformation
+# Setting Initial deformation and mean curvature (latter we don't need )
 Xh.Set( CF( (x,y,z) ), definedon=mesh.Boundaries(".*"))
-kappah.Set(CF(2/R),    definedon=mesh.Boundaries(".*"))
 
 # Store identity mapping as grid function,
 # to be substracted from parameter mapping to compute 
@@ -57,18 +67,21 @@ scene = Draw(kappah, mesh, deformation=dXh)
 (X, kappa), (eta, chi) = W.TnT()
 nu = specialcf.normal(3)
 
-mass_lumped = False
+mass_lumped = True
 # time step
-tau = 0.125*maxh**2
+# tau = 0.125*maxh**2
+tau = 2.0e-4
+print(f"Using time step tau = {tau}")
 
 M = BilinearForm(W)
 l = LinearForm(W)
 
 if not mass_lumped : 
     print("Using standard inner products ...")
+    # TODO: Switch sign of second equation to use SparseCholesky
     M += (InnerProduct(X,nu)*chi - tau*kappa*chi)*ds(deformation=dXh)
-    M += kappa*InnerProduct(nu,eta)*ds(deformation=dXh)
-    M += InnerProduct(grad(X).Trace(), grad(eta).Trace())*ds(deformation=dXh)
+    M += tau*kappa*InnerProduct(nu,eta)*ds(deformation=dXh)
+    M += tau*InnerProduct(grad(X).Trace(), grad(eta).Trace())*ds(deformation=dXh)
     
     l += InnerProduct(CF((x,y,z)),nu)*chi*ds(deformation=dXh)
 else:
@@ -78,23 +91,23 @@ else:
     ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6] )
     ds_lumping = ds(intrules = { TRIG : ir }, deformation=dXh)
     M += (InnerProduct(X,nu)*chi - tau*kappa*chi)*ds_lumping
-    M += kappa*InnerProduct(nu,eta)*ds_lumping
-    M += (InnerProduct(grad(X).Trace(), grad(eta).Trace()))*ds(deformation=dXh)
+    M += tau*kappa*InnerProduct(nu,eta)*ds_lumping
+    M += tau*(InnerProduct(grad(X).Trace(), grad(eta).Trace()))*ds(deformation=dXh)
 
     l += InnerProduct(CF((x,y,z)),nu)*chi*ds_lumping
 
 M.Assemble()
-Minv = M.mat.Inverse(V.FreeDofs(), inverse="sparsecholesky")
+Minv = M.mat.Inverse(W.FreeDofs(), inverse="umfpack")
 l.Assemble()
 
 #  %% Time loop
 i = 0
 t = 0
 with TaskManager():
-    # while t <= Tend-tau:
-    while t <= 1*tau:
-        # print ("\rt=", t, end="")
-        print (f"t={t}\n")
+    while t <= Tend-tau:
+    # while t <= 1*tau:
+        print ("\rt=", t, end="")
+        # print (f"t={t}\n")
         M.Assemble()
         l.Assemble()
         Minv.Update()
