@@ -14,6 +14,19 @@ def generate_sphere_mesh(maxh, order_g = 1, center=csg.Pnt(0,0,0), r = 1.0):
     mesh.Curve(order_g)
     return mesh
 
+def generate_half_sphere_mesh(maxh, order_g = 1, center=csg.Pnt(0,0,0), r = 1.0):
+    geo          = csg.CSGeometry()
+    sphere       = csg.Sphere(center, r)
+    bot          = csg.Plane(center, csg.Vec(0,0,-1))
+    finitesphere = sphere * bot
+
+    geo.AddSurface(sphere, finitesphere.bc("surface"))
+    geo.NameEdge(sphere,bot, "bottom")
+
+    mesh = Mesh(geo.GenerateMesh(maxh=maxh))
+    mesh.Curve(order_g)
+    return mesh
+
 def generate_cylinder_mesh(maxh, order_g=1):
     geo       = csg.CSGeometry()
     cyl       = csg.Cylinder(csg.Pnt(0,0,0), csg.Pnt(1,0,0), 1)
@@ -31,7 +44,7 @@ def generate_cylinder_mesh(maxh, order_g=1):
 
 
 # TODO: Other possibilities to generate
-def generate_torus_mesh(maxh, order_g = 1, center=csg.Pnt(0,0,0), R = 1.0, r = 0.4):
+def generate_torus_mesh(maxh, order_g = 1, center=occ.Pnt(0,0,0), R = 1.0, r = 0.4):
 
     pnt1 = occ.Pnt(R-r + center[0], 0 + center[1], 0 + center[2])
     pnt2 = occ.Pnt(R + center[0], 0 + center[1], r + center[2])
