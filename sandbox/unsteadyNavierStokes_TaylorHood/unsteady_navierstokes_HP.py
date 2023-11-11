@@ -7,10 +7,11 @@ from ngsolve.webgui import Draw
 import numpy as np
 import matplotlib.pyplot as plt
 # Output files path
-path = "../results/"
+path = "./results/"
 import sys
 sys.path.append("../")
 from generate_surface_meshes import generate_half_sphere_mesh
+print(path)
 
 # %% 
 # Definition of exact geometry and symbolic operators
@@ -99,7 +100,7 @@ p_ex = CoefficientFunction(sin(x)*cos(5*t))
 
 grad_p = gradient(p_ex,P)
 
-nu = Parameter(0.001)
+nu = Parameter(1.0)
 
 # Exact rhs to impose manufactured solution
 f = -nu*div_sym_grad + u_t + grad_p + grad_u.trans*u_ex
@@ -129,7 +130,6 @@ def NavierStokes(mesh, fes_order, times, f, g, m, n):
     p_h = x_h.components[1]
 
     # Setting up output
-    path = "./results/"
     vtkout = VTKOutput(mesh,coefs=[u_h, p_h],names=["u", "p"],filename=path + "unsteady_navierstokes",subdivision=2)
     vtkout_sol = VTKOutput(mesh,coefs=[u_ex, p_ex],names=["u", "p"],filename=path + "unsteady_navierstokes_sol",subdivision=2)
 
@@ -383,11 +383,8 @@ for i,k in enumerate(fes_order_list):
 
 '''
 - The code is limited to low Reynolds numbers as it is, no stabilization for the convective term is implemented
-- The convective term is treated completely explicitly (with BDF high order extrapolation) for now, possible improvement could be passing to implicit-explicit handling
-- Convective term is for now grad_u*u, but it can be changed to the appropriate one if needed (grad_u.trans*u)
-- Convergence rates are optimal
-- Spatial errors of L\inftyL^2 of velocity seems to not be influenced by BDF order 
-- The use of grad(q)*u for the incompressibility constraint makes the system nonsymmetric (in case an open surface is considered as in this case)
+- An IMEX scheme is used to deal with the convection, the nonlinear term
+- Convergence rates are optimal and pressure error seems to be independent on the BDF order
 '''
 
 ##

@@ -7,7 +7,7 @@ from ngsolve.webgui import Draw
 import numpy as np
 import matplotlib.pyplot as plt
 # Output files path
-path = "../results/"
+path = "./results/"
 import sys
 sys.path.append("../")
 from generate_surface_meshes import generate_half_sphere_mesh
@@ -129,7 +129,6 @@ def NavierStokes(mesh, fes_order, times, f, g, m, n):
     p_h = x_h.components[1]
 
     # Setting up output
-    path = "./results/"
     vtkout = VTKOutput(mesh,coefs=[u_h, p_h],names=["u", "p"],filename=path + "unsteady_navierstokes",subdivision=2)
     vtkout_sol = VTKOutput(mesh,coefs=[u_ex, p_ex],names=["u", "p"],filename=path + "unsteady_navierstokes_sol",subdivision=2)
 
@@ -382,12 +381,9 @@ for i,k in enumerate(fes_order_list):
 
 '''
 - The code is limited to low Reynolds numbers as it is, no stabilization for the convective term is implemented
-- The convective term is treated completely explicitly (with BDF high order extrapolation) for now, possible improvements could be passing to implicit-explicit handling
-- Convective term is for now grad_u*u, but it can be changed to the appropriate one if needed (grad_u.trans*u)
-- Convergence rates are suboptimal
-- Augmenting the fes degree of the lagrange multiplier seems to help raising the convergence rates but it actually makes the code unstable, thus we sticked to the choices made in the paper
-- The L2H1 gradient error seems to have optimal converge rates even if the convergence in L\inftyL2 does not
-- The system is symmetric
+- An IMEX scheme is used to deal with the convection, the nonlinear term
+- Convergence rates are suboptimal. The L2H1 gradient error seems to have optimal converge rates and equal to the one in L\inftyL2. Pressure error seems to be independent on the BDF order
+- Augmenting the fes degree of the lagrange multiplier seems to help raising the convergence rates but it actually makes the code unstable, thus we sticked to the choices made in the paper and it shouldn't be changed
 '''
 ##
 

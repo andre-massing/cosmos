@@ -7,7 +7,7 @@ from ngsolve.webgui import Draw
 import numpy as np
 import matplotlib.pyplot as plt
 # Output files path
-path = "../results/"
+path = "./results/"
 import sys
 sys.path.append("../")
 from generate_surface_meshes import generate_half_sphere_mesh
@@ -150,7 +150,6 @@ def NavierStokes(mesh, fes_order, times, f, g, m, n):
     p_h = x_h.components[2]
 
     # Setting up output
-    path = "./results/"
     vtkout = VTKOutput(mesh,coefs=[u_h, p_h],names=["u", "p"],filename=path + "unsteady_navierstokes",subdivision=2)
     vtkout_sol = VTKOutput(mesh,coefs=[u_ex, p_ex],names=["u", "p"],filename=path + "unsteady_navierstokes_sol",subdivision=2)
 
@@ -391,16 +390,10 @@ for i,k in enumerate(fes_order_list):
 ## Comments/problems/updates
 
 '''
-
-PROBLEMS:
-- Impossibility to simply Set the (b)boundary values to incorporate inhomogeneous boundary conditions
-- The formulation should tackle high Reynolds numbers, but it does not seem to happen here
-
-COMMENTS:
 - The convective term is expressed in conservative form (see exact solution) contrary to the other implementations
-- The convective term is treated completely explicitly (with BDF high order extrapolation) for now, possible improvements could be passing to implicit-explicit handling
-- The system is symmetric
+- An IMEX scheme is used to deal with the convection, the nonlinear term
 - Exact continuity is traded for exact tangentiality
+- Convergence is suboptimal
 - The warning on the "orderface" flag must be solved. It could also be Hcurl was just a temporary solution. VectorFacetSurface is maybe a solution?
 - Need to find a way to compute the H1 norm of U (see source code from article)
 '''
