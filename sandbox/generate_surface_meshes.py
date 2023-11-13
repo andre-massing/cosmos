@@ -14,6 +14,19 @@ def generate_sphere_mesh(maxh, order_g = 1, center=csg.Pnt(0,0,0), r = 1.0):
     mesh.Curve(order_g)
     return mesh
 
+def generate_half_sphere_mesh(maxh, order_g = 1, center=csg.Pnt(0,0,0), r = 1.0):
+    geo          = csg.CSGeometry()
+    sphere       = csg.Sphere(center, r)
+    bot          = csg.Plane(center, csg.Vec(0,0,-1))
+    finitesphere = sphere * bot
+
+    geo.AddSurface(sphere, finitesphere.bc("surface"))
+    geo.NameEdge(sphere,bot, "bottom")
+
+    mesh = Mesh(geo.GenerateMesh(maxh=maxh))
+    mesh.Curve(order_g)
+    return mesh
+
 def generate_cylinder_mesh(maxh, order_g=1):
     geo       = csg.CSGeometry()
     cyl       = csg.Cylinder(csg.Pnt(0,0,0), csg.Pnt(1,0,0), 1)
@@ -31,32 +44,24 @@ def generate_cylinder_mesh(maxh, order_g=1):
 
 
 # TODO: Other possibilities to generate
-def generate_torus_mesh(maxh, order_g = 1, center=csg.Pnt(0,0,0), R = 1.0, r = 0.4):
-    spline = csg.SplineCurve2d()
-    R = 1
-    r = 0.4
-    eps = r*1e-8
+def generate_torus_mesh(maxh, order_g = 1, center=occ.Pnt(0,0,0), R = 1.0, r = 0.4):
 
-    # define the control points
-    pnts = [ (0,R-r), (-r+eps,R-r+eps), (-r,R),
-            (-r+eps,R+r-eps), (0,R+r), (r-eps,R+r-eps), (r,R), (r-eps,R-r+eps) ]
-    # define the splines using the control points
-    segs = [ (0,1,2), (2,3,4), (4,5,6), (6,7,0) ]
+    pnt1 = occ.Pnt(R-r + center[0], 0 + center[1], 0 + center[2])
+    pnt2 = occ.Pnt(R + center[0], 0 + center[1], r + center[2])
+    pnt3 = occ.Pnt(R+r + center[0], 0 + center[1], 0 + center[2])
+    pnt4 = occ.Pnt(R + center[0], 0 + center[1], -r + center[2])
 
-    # add the points and segments to the spline
-    for pnt in pnts:
-        spline.AddPoint(*pnt)
+    arc1 = occ.ArcOfCircle(pnt1, pnt2, pnt3)
+    arc2 = occ.ArcOfCircle(pnt3, pnt4, pnt1)
 
-    for seg in segs:
-        spline.AddSegment(*seg)
+    w = occ.Wire([arc1, arc2])
+    f = occ.Face(w)
+    body = f.Revolve(occ.Axis((0,0,0),occ.Z), 360)
 
-    rev = csg.Revolution(csg.Pnt(0,0,-1), csg.Pnt(0,0,1), spline)
-    geo = csg.CSGeometry()
-    geo.Add(rev.col([1,0,0]))
-
+    geo = occ.OCCGeometry(body)
     mesh = geo.GenerateMesh(maxh=maxh, optsteps2d=3, perfstepsend=MeshingStep.MESHSURFACE)
     mesh = Mesh(mesh)
-    mesh.Curve(order_g)	
+    mesh.Curve(order_g)
     return mesh 
 
 def generate_n_torus_mesh(maxh, order_g = 1, char_len=1, n=2):
@@ -109,7 +114,25 @@ def generate_n_torus_mesh(maxh, order_g = 1, char_len=1, n=2):
     mesh = geo.GenerateMesh(maxh=maxh, optsteps2d=3, perfstepsend=MeshingStep.MESHSURFACE)
     mesh = Mesh(mesh)
     mesh.Curve(order_g)	
+    return mesh
+
+def generate_plane(maxh, order_g = 1, a =1.0, b=2.0):
+    # order_g is mainteined just for compatibility, but it does not improve the 
+    # description of the plane. a,b are the side length. The boundary of the plane
+    # has been named to facilitate handling of boundary conditions
+
+    wp = occ.WorkPlane()
+    wp.Rectangle(a,b)
+    face = wp.Face()
+
+    face.edges.name = "boundary"
+
+    geo = occ.OCCGeometry(face)
+
+    mesh = Mesh(geo.GenerateMesh(maxh=maxh))
+    mesh.Curve(order_g);	
     return mesh 
+
 
 def import_stl_mesh(fname, maxh):
     geo = stl.STLGeometry(fname)
