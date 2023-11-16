@@ -4,7 +4,7 @@ from ngsolve import *
 from ngsolve.webgui import Draw
 
 # %% Define Stokes CIP solver
-def StokesTH(mesh, *, order_u, f, g, filename="results/stokes_th_sol"):
+def StokesTH(mesh, *, order_u, nu, f, g, filename="results/stokes_th_sol"):
     # Function spaces
     order_p = order_u - 1
     V = VectorH1(mesh, order=int(order_u))

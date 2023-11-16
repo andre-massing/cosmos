@@ -12,7 +12,7 @@ import pandas as pd
 from utils import *
 
 # %% Define Stokes CIP solver
-def StokesCIP(mesh, *, order_u, f, g, filename="results/stokes_cip_sol"):
+def StokesCIP(mesh, *, order_u, nu, f, g, filename="results/stokes_cip_sol"):
     # Function spaces
     order_p = order_u 
     V = VectorH1(mesh, order=int(order_u))
