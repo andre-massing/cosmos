@@ -1,0 +1,8 @@
+#dofs:  242160
+#cdofs: 151350
+#nface: 6054
+#nedge: 9081
+#nv:    3029
+#preg:  1e-10
+#alpha: 80
+#dt:    0.005
