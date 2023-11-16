@@ -67,7 +67,8 @@ def compute_errors(mesh,
     
     # Compute errors
     err_u = InnerProduct(u_ex-u_h, u_ex-u_h)
-    err_u_grad = InnerProduct(grad_u-Ps*Grad(u_h)*Ps, grad_u-Ps*Grad(u_h)*Ps)
+    err_u_grad = InnerProduct(grad_u-Ps*u_h.Operator("grad", BND)*Ps, 
+                              grad_u-Ps*u_h.Operator("grad", BND)*Ps)
     err_p = InnerProduct(p_ex-p_h, p_ex-p_h)
     l2u_error = sqrt(Integrate(cf = err_u, mesh=mesh, order = order_u+2, VOL_or_BND = BND))
     h1u_error = sqrt(Integrate(cf = err_u_grad, mesh=mesh, order = order_u+2, VOL_or_BND = BND))
