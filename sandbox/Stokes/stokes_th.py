@@ -1,20 +1,12 @@
 # %% 
 # Importing the necessary libraries
-
-import time
-from netgen.occ import *
-from netgen.meshing import MeshingStep
-from netgen.csg import *
 from ngsolve import *
 from ngsolve.webgui import Draw
-import numpy as np
-import pandas as pd
-from utils import *
 
 # %% Define Stokes CIP solver
-def StokesCIP(mesh, *, order_u, f, g, filename="results/stokes_cip_sol"):
+def StokesTH(mesh, *, order_u, f, g, filename="results/stokes_th_sol"):
     # Function spaces
-    order_p = order_u 
+    order_p = order_u - 1
     V = VectorH1(mesh, order=int(order_u))
     Q = H1(mesh, order=int(order_p), dgjumps=True)
     N = NumberSpace(mesh)
@@ -80,15 +72,7 @@ def StokesCIP(mesh, *, order_u, f, g, filename="results/stokes_cip_sol"):
     beta = 1.0
     # A += nu*beta*h**(-2.0)*InnerProduct(ns*u, ns*v)*ds
     A += nu*beta/(h*h)*InnerProduct(ns*u, ns*v)*ds
-    # A += nu*beta/h*InnerProduct(ns*u, ns*v)*ds
 
-    # Pressure stabilization
-    # TODO: p.Other() is not working when using ds(element_boundary=True) 
-    # Resulting contribution is zero!
-    jump_dpdn = (p.Trace()-p.Other().Trace())
-    jump_dqdn = (q.Trace()-q.Other().Trace())
-    gamma_p = 0.1
-    A += -gamma_p*h**3/nu*InnerProduct(jump_dpdn,jump_dqdn)*ds(element_boundary=True)
     A.Assemble()
 
     # Imposing manufactured solutions
