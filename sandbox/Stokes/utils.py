@@ -67,6 +67,8 @@ def compute_errors(mesh,
     
     # Compute errors
     err_u = InnerProduct(u_ex-u_h, u_ex-u_h)
+    # TODO: Next line does not work universally for all velocity spaces
+    #       This works now for Hdiv spaces 
     err_u_grad = InnerProduct(grad_u-Ps*u_h.Operator("grad", BND)*Ps, 
                               grad_u-Ps*u_h.Operator("grad", BND)*Ps)
     err_p = InnerProduct(p_ex-p_h, p_ex-p_h)
