@@ -8,7 +8,7 @@ def StokesTH(mesh, *, order_u, nu, f, g, filename="results/stokes_th_sol"):
     # Function spaces
     order_p = order_u - 1
     V = VectorH1(mesh, order=int(order_u))
-    Q = H1(mesh, order=int(order_p), dgjumps=True)
+    Q = H1(mesh, order=int(order_p))
     N = NumberSpace(mesh)
     
     # TODO: Only needed if no boundary is included
