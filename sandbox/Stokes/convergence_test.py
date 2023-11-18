@@ -58,11 +58,16 @@ geo.Add(sphere)
 # geo.NameEdge(sphere,bot, "bottom")
 
 # %% Run convergence study
-fes_order_list = [2]
-num_refs = 3
-ref_fac = 2
+fes_order_list = [1, 2, 3]
 maxh0 = 0.25
-
+num_refs = 3
+truly_refine = True
+if  truly_refine:
+    ref_fac = 2.0
+# Chose refinement factor for mesh generation
+else:
+    ref_fac = 1.5
+    
 # make directory if it does not exist
 results_dir = "results/"
 import os
@@ -75,11 +80,18 @@ solvers = [StokesCIPHDG]
 # solvers = [StokesTH]
 
 for solver in solvers:
+    print("---------------------------------------------------------------")
+    print("Convergence study for ", solver.__name__)
+    print("---------------------------------------------------------------")
     for fes_order in fes_order_list:
+        print("fes_order = ", fes_order)
+        print("===============================================================")
         error_list = [[], [], []]
         maxh = maxh0
         mesh = Mesh(geo.GenerateMesh(maxh=maxh, perfstepsend=MeshingStep.MESHSURFACE))
         for ref in range(num_refs+1):
+                print("Refinement step ", ref)
+                print("---------------------------------------------------------------")
                 order_u, order_p = fes_order, fes_order-1
                 # order_g = order_u
                 order_g = order_u+1
@@ -107,8 +119,14 @@ for solver in solvers:
                                     'L2_eoc_p'  : eoc_list[2]})
                 # display(table)
                 print(table.to_string())
-                maxh /= ref_fac
+                print("---------------------------------------------------------------")
                 if ref < num_refs:
-                    mesh.Curve(1)
-                    mesh.Refine(mark_surface_elements=True)
-                    mesh.Curve(order_g)
+                    if truly_refine:
+                        mesh.Curve(1)
+                        mesh.Refine(mark_surface_elements=True)
+                        mesh.Curve(order_g)
+                    else:
+                        maxh /= ref_fac
+                        mesh = Mesh(geo.GenerateMesh(maxh=maxh, perfstepsend=MeshingStep.MESHSURFACE))
+        
+        print("===============================================================")

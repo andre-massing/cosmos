@@ -2,6 +2,7 @@
 # Importing the necessary libraries
 
 import time
+import sys
 from netgen.occ import *
 from netgen.meshing import MeshingStep
 from netgen.csg import *
@@ -16,7 +17,9 @@ def StokesHDG(mesh, *, order_u, nu, f, g, filename="results/stokes_hdg_sol"):
     # Function spaces
     order_p = order_u - 1
     VDiv = HDivSurface(mesh, order=int(order_u))
+    VDiv = Compress(VDiv)
     VHat = HCurl(mesh, order=int(order_u), orderface=0)
+    VHat = Compress(VHat)
     Q    = SurfaceL2(mesh, order=int(order_p))
     N    = NumberSpace(mesh)
     
@@ -59,7 +62,7 @@ def StokesHDG(mesh, *, order_u, nu, f, g, filename="results/stokes_hdg_sol"):
     def E_th(u):
         return Sym(Ps*Grad(u)*Ps)
     
-    A = BilinearForm(W)
+    A = BilinearForm(W, symmetric=True)
     A += nu*InnerProduct(E_th(u), E_th(v))*ds
     # Consistency term (Note the positive sign due to the swapping the order of vhat and v.Trace())
     A += nu*InnerProduct(E_th(u)*nE, QE(vhat-v.Trace()))*ds(element_boundary=True)
@@ -82,12 +85,13 @@ def StokesHDG(mesh, *, order_u, nu, f, g, filename="results/stokes_hdg_sol"):
 
     # Imposing manufactured solutions
     l = LinearForm(W)
-    l += ( InnerProduct(Ps*f, v.Trace()) - g*q)* ds 
+    l += (InnerProduct(Ps*f, v.Trace()) - g*q)*ds
 
     res = x_h.vec.CreateVector()
 
     # matrix for actual system inversion
-    SetNumThreads(4)
+    # SetNumThreads(1)
+    SetNumThreads(1)
     with TaskManager():
         A.Assemble()
         l.Assemble()
