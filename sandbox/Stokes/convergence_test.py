@@ -2,6 +2,8 @@
 # Importing the necessary libraries
 
 import time
+import sys
+sys.path.append("./")
 # caution: path[0] is reserved for script path (or '' in REPL)
 from netgen.occ import *
 from netgen.meshing import MeshingStep
@@ -14,6 +16,7 @@ from utils import *
 
 from stokes_th import StokesTH
 from stokes_hdg import StokesHDG
+from stokes_cip_hdg import StokesCIPHDG
        
 # %% Define manufactured solution
 dimension = 3 # dimension of the embedding space
@@ -57,7 +60,7 @@ geo.Add(sphere)
 # %% Run convergence study
 fes_order_list = [2]
 num_refs = 3
-ref_fac = 1.5
+ref_fac = 2
 maxh0 = 0.25
 
 # make directory if it does not exist
@@ -67,15 +70,16 @@ if not os.path.exists(results_dir):
     os.makedirs(results_dir)
 
 # solvers = [StokesTH, StokesHDG]
-solvers = [StokesHDG]
+# solvers = [StokesHDG]
+solvers = [StokesCIPHDG]
 # solvers = [StokesTH]
 
 for solver in solvers:
     for fes_order in fes_order_list:
         error_list = [[], [], []]
         maxh = maxh0
+        mesh = Mesh(geo.GenerateMesh(maxh=maxh, perfstepsend=MeshingStep.MESHSURFACE))
         for ref in range(num_refs+1):
-                mesh = Mesh(geo.GenerateMesh(maxh=maxh, perfstepsend=MeshingStep.MESHSURFACE))
                 order_u, order_p = fes_order, fes_order-1
                 # order_g = order_u
                 order_g = order_u+1
@@ -101,10 +105,10 @@ for solver in solvers:
                                     'H1_eoc_u'  : eoc_list[1],
                                     'L2_error_p': error_list[2],
                                     'L2_eoc_p'  : eoc_list[2]})
-                display(table)
-                # print(table.to_string())
+                # display(table)
+                print(table.to_string())
                 maxh /= ref_fac
-                # if ref < num_refs:
-                #     mesh.Curve(1)
-                #     mesh.Refine(mark_surface_elements=True)
-                #     mesh.Curve(order_g)
+                if ref < num_refs:
+                    mesh.Curve(1)
+                    mesh.Refine(mark_surface_elements=True)
+                    mesh.Curve(order_g)
