@@ -59,7 +59,7 @@ def StokesCIPHDG(mesh, *, order_u, nu, f, g, filename="results/stokes_cip_sol"):
     def E_h(u):
         return Sym(Ps*Grad(u).Trace()*Ps)
 
-    # Corrected strain rate tensor for non-tangential 
+    # Corrected strain rate tensor for non-tangential fields
     def E_th(u):
         return E_h(u) - InnerProduct(u, ns)*Bs
     
@@ -79,7 +79,6 @@ def StokesCIPHDG(mesh, *, order_u, nu, f, g, filename="results/stokes_cip_sol"):
     # Penalization of normal component through bilinear form  
     # beta = Penalty parameter to weakly enforce tangential condition
     beta = 1.0
-    # A += nu*beta*h**(-2.0)*InnerProduct(ns*u, ns*v)*ds
     A += nu*beta/(h*h)*InnerProduct(ns*u, ns*v)*ds
     # A += nu*beta/h*InnerProduct(ns*u, ns*v)*ds
 
@@ -90,7 +89,6 @@ def StokesCIPHDG(mesh, *, order_u, nu, f, g, filename="results/stokes_cip_sol"):
     jump_dqdn = (q.Trace().Deriv()-qhat.Trace())*nn
     gamma_p = 0.1
     A += -gamma_p*h**3/nu*InnerProduct(jump_dpdn,jump_dqdn)*ds(element_boundary=True)
-    A.Assemble()
 
     # Imposing manufactured solutions
     l = LinearForm(W)
@@ -100,7 +98,9 @@ def StokesCIPHDG(mesh, *, order_u, nu, f, g, filename="results/stokes_cip_sol"):
     res = x_h.vec.CreateVector()
 
     # matrix for actual system inversion
+    SetNumThreads(8)
     with TaskManager():
+        A.Assemble()
         l.Assemble()
         res.data = l.vec
 

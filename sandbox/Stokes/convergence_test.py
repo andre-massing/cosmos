@@ -32,7 +32,10 @@ Ps = tang_project(normal)
 t1 = time.time()
 
 # Manufactured solution
-_u = CoefficientFunction((x**3, sin(y), z))
+# _u = CoefficientFunction((x, sin(y), z))
+_u = CoefficientFunction((-y*(2+sin(pi*x))*(2+cos(pi*z)),
+                           x*(2+sin(pi*x))*(2+cos(pi*z)),
+                           0))
 u_ex = Ps*_u
 p_ex = CoefficientFunction(sin(x))
 
@@ -60,7 +63,7 @@ geo.Add(sphere)
 # %% Run convergence study
 fes_order_list = [1, 2, 3]
 maxh0 = 0.25
-num_refs = 3
+num_refs = 4
 truly_refine = True
 if  truly_refine:
     ref_fac = 2.0
@@ -92,11 +95,11 @@ for solver in solvers:
         for ref in range(num_refs+1):
                 print("Refinement step ", ref)
                 print("---------------------------------------------------------------")
-                order_u, order_p = fes_order, fes_order-1
+                order_u, order_p = fes_order, fes_order
                 # order_g = order_u
                 order_g = order_u+1
                 solver_name = solver.__name__
-                file_name = os.path.join(results_dir, f"{solver_name}_{order_u}_{order_p}_ref_{ref}")
+                file_name = os.path.join(results_dir, f"{solver_name}_order_u_{order_u}_order_p_{order_p}_sol_ref_{ref}")
                 mesh.Curve(order_g)
                 u_h, p_h = solver(mesh, 
                                   order_u=order_u,
@@ -128,5 +131,8 @@ for solver in solvers:
                     else:
                         maxh /= ref_fac
                         mesh = Mesh(geo.GenerateMesh(maxh=maxh, perfstepsend=MeshingStep.MESHSURFACE))
-        
+                else:
+                    eoc_file_name = os.path.join(results_dir, f"eoc_{solver_name}_{order_u}_{order_p}_num_refs_{num_refs}")
+                    table.to_csv(eoc_file_name + ".csv", index=False)
+                    
         print("===============================================================")
