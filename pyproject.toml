@@ -15,7 +15,6 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
 "ngsolve>=6.2.2402",
-"netgen"
 ]
 
 
