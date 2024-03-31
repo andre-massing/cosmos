@@ -9,7 +9,7 @@ import numpy as np
 path = "./results/"
 import sys
 sys.path.append("../")
-from generate_surface_meshes import generate_torus_mesh
+from cosmos.utils.generate_surface_meshes import generate_torus_mesh
 
 
 # %%

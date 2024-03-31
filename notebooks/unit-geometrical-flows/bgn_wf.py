@@ -6,7 +6,7 @@ ngsglobals.msg_level = 2
 
 import sys
 sys.path.insert(0, "../../")
-from sandbox.generate_surface_meshes import *
+from cosmos.utils.generate_surface_meshes import *
 
 shape = "torus"
 order_g = 1
@@ -53,6 +53,8 @@ Idh.Set( CF( (x,y,z) ), definedon=mesh.Boundaries(".*"))
 # %% Compute mean curvature for start geometry
 # Note that we redefine some of these later,
 # using mixed space W instead of V ...
+# TODO: Put this into a separate utility function
+# TODO: Compute mean curvature via stabilized HLL approach
 kappavec, eta = V.TnT()
 nu = specialcf.normal(3)
 
@@ -72,10 +74,27 @@ l += InnerProduct(grad(Idh).Trace(), grad(eta).Trace())*ds
 M.Assemble()
 l.Assemble()
 
-Minv = M.mat.Inverse(W.FreeDofs(), inverse="umfpack")
+Minv = M.mat.Inverse(V.FreeDofs(), inverse="umfpack")
 kappavech = GridFunction(V)
 kappavech.vec.data = Minv*l.vec
+
 Draw(kappavech, mesh)
+
+# %% Now postprocess to compute actual mean curvature
+kappa, chi = Q.TnT()
+M = BilinearForm(Q)
+M += kappa*chi*ds
+
+l = LinearForm(Q)
+l += InnerProduct(kappavech, nu)*chi*ds
+
+M.Assemble()
+l.Assemble()
+
+Minv = M.mat.Inverse(Q.FreeDofs(), inverse="umfpack")
+kappah = GridFunction(Q)
+kappah.vec.data = Minv*l.vec
+Draw(kappah, mesh)
 
 # %% Set solver for geometric evolution problem
 
@@ -95,7 +114,6 @@ Xh.Set( CF( (x,y,z) ), definedon=mesh.Boundaries(".*"))
 
 # scene = Draw(Xh, mesh, deformation=Xh, vectors=True)
 scene = Draw(kappah, mesh, deformation=dXh)
-
 
 
 # %% Define weak form to compute initial mean curvature

@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 path = "./results/"
 import sys
 sys.path.append("../")
-from generate_surface_meshes import generate_half_sphere_mesh
+from cosmos.utils.generate_surface_meshes import generate_half_sphere_mesh
 
 # %% 
 # Definition of exact geometry and symbolic operators

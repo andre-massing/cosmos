@@ -6,7 +6,7 @@ ngsglobals.msg_level = 2
 
 import sys
 sys.path.insert(0, "../../")
-from sandbox.generate_surface_meshes import *
+from cosmos.utils.generate_surface_meshes import *
 
 # shape = "sphere"
 shape = "torus"
