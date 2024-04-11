@@ -24,6 +24,5 @@ def solve_fem():
             yield gfu
             
 #%%
-# solve_fem()
 for u_h in solve_fem():
     print("Solving again ...")
