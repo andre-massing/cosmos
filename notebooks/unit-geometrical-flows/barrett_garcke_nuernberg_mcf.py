@@ -4,8 +4,6 @@ from netgen.occ import *
 from ngsolve.webgui import Draw
 ngsglobals.msg_level = 2
 
-import sys
-sys.path.insert(0, "../../")
 from cosmos.utils.generate_surface_meshes import *
 
 # shape = "sphere"
@@ -17,7 +15,6 @@ maxh = 0.1
 if shape == "sphere" :
     R = 1
     sphere = Sphere((0,0,0),R).faces[0]
-
     # Radius of exact solution at time t
     ex_R = lambda t : sqrt(R**2-4*t)
     # Extinction time
@@ -93,7 +90,6 @@ else:
     M += (InnerProduct(X,nu)*chi - tau*kappa*chi)*ds_lumping
     M += tau*kappa*InnerProduct(nu,eta)*ds_lumping
     M += tau*(InnerProduct(grad(X).Trace(), grad(eta).Trace()))*ds(deformation=dXh)
-
     l += InnerProduct(CF((x,y,z)),nu)*chi*ds_lumping
 
 M.Assemble()
@@ -105,14 +101,11 @@ i = 0
 t = 0
 with TaskManager():
     while t <= Tend-tau:
-    # while t <= 1*tau:
         print ("\rt=", t, end="")
-        # print (f"t={t}\n")
         M.Assemble()
         l.Assemble()
         Minv.Update()
         Xkappah.vec.data = Minv*l.vec
-        # dXh.vec.data = Xh.vec - Idh.vec
         dXh.vec.data = Xkappah.components[0].vec - Idh.vec
         
         if i % 1 == 0:
@@ -120,4 +113,3 @@ with TaskManager():
         
         t += tau
         i += 1
-# %%
