@@ -1,3 +1,5 @@
+# Run file via 
+# mpirun -np <NUM_PROC> python poisson_mpi_yield.py 
 from mpi4py import MPI
 from ngsolve import *
 from netgen.geom2d import unit_square
