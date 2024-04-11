@@ -1,0 +1,136 @@
+# %%
+import sys
+sys.path.insert(0, '../solvers/')
+from solver_base import SteadySolver
+from ngsolve import *
+
+# # Only used for testing
+# sys.path.insert(0, '../geometries/')
+# from generate_meshes import *
+# from ngsolve.webgui import Draw
+
+class ADR_CGSolver(SteadySolver):
+
+    fields_num = 1
+    dir_bnd = ''
+    neu_bnd = ''
+
+    def __init__(self, mesh, fes_order, b, c, d, bnd_cond=[["dir", "default", CF(0.0)]], rhs=CF(0.0)):
+        
+        super().__init__(mesh, bnd_cond)
+
+        self.fes_order = fes_order
+        self.rhs = rhs
+        self.b = b # Coefficient function/ for convection term
+        self.c = c # Coefficient function/scalar for reaction term
+        self.d = d # Scalar for diffusion term (no matrix allowed for now)
+
+
+    def __call__(self):
+
+        if self.dir_bnd == '':
+
+            # What happens if I only have Neumann boundary conditions?
+            
+            pass
+
+        else: 
+            fes = H1(self.mesh, order=self.fes_order, dgjumps = True)
+            u,v = fes.TnT()
+
+            h = specialcf.mesh_size
+            n = specialcf.normal(self.mesh.dim)
+
+            a = BilinearForm(fes)
+
+            # Penalty as need for the Nietsche method for imposing Dirichlet boundary consitions
+            penalty = 10*(self.fes_order+1)*(self.fes_order+self.mesh.dim)/self.mesh.dim/h
+            diffusion = self.d*grad(u)*grad(v)*dx - self.d*grad(u).Trace()*n*v*ds \
+                - self.d*grad(v).Trace()*n*u*ds + penalty*u*v*ds(skeleton=True)
+
+            reaction = self.c * u*v * dx 
+
+            bn_minus = 0.5*(Norm(self.b*n)-self.b*n)
+
+            # trial and test function gradeint jump across elements
+            jump_u = n*(grad(u) - (grad(u)).Other())
+            jump_v = n*(grad(v) - (grad(v)).Other())
+
+            # CIP stabilization
+            S_int = 0.5*Norm(self.b*n) # Parameter corresponding to upwind stabilization
+            # divergence of velocity field to be added ince we consider the system in
+            # conservative form. It cna probably be improved to accomodate grid_functions
+            # and not only coefficient functions
+            div_b = CF(0)
+            vars = [x, y, z]
+            for i in range(self.mesh.dim):
+                div_b += self.b[i].Diff(vars[i])
+            convection = self.b*grad(u) * v *dx \
+                + div_b*u*v*dx \
+                + bn_minus*u*v*ds(skeleton=True) + \
+                h**2*S_int*jump_u*jump_v*dx(skeleton=True)
+            
+
+            if (self.d==0):
+                a += reaction + convection
+            elif (Integrate(Norm(self.b), self.mesh)<1e-14):
+                a += reaction + diffusion
+            else:
+                a += reaction + convection + diffusion
+            
+            a.Assemble()
+
+            f = LinearForm(fes)
+            # rhs taking care of boundary conditions
+            f_diff = penalty*self.dir_cf*v*ds(skeleton=True)- self.d*grad(v).Trace()*n*self.dir_cf*ds
+            f_conv = bn_minus*self.dir_cf*v * ds(skeleton=True)
+
+            if (d==0):
+                f += self.rhs*v * dx + f_conv
+            elif (Integrate(Norm(self.b), self.mesh)<1e-14):
+                f += self.rhs*v * dx + f_diff    
+            else:
+                f += self.rhs*v * dx + f_diff + f_conv      
+            
+            f.Assemble()
+
+            gfu = GridFunction(fes)
+            gfu.vec.data = a.mat.Inverse(freedofs=fes.FreeDofs()) * f.vec
+
+            return gfu
+
+if __name__ == "__main__":
+
+    pass
+
+    # mesh = Mesh(unit_square.GenerateMesh(maxh=0.1))
+    # mesh.Curve(1)
+    # fes_order = 2
+    # u_ex = cos(4*x)*cos(6*y)
+    # b = CF((0,0))
+    # d = 2
+    # c = 0
+    # mean_u = Integrate(u_ex, mesh)
+    # # u_ex = u_ex-mean_u
+
+    # rhs = d*(-u_ex.Diff(x).Diff(x) - u_ex.Diff(y).Diff(y)) \
+    #     + (u_ex*b[0]).Diff(x) + (b[1]*u_ex).Diff(y) \
+    #     + c*u_ex
+    # n = specialcf.normal(mesh.dim)
+    # grad_u_n = InnerProduct(CF((u_ex.Diff(x), u_ex.Diff(y))), n)
+    # bnd_cond=[['dir', 'right|left|top|bottom', u_ex]]
+    # solver1 = ADR_CGSolver(mesh, fes_order, b,c,d, bnd_cond, rhs)
+
+    # gfu1 = solver1()
+    # err1 = Integrate((gfu1-u_ex)*(gfu1-u_ex) ,mesh, order = solver1.fes_order+2)
+
+    # Draw(u_ex-gfu1, mesh)
+
+    # mesh.Refine()
+    # gfu2 = solver1()
+    # err2 = Integrate((gfu2-u_ex)*(gfu2-u_ex) ,mesh, order = solver1.fes_order+2)
+
+    # Draw(u_ex-gfu2, mesh)
+
+    # print(err1/err2)
+# %%

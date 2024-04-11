@@ -1,0 +1,4 @@
+- what boundary conditions do we want to allow on the adr solver? Becomes tricky if one can impose Neumann and diffusion is 0
+- for now adopting penalty method for adr cg but seems like the penalty doesn't scale properly
+- adding anisotropic case in adr?
+- understand if passing the parameter "t" is a safe option
