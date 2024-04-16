@@ -115,16 +115,16 @@ class HeatSolver(UnsteadySolver):
         self.u_h.Set(self.dir_cf, definedon = self.mesh.Boundaries(self.dir_bnd))
 
         # self.a.Assemble() # not needed in this case
-        self.f.Assemble()
         # self.a_inv.Update() # not needed in this case
+        self.f.Assemble()
 
         
 
 if __name__ == "__main__":
 
-    mesh = Mesh(unit_square.GenerateMesh(maxh=0.1))
+    mesh = Mesh(unit_square.GenerateMesh(maxh=0.2))
     mesh.Curve(3)
-    fes_order = 1
+    fes_order = 4
 
     t = Parameter(0.0)
 
@@ -140,14 +140,38 @@ if __name__ == "__main__":
     dt = 0.01
 
     solver1 = HeatSolver(mesh, fes_order, dt, t, T, bnd_cond, u_ex, rhs)
-
+    ERR1 = 0
     try:
         while True:
             gfu, gfut = next(solver1())
+            err = Integrate((u_ex-gfu)*(u_ex-gfu), mesh, order = fes_order +2)
+            ERR1 += dt*err
     except StopIteration:
         print("Simulation has reached final time successfully")
     except Exception as E:
         print("Something went wrong during the simulation. Exception:")
         print(E)
+    ERR1 = sqrt(ERR1)
+    print(ERR1)
+
+    mesh.Refine()
+    dt = dt*2**(-(fes_order+1)) # scaling so that the time convergence cannot be seen 
+    t.Set(0.0)
+    solver2 = HeatSolver(mesh, fes_order, dt, t, T, bnd_cond, u_ex, rhs)
+    ERR2 = 0
+    try:
+        while True:
+            gfu, gfut = next(solver2())
+            err = Integrate((u_ex-gfu)*(u_ex-gfu), mesh, order = fes_order +2)
+            ERR2 += dt*err
+    except StopIteration:
+        print("Simulation has reached final time successfully")
+    except Exception as E:
+        print("Something went wrong during the simulation. Exception:")
+        print(E)
+    ERR2 = sqrt(ERR2)
+    print(ERR2)
+
+    print(ERR1/ERR2)
         
 # %%
