@@ -2,6 +2,10 @@
 from sympy import *
 from sympy.printing import latex, pretty
 from IPython.display import display, Math
+from ngsolve import Integrate, Mesh, BND
+from netgen.meshing import MeshingStep
+from ngsolve.webgui import Draw
+import numpy as np
 
 def vec_simplify(f):
     "Simplify vector expression."
@@ -189,4 +193,82 @@ def get_solution_str(u_str, levelset_str, epsilon_str="1", b_str=["0","0","0"], 
 # %% [markdown]
 # 
 
+# define function to compute the convergence and print the order
 
+def convergence(geom, dh, solver, exact_sol, power = 2, n_refinements = 0, dt = 0.0, time_adapt = False, vol_or_bnd = 'VOL'):
+
+    # Array of errors used for convergence order computation
+    ERR = np.zeros(n_refinements+1)
+
+    # Case of a steady solver (no time stepping)
+    if solver.type == 'steady':
+
+        for i in range(n_refinements+1):
+
+            # Bulk simulation
+            if vol_or_bnd == 'VOL':
+
+                solver.mesh = Mesh(geom.GenerateMesh(maxh = dh)).Curve(solver.geo_order)
+                gfu = solver()
+
+                # L2 norm of error
+                ERR[i] = sqrt(Integrate((exact_sol-gfu)*(exact_sol-gfu), solver.mesh, order = solver.fes_order +2))
+
+            # Hypersurface simulation
+            elif vol_or_bnd == 'BND':
+
+                solver.mesh = Mesh(geom.GenerateMesh(maxh = dh, optsteps2d=3, perfstepsend=MeshingStep.MESHSURFACE)).Curve(solver.geo_order)
+                gfu = solver()
+
+                # L2 norm of error
+                ERR[i] = sqrt(Integrate((exact_sol-gfu)*(exact_sol-gfu), solver.mesh, order = solver.fes_order +2, VOL_or_BND = BND))
+
+            # Update for refinement
+            dh = dh/power
+    
+    # Case of a marching simulation in time
+    elif solver.type == 'unsteady':
+
+        for i in range(n_refinements+1):
+
+            if vol_or_bnd == 'VOL':
+                solver.mesh = Mesh(geom.GenerateMesh(maxh = dh)).Curve(solver.geo_order)
+            elif vol_or_bnd == 'BND':
+                solver.mesh = Mesh(geom.GenerateMesh(maxh = dh, optsteps2d=3, perfstepsend=MeshingStep.MESHSURFACE)).Curve(solver.geo_order)
+
+            solver.setup()
+
+            try:
+                while True:
+                    gfu, _= next(solver())
+
+                    if vol_or_bnd == 'VOL':
+                        err = Integrate((exact_sol-gfu)*(exact_sol-gfu), solver.mesh, order = solver.fes_order +2)
+                    elif vol_or_bnd == 'BND':
+                        err = sqrt(Integrate((exact_sol-gfu)*(exact_sol-gfu), solver.mesh, order = solver.fes_order +2, VOL_or_BND = BND))
+            
+                    ERR[i] += solver.dt*err
+            except StopIteration:
+                if solver.verbose > 0:
+                    print("Simulation n.", i+1,  " has reached final time successfully")
+            except Exception as E:
+                print("Something went wrong during the simulation. Exception:")
+                print(E)
+            ERR[i] = sqrt(ERR[i])
+
+            # Update for refinement
+            aux = solver.dt
+            if time_adapt:
+                solver.dt = aux*power**(-(solver.fes_order+1))
+            else: 
+                solver.dt = aux/power
+            solver.t.Set(0.0)
+            dh = dh/power
+
+            # solver.setup()
+
+    order = np.log(ERR[:-1]/ERR[1:])/np.log(power)
+
+    return order
+
+# %%
