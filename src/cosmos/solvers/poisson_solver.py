@@ -28,7 +28,7 @@ class PoissonSolver(SteadySolver):
             fes = V
             u, v = fes.TnT()
         else:
-            # In case of fully neomann boundary conditions
+            # In case of fully Neumann boundary conditions
             # a zero-mean solution is enforced through a lagrange multiplier
             V = H1(self.mesh, order= self.fes_order)
             Q = NumberSpace(self.mesh) # Lagrange multiplier for zero mean solution
@@ -75,7 +75,7 @@ class PoissonSolver(SteadySolver):
 
 if __name__ == "__main__":
 
-    fes_order = 2
+    ##### 2D CASE #####
 
     u_ex = cos(4*pi*x)*cos(6*pi*y)
     grad_u = CF((u_ex.Diff(x), u_ex.Diff(y)))
@@ -88,6 +88,7 @@ if __name__ == "__main__":
     ## Case with mixed boundary conditions
     bnd_cond=[['neu', 'right|left', grad_u],
               ['dir', 'top|bottom', u_ex]]
+    fes_order = 2
     solver = PoissonSolver(fes_order=fes_order, bnd_cond=bnd_cond, rhs=rhs,  verbose = 0)
 
     order = convergence(geo, dh, solver, u_ex, power=2.0, n_refinements = 3)
@@ -107,5 +108,40 @@ if __name__ == "__main__":
 
     order = convergence(geo, dh, solver, u_ex, power=2.0, n_refinements = 2)
     print(order)
+
+
+    ##### 3D CASE #####
+
+    # u_ex = cos(4*pi*x)*cos(6*pi*y)*cos(5*pi*z)
+    # grad_u = CF((u_ex.Diff(x), u_ex.Diff(y), u_ex.Diff(z)))
+
+    # rhs = -u_ex.Diff(x).Diff(x) - u_ex.Diff(y).Diff(y) - u_ex.Diff(z).Diff(z)
+
+    # dh = 0.2
+    # geo = unit_cube
+
+    # ## Case with mixed boundary conditions
+    # bnd_cond=[['neu', 'right|left|back', grad_u],
+    #           ['dir', 'top|bottom|front', u_ex]]
+    # fes_order = 1
+    # solver = PoissonSolver(fes_order=fes_order, bnd_cond=bnd_cond, rhs=rhs,  verbose = 0)
+
+    # order = convergence(geo, dh, solver, u_ex, power=2, n_refinements = 3)
+    # print(order)
+
+    # ## Case with neumann boundary conditions only
+    # # The exact solution already has zero mean
+    # bnd_cond=[['neu', 'right|left|top|bottom|front|back', grad_u]]
+    # solver.bnd_cond = bnd_cond
+
+    # order = convergence(geo, dh, solver, u_ex, power=2, n_refinements = 3)
+    # print(order)
+
+    # ## Case with dirichlet boundary conditions only
+    # bnd_cond=[['dir', 'right|left|top|bottom|front|back', u_ex]]
+    # solver.bnd_cond = bnd_cond
+
+    # order = convergence(geo, dh, solver, u_ex, power=2.0, n_refinements = 3)
+    # print(order)
 
 # %%
