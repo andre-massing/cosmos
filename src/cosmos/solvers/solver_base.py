@@ -24,7 +24,7 @@ class SteadySolver():
             if self.bnd_cond != None:
                 self.__setup_bnd__()
             else:
-                if self.verbose >0:
+                if self.verbose>0:
                     print('No boundary conditions given, homogeneous natural boundary conditions are applied')
         else:
             raise Exception("You have to provide a mesh in order to perform the simulation")
@@ -61,7 +61,7 @@ class SteadySolver():
         # Labels will be grouped in the string format  bnd_type="bnd1|bnd2|bnd3" so that they can be
         # easily used in the method Set(..., definedon = bnd_type)
         # Coefficient functions are constructed piecewise using a dictionary type_dict
-        # For now only Dirichlet and Neumann b.c. are allowed
+        # For now only Dirichlet and Neumann b.c. are allowed: type = 'dir' or 'neu'
         dir_first_iteration = True
         neu_first_iteration = True
         dir_dict = {}
@@ -102,13 +102,13 @@ class SteadySolver():
     def __call__(self):
 
         self.__setup__()
-        print("The steady solver base class is being called. No action performed")
+        print("!The steady solver base class is being called. No action performed!")
 
 class UnsteadySolver(SteadySolver):
 
-    def __init__(self, mesh, dt, t=Parameter(0.0), T=1.0, bnd_cond=None):
+    def __init__(self, mesh= None, dt=1e-2, t=Parameter(0.0), T=1.0, bnd_cond=None, verbose = 0):
 
-        super().__init__(mesh, bnd_cond)
+        super().__init__(mesh, bnd_cond, verbose=verbose)
         self.type = 'unsteady'
 
         self.dt = dt
@@ -118,10 +118,23 @@ class UnsteadySolver(SteadySolver):
     def __call__(self):
 
         self.__setup__()
-        print("The unsteady solver base class is being called. No action performed")
+        print("!The unsteady solver base class is being called. No action performed!")
 
 
-# if __name__ == "__main__":
+if __name__ == "__main__":
 
-#     pass
+    mesh = Mesh(unit_square.GenerateMesh(maxh = 0.1))
+
+    solver1 = SteadySolver(verbose = 1)
+    solver2 = SteadySolver(mesh = mesh, bnd_cond = [['dir', 'left|right', CF(0.0)], ['neu', 'top|bottom', CF((0, 0))]] , verbose = 1)
+
+    # solver1() # Should throw error of missing mesh
+    solver2()
+
+    dt = 0.1
+    solver1 = UnsteadySolver(dt = dt, verbose = 1)
+    solver2 = UnsteadySolver(mesh = mesh, dt=dt , bnd_cond = [['dir', 'left|right', CF(0.0)], ['neu', 'top|bottom', CF((0, 0))]] , verbose = 1)
+
+    # solver1() # Should throw error of missing mesh
+    solver2()
 # %%
