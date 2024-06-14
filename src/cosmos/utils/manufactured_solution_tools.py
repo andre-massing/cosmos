@@ -2,7 +2,7 @@
 from sympy import *
 from sympy.printing import latex, pretty
 from IPython.display import display, Math
-from ngsolve import Integrate, Mesh, BND
+from ngsolve import Integrate, Mesh, BND, unit_square
 from netgen.meshing import MeshingStep
 from ngsolve.webgui import Draw
 import numpy as np
@@ -195,80 +195,55 @@ def get_solution_str(u_str, levelset_str, epsilon_str="1", b_str=["0","0","0"], 
 
 # define function to compute the convergence and print the order
 
-def convergence(geom, dh, solver, exact_sol, power = 2, n_refinements = 0, dt = 0.0, time_adapt = False, vol_or_bnd = 'VOL'):
-
-    # Array of errors used for convergence order computation
-    ERR = np.zeros(n_refinements+1)
-
-    # Case of a steady solver (no time stepping)
-    if solver.type == 'steady':
-
-        for i in range(n_refinements+1):
-
-            # Bulk simulation
-            if vol_or_bnd == 'VOL':
-
-                solver.mesh = Mesh(geom.GenerateMesh(maxh = dh)).Curve(solver.geo_order)
-                gfu = solver()
-
-                # L2 norm of error
-                ERR[i] = sqrt(Integrate((exact_sol-gfu)*(exact_sol-gfu), solver.mesh, order = solver.fes_order +2))
-
-            # Hypersurface simulation
-            elif vol_or_bnd == 'BND':
-
-                solver.mesh = Mesh(geom.GenerateMesh(maxh = dh, optsteps2d=3, perfstepsend=MeshingStep.MESHSURFACE)).Curve(solver.geo_order)
-                gfu = solver()
-
-                # L2 norm of error
-                ERR[i] = sqrt(Integrate((exact_sol-gfu)*(exact_sol-gfu), solver.mesh, order = solver.fes_order +2, VOL_or_BND = BND))
-
-            # Update for refinement
-            dh = dh/power
+class Convergence():
     
-    # Case of a marching simulation in time
-    elif solver.type == 'unsteady':
+    def __init__(self, geom=unit_square, dh=0.1, power = 2, n_refinements = 0, time_adapt = False, vol_or_bnd = 'VOL'):
 
-        for i in range(n_refinements+1):
+        self.geom = geom
+        self.dh = dh
+        self.power = power
+        self.n_ref = n_refinements
+        self.t_adapt = time_adapt
+        self.vol_or_bnd = vol_or_bnd
 
-            if vol_or_bnd == 'VOL':
-                solver.mesh = Mesh(geom.GenerateMesh(maxh = dh)).Curve(solver.geo_order)
-            elif vol_or_bnd == 'BND':
-                solver.mesh = Mesh(geom.GenerateMesh(maxh = dh, optsteps2d=3, perfstepsend=MeshingStep.MESHSURFACE)).Curve(solver.geo_order)
+    def __call__(self, solver, exact_sol, vol_or_bnd_err='VOL'):
 
-            solver.setup()
+        # Array of errors used for convergence order computation
+        ERR = -np.ones(self.n_ref+1)*np.inf
 
-            try:
-                while True:
-                    gfu, _= next(solver())
+        maxh = self.dh
 
-                    if vol_or_bnd == 'VOL':
-                        err = Integrate((exact_sol-gfu)*(exact_sol-gfu), solver.mesh, order = solver.fes_order +2)
-                    elif vol_or_bnd == 'BND':
-                        err = sqrt(Integrate((exact_sol-gfu)*(exact_sol-gfu), solver.mesh, order = solver.fes_order +2, VOL_or_BND = BND))
-            
-                    ERR[i] += solver.dt*err
-            except StopIteration:
-                if solver.verbose > 0:
-                    print("Simulation n.", i+1,  " has reached final time successfully")
-            except Exception as E:
-                print("Something went wrong during the simulation. Exception:")
-                print(E)
-            ERR[i] = sqrt(ERR[i])
+        for i in range(self.n_ref+1):
+
+            if self.vol_or_bnd == 'VOL':
+                solver.mesh = Mesh(self.geom.GenerateMesh(maxh = maxh)).Curve(solver.geo_order)
+            elif self.vol_or_bnd == 'BND':
+                solver.mesh = Mesh(self.geom.GenerateMesh(maxh = maxh, optsteps2d=3, perfstepsend=MeshingStep.MESHSURFACE)).Curve(solver.geo_order)
+
+            if solver.type == 'unsteady':
+                solver.setup()
+
+            for sol in solver():
+
+                if vol_or_bnd_err == 'VOL':
+                    err = sqrt(Integrate((exact_sol-sol)*(exact_sol-sol), solver.mesh, order = solver.fes_order +2))
+                elif vol_or_bnd_err == 'BND':
+                    err = sqrt(Integrate((exact_sol-sol)*(exact_sol-sol), solver.mesh, order = solver.fes_order +2, VOL_or_BND = BND))
+        
+                ERR[i] = np.maximum(ERR[i], err)
 
             # Update for refinement
-            aux = solver.dt
-            if time_adapt:
-                solver.dt = aux*power**(-(solver.fes_order+1))
-            else: 
-                solver.dt = aux/power
-            solver.t.Set(0.0)
-            dh = dh/power
+            maxh = maxh/self.power
+            if solver.type == 'unsteady':
+                aux = solver.dt
+                if self.time_adapt:
+                    solver.dt = aux*self.power**(-(solver.fes_order+1))
+                else: 
+                    solver.dt = aux/self.power
+                solver.t.Set(0.0)
 
-            # solver.setup()
+        order = np.log(ERR[:-1]/ERR[1:])/np.log(self.power)
 
-    order = np.log(ERR[:-1]/ERR[1:])/np.log(power)
-
-    return order
+        return order
 
 # %%

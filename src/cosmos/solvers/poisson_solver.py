@@ -1,5 +1,5 @@
 # %%
-from cosmos.utils.manufactured_solution_tools import convergence
+from cosmos.utils.manufactured_solution_tools import Convergence
 from cosmos.solvers.solver_base import *
 from ngsolve import *
 
@@ -16,8 +16,7 @@ class PoissonSolver(SteadySolver):
         self.fes_order = fes_order
         self.rhs = rhs
         self.geo_order = geo_order
-
-
+    
     def __call__(self):
 
         self.__setup__()
@@ -61,7 +60,7 @@ class PoissonSolver(SteadySolver):
             f.Assemble()
 
             res = f.vec
-            if self.dir_bnd != None:
+            if self.dir_bnd != None: 
                 u_h.Set(self.dir_cf, definedon = self.mesh.Boundaries(self.dir_bnd))
                 res.data += - a.mat * gfu.vec
 
@@ -71,7 +70,7 @@ class PoissonSolver(SteadySolver):
 
                 gfu.vec.data = a.mat.Inverse(freedofs=fes.FreeDofs()) * f.vec
 
-        return u_h
+        yield u_h
 
 if __name__ == "__main__":
 
@@ -91,7 +90,8 @@ if __name__ == "__main__":
     fes_order = 2
     solver = PoissonSolver(fes_order=fes_order, bnd_cond=bnd_cond, rhs=rhs,  verbose = 0)
 
-    order = convergence(geo, dh, solver, u_ex, power=2.0, n_refinements = 3)
+    conv = Convergence(geom=geo, dh = 0.1, power=2, n_refinements=3)
+    order = conv(solver=solver, exact_sol=u_ex)
     print(order)
 
     ## Case with neumann boundary conditions only
@@ -99,16 +99,18 @@ if __name__ == "__main__":
     bnd_cond=[['neu', 'right|left|top|bottom', grad_u]]
     solver.bnd_cond = bnd_cond
 
-    order = convergence(geo, dh, solver, u_ex, power=1.5, n_refinements = 3)
+    conv.n_ref = 2
+    order = conv(solver=solver, exact_sol=u_ex)
     print(order)
 
     ## Case with dirichlet boundary conditions only
     bnd_cond=[['dir', 'right|left|top|bottom', u_ex]]
     solver.bnd_cond = bnd_cond
 
-    order = convergence(geo, dh, solver, u_ex, power=2.0, n_refinements = 2)
+    conv.n_ref = 3
+    conv.power = 1.5
+    order = conv(solver=solver, exact_sol=u_ex)
     print(order)
-
 
     ##### 3D CASE #####
 
@@ -126,7 +128,8 @@ if __name__ == "__main__":
     # fes_order = 1
     # solver = PoissonSolver(fes_order=fes_order, bnd_cond=bnd_cond, rhs=rhs,  verbose = 0)
 
-    # order = convergence(geo, dh, solver, u_ex, power=2, n_refinements = 3)
+    # conv = Convergence(geom=geo, dh = 0.1, power=1.5, n_refinements=3)
+    # order = conv(solver=solver, exact_sol=u_ex)
     # print(order)
 
     # ## Case with neumann boundary conditions only
@@ -134,14 +137,17 @@ if __name__ == "__main__":
     # bnd_cond=[['neu', 'right|left|top|bottom|front|back', grad_u]]
     # solver.bnd_cond = bnd_cond
 
-    # order = convergence(geo, dh, solver, u_ex, power=2, n_refinements = 3)
+    # conv.n_ref = 2
+    # order = conv(solver=solver, exact_sol=u_ex)
     # print(order)
 
     # ## Case with dirichlet boundary conditions only
     # bnd_cond=[['dir', 'right|left|top|bottom|front|back', u_ex]]
     # solver.bnd_cond = bnd_cond
 
-    # order = convergence(geo, dh, solver, u_ex, power=2.0, n_refinements = 3)
+    # conv.n_ref = 2
+    # conv.power = 2
+    # order = conv(solver=solver, exact_sol=u_ex)
     # print(order)
 
 # %%
