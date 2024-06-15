@@ -220,15 +220,18 @@ class Convergence():
             elif self.vol_or_bnd == 'BND':
                 solver.mesh = Mesh(self.geom.GenerateMesh(maxh = maxh, optsteps2d=3, perfstepsend=MeshingStep.MESHSURFACE)).Curve(solver.geo_order)
 
-            if solver.type == 'unsteady':
-                solver.setup()
-
             for sol in solver():
+
+                if hasattr(solver, 'displ_h'):
+                    solver.mesh.SetDeformation(solver.displ_h)
 
                 if vol_or_bnd_err == 'VOL':
                     err = sqrt(Integrate((exact_sol-sol)*(exact_sol-sol), solver.mesh, order = solver.fes_order +2))
                 elif vol_or_bnd_err == 'BND':
                     err = sqrt(Integrate((exact_sol-sol)*(exact_sol-sol), solver.mesh, order = solver.fes_order +2, VOL_or_BND = BND))
+
+                if hasattr(solver, 'displ_h'):
+                    solver.mesh.UnsetDeformation()
         
                 ERR[i] = np.maximum(ERR[i], err)
 
@@ -236,7 +239,7 @@ class Convergence():
             maxh = maxh/self.power
             if solver.type == 'unsteady':
                 aux = solver.dt
-                if self.time_adapt:
+                if self.t_adapt:
                     solver.dt = aux*self.power**(-(solver.fes_order+1))
                 else: 
                     solver.dt = aux/self.power
