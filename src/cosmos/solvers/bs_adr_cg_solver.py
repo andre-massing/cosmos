@@ -62,7 +62,7 @@ class bs_ADR_CGSolver(SteadySolver):
         convection_v = -self.b_v*grad(v_v) * u_v *dx \
             + h**2*S_int*jump_u*jump_v*dx(skeleton=True)
         
-        coupling_v = (self.alpha*u_v - self.beta*u_s)*v_v*ds(definedon = self.mesh.Boundaries(self.neu_bnd))
+        coupling_v = (self.alpha*u_v - self.beta*u_s)*v_v*ds
 
         self.a += diffusion_v + reaction_v + convection_v + coupling_v
 
