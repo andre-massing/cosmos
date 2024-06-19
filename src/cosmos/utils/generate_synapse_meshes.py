@@ -241,16 +241,4 @@ if __name__ == "__main__":
 
     synapse3d, _ = generate_synapse3d(maxh=0.1, order_g = order_g)
     Draw(synapse3d, draw_surf = False, clipping={"x": 0, "y": 1, "z": 0, "dist": 0.0})
-
-__all__ = [
-    'generate_circle',
-    'generate_sphere',
-    'generate_ball',
-    'generate_cube',
-    'generate_box',
-    'generate_cube_g5',
-    'generate_torus',
-    'generate_synapse2d',
-    'generate_synapse3d'
-]
 # %%
