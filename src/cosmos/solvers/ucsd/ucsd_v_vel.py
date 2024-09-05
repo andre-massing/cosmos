@@ -31,7 +31,7 @@ class VelocitySolver(SteadySolver):
         
         fes = H1(self.mesh, order= self.fes_order, dirichlet = self.dir_bnd)
         fesh = H1(self.mesh, order= self.fes_order+1, dirichlet = self.dir_bnd)
-        fesV = VectorH1(self.mesh, order = self.fes_order, dirichlet = self.dir_bnd)
+        fesV = VectorH1(self.mesh, order = self.fes_order)
         u,v = fes.TnT()
         uh, vh = fesh.TnT()
         alpha = specialcf.mesh_size
@@ -56,7 +56,7 @@ class VelocitySolver(SteadySolver):
         gfuh.vec.data += a1.mat.Inverse(freedofs=fesh.FreeDofs()) * r
 
         X = GridFunction(fesV)
-        X.Set(grad(gfuh)/Norm(grad(gfuh)), dual = True)
+        X.Set(grad(gfuh)/Norm(grad(gfuh)))
 
         a2 = BilinearForm(fes)
         a2 += (grad(u)*grad(v))*dx(deformation = displ_h)

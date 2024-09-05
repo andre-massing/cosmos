@@ -8,7 +8,6 @@ __all__ = [
     'generate_circle',
     'generate_sphere',
     'generate_ball',
-    'generate_cube',
     'generate_box',
     'generate_cube_g5',
     'generate_torus',
@@ -17,7 +16,18 @@ __all__ = [
     'generate_synapse3d'
 ]
 
-def generate_circle(maxh, order_g = 1, center=occ.Pnt(0,0,0), R = 0.5):
+def Meshing(geo, maxh, order_g, vol_or_bnd):
+
+    if vol_or_bnd == 'BND':
+        mesh = geo.GenerateMesh(maxh=maxh, optsteps2d=3, perfstepsend=MeshingStep.MESHSURFACE)
+    elif vol_or_bnd == 'VOL':
+        mesh = geo.GenerateMesh(maxh=maxh)
+    mesh = Mesh(mesh)
+    mesh.Curve(order_g)
+
+    return mesh
+
+def generate_circle(maxh, order_g = 1, center=occ.Pnt(0,0,0), R = 0.5, vol_or_bnd = 'VOL'):
 
     wp = occ.WorkPlane()
     wp.Arc(R, 180)
@@ -30,9 +40,9 @@ def generate_circle(maxh, order_g = 1, center=occ.Pnt(0,0,0), R = 0.5):
     synapse.faces.name = "inner_space"
 
     geo = occ.OCCGeometry(synapse, dim = 2)
-    mesh = geo.GenerateMesh(maxh=maxh, optsteps2d=3)
-    mesh = Mesh(mesh)
-    mesh.Curve(order_g)
+
+    mesh = Meshing(geo, maxh, order_g, vol_or_bnd)
+
     return mesh, geo
 
 def generate_sphere(maxh, order_g = 1, center=occ.Pnt(0,0,0), R = 0.5):
@@ -42,12 +52,14 @@ def generate_sphere(maxh, order_g = 1, center=occ.Pnt(0,0,0), R = 0.5):
     body = body.Move((center[0], center[1], center[2]))
 
     geo = occ.OCCGeometry(body)
-    mesh = geo.GenerateMesh(maxh=maxh)
+    
+    mesh = geo.GenerateMesh(maxh=maxh, optsteps2d=3, perfstepsend=MeshingStep.MESHSURFACE)
     mesh = Mesh(mesh)
     mesh.Curve(order_g)
+
     return mesh, geo 
 
-def generate_ball(maxh, order_g = 1, center=occ.Pnt(0,0,0), R = 0.5):
+def generate_ball(maxh, order_g = 1, center=occ.Pnt(0,0,0), R = 0.5, vol_or_bnd = 'VOL'):
 
     body = occ.Sphere(center, R)
     body.faces.name = "membrane"
@@ -55,12 +67,12 @@ def generate_ball(maxh, order_g = 1, center=occ.Pnt(0,0,0), R = 0.5):
     body = body.Move((center[0], center[1], center[2]))
 
     geo = occ.OCCGeometry(body)
-    mesh = geo.GenerateMesh(maxh=maxh, optsteps2d=3)
-    mesh = Mesh(mesh)
-    mesh.Curve(order_g)
+    
+    mesh = Meshing(geo, maxh, order_g, vol_or_bnd)
+
     return mesh, geo
 
-def generate_torus(maxh, order_g = 1, center=occ.Pnt(0,0,0), R = 1.0, r = 0.4):
+def generate_torus(maxh, order_g = 1, center=occ.Pnt(0,0,0), R = 1.0, r = 0.4, vol_or_bnd = 'VOL'):
 
     circ = occ.WorkPlane(occ.Axes((R,0,0), -occ.Y,occ.X)).Circle(r).Wire()
     body = occ.Revolve(circ, occ.Axis((0,0,0), (0,0,1)), 360)
@@ -69,11 +81,11 @@ def generate_torus(maxh, order_g = 1, center=occ.Pnt(0,0,0), R = 1.0, r = 0.4):
 
     geo = occ.OCCGeometry(body)
 
-    mesh = Mesh(geo.GenerateMesh(maxh=maxh))
-    mesh.Curve(order_g)
+    mesh = Meshing(geo, maxh, order_g, vol_or_bnd)
+
     return mesh, geo
 
-def generate_n_torus(maxh, order_g = 1, char_len=1, n=2):
+def generate_n_torus(maxh, order_g = 1, char_len=1, n=2, vol_or_bnd = 'VOL'):
     # char_len is the thickness of the thorus and coincides with the inner radius of 
     # the holes, the width is automatically deduced in order to fit the n holes 
     # disposed tangential to the outer circumference in a way that they don't
@@ -120,38 +132,24 @@ def generate_n_torus(maxh, order_g = 1, char_len=1, n=2):
         body = body-body2.Rotate(occ.Axis((0,0,0), occ.Z), 360/n*i)
 
     geo = occ.OCCGeometry(body)
-    mesh = geo.GenerateMesh(maxh=maxh, optsteps2d=3, perfstepsend=MeshingStep.MESHSURFACE)
-    mesh = Mesh(mesh)
-    mesh.Curve(order_g)	
+    
+    mesh = Meshing(geo, maxh, order_g, vol_or_bnd)
     
     return mesh, geo
 
-
-def generate_cube(maxh, order_g = 1, center=occ.Pnt(0,0,0), R = 0.5, b = 1):
-
-    body = occ.Box(occ.Pnt(-R/2,-b/2,-R/2), occ.Pnt(R/2, b/2, R/2))
-    body = body.Move((center[0], center[1], center[2]))
-    body.faces.name = "membrane"
-
-    geo= occ.OCCGeometry(body)
-    mesh = geo.GenerateMesh(maxh=maxh)
-    mesh = Mesh(mesh)
-    mesh.Curve(order_g)
-    return mesh, geo
-
-def generate_box(maxh, order_g = 1, center=occ.Pnt(0,0,0), a = 0.5, b = 1):
+def generate_box(maxh, order_g = 1, center=occ.Pnt(0,0,0), a = 0.5, b = 1, vol_or_bnd = 'VOL'):
 
     body = occ.Box(occ.Pnt(-a/2,-b/2,-a/2), occ.Pnt(a/2, b/2, a/2))
     body = body.Move((center[0], center[1], center[2]))
     body.faces.name = "membrane"
 
     geo= occ.OCCGeometry(body)
-    mesh = geo.GenerateMesh(maxh=maxh, optsteps2d=3, perfstepsend=MeshingStep.MESHSURFACE)
-    mesh = Mesh(mesh)
-    mesh.Curve(order_g)
+    
+    mesh = Meshing(geo, maxh, order_g, vol_or_bnd)
+
     return mesh, geo
 
-def generate_cube_g5(maxh, order_g = 1, center=occ.Pnt(0,0,0), R = 1.0):
+def generate_cube_g5(maxh, order_g = 1, center=occ.Pnt(0,0,0), R = 1.0, vol_or_bnd = 'VOL'):
 
     body = occ.Box(occ.Pnt(-R/2,-R/2,-R/2), occ.Pnt(R/2, R/2, R/2))
     body = body - occ.Box(occ.Pnt(-R/6,-R/6,-R), occ.Pnt(R/6, R/6, R))
@@ -162,12 +160,12 @@ def generate_cube_g5(maxh, order_g = 1, center=occ.Pnt(0,0,0), R = 1.0):
     body.faces.name = "membrane"
 
     geo = occ.OCCGeometry(body)
-    mesh = geo.GenerateMesh(maxh=maxh, optsteps2d=3, perfstepsend=MeshingStep.MESHSURFACE)
-    mesh = Mesh(mesh)
-    mesh.Curve(order_g)
+    
+    mesh = Meshing(geo, maxh, order_g, vol_or_bnd)
+
     return mesh, geo 
 
-def generate_synapse2d(maxh, order_g = 1, external = False):
+def generate_synapse2d(maxh, order_g = 1, external = False, vol_or_bnd = 'VOL'):
     wp = occ.WorkPlane()
     wp.Rotate(90).Line(0.1).Rotate(-90)
     wp.Line(0.2).Line(0.15).Arc(0.1, 90)
@@ -213,11 +211,12 @@ def generate_synapse2d(maxh, order_g = 1, external = False):
         total = synapse
 
     geo = occ.OCCGeometry(total, dim = 2)
-    mesh = Mesh(geo.GenerateMesh(maxh=maxh))
-    mesh.Curve(order_g)
+    
+    mesh = Meshing(geo, maxh, order_g, vol_or_bnd)
+
     return mesh, geo
 
-def generate_synapse3d(maxh, order_g = 1, external = False):
+def generate_synapse3d(maxh, order_g = 1, external = False, vol_or_bnd = 'VOL'):
     wp = occ.WorkPlane()
     wp.Rotate(90).Line(0.1).Rotate(-90)
     wp.Line(0.2).Line(0.15).Arc(0.1, 90)
@@ -265,8 +264,8 @@ def generate_synapse3d(maxh, order_g = 1, external = False):
 
     geo = occ.OCCGeometry(total)
 
-    mesh = Mesh(geo.GenerateMesh(maxh=maxh))
-    mesh.Curve(order_g)
+    mesh = Meshing(geo, maxh, order_g, vol_or_bnd)
+
     return mesh, geo
 
 if __name__ == "__main__":
@@ -281,13 +280,10 @@ if __name__ == "__main__":
     ball, _ = generate_ball(maxh=0.05, order_g = order_g)
     Draw(ball, clipping={"x": 0, "y": 1, "z": 0, "dist": 0.0})
 
-    cube, _ = generate_cube(maxh=0.05, order_g = order_g)
-    Draw(cube, clipping={"x": 0, "y": 1, "z": 0, "dist": 0.0})
-
-    cube_g5, _ = generate_cube_g5(maxh=0.05, order_g = order_g)
+    cube_g5, _ = generate_cube_g5(maxh=0.05, order_g = order_g, vol_or_bnd='BND')
     Draw(cube_g5, clipping={"x": 0, "y": 1, "z": 0, "dist": 0.0})
 
-    torus, _ = generate_torus(maxh=0.1, order_g = order_g, R = sqrt(2), r = 1.0)
+    torus, _ = generate_torus(maxh=0.2, order_g = order_g, R = sqrt(2), r = 1.0, vol_or_bnd='BND')
     Draw(torus, clipping={"x": 0, "y": 1, "z": 0, "dist": 0.0})
 
     synapse2d, _ = generate_synapse2d(maxh=0.05, order_g = order_g)

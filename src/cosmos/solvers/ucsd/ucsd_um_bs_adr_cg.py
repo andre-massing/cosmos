@@ -8,6 +8,7 @@ from ngsolve import *
 from ngsolve.webgui import Draw
 import time as time
 import numpy as np
+import pandas as pd
 
 class um_bs_ADR_CGSolver(UnsteadySolver):
 
@@ -33,6 +34,14 @@ class um_bs_ADR_CGSolver(UnsteadySolver):
         self.alpha = coupling[0]
         self.beta = coupling[1]
 
+        self.setup = False
+        if mesh != None:
+            self.setup = True
+
+            self.__setup__()
+
+            self.__build_Ab__()
+
     def __build_Ab__(self):
 
         fes_v = H1(self.mesh, order=self.fes_order, dgjumps = True)
@@ -41,8 +50,6 @@ class um_bs_ADR_CGSolver(UnsteadySolver):
         V = VectorH1(self.mesh, order=self.fes_order)
         Vs = VectorH1(self.mesh, order=self.fes_order, definedon=self.mesh.Boundaries('.*'))
         (u_v, u_s), (v_v, v_s) = self.fes.TnT()
-
-        self.dummy = GridFunction(fes_v)
 
         self.displ_h = GridFunction(V)
         self.displ_old_h = GridFunction(V)
@@ -108,13 +115,14 @@ class um_bs_ADR_CGSolver(UnsteadySolver):
 
         self.u_h.Set(self.u0)
         self.v_h.Set(self.v0, definedon = self.mesh.Boundaries(".*"))
-        self.dummy.Set(self.v_h, definedon = self.mesh.Boundaries('.*'))
 
     def __call__(self):
 
-        self.__setup__()
+        if self.setup == False:
 
-        self.__build_Ab__()
+            self.__setup__()
+
+            self.__build_Ab__()
 
         res = self.f.vec.CreateVector()
         self.gfu_old.vec.data = self.gfu.vec.data
@@ -127,11 +135,9 @@ class um_bs_ADR_CGSolver(UnsteadySolver):
                 + self.m.mat*self.gfu_old.vec
             self.gfu.vec.data = self.a_inv * res
 
-            self.dummy.Set(self.v_h, definedon = self.mesh.Boundaries('.*'))
-
             self.__finalize__()
 
-            yield self.dummy
+            yield self.v_h
 
 
     def __update__(self):
@@ -143,8 +149,18 @@ class um_bs_ADR_CGSolver(UnsteadySolver):
             self.m.Assemble()
 
             self.t.Set(self.t.Get() + self.dt_var.Get())
+
             self.displ_h.Set(self.displ_old_h+self.displ)
+            '''
+            Switch the above to  :
+
+            self.displ_h.Set(self.displ_old_h+self.displ)
+
+            in case convergence studies are being run
+            '''
             # self.displ_h.Set(self.displ)
+
+            
             self.b_v_h.Set(self.b_v)
             self.b_s_h.Set(self.b_s, definedon = self.mesh.Boundaries('.*'))
 
@@ -200,6 +216,14 @@ def gradient(f,P):
 
 if __name__ == "__main__":
 
+    '''
+    This file is used for the UCSD project simulations, where the increment is given. Switch to :
+
+    self.displ_h.Set(self.displ)
+
+    in the update function for the convergence study
+    '''
+
     t = Parameter(0.0)
 
     # General affine transformation (sphere to ellipse)
@@ -246,9 +270,6 @@ if __name__ == "__main__":
     u_ex = cos(pi*x)*sin(3*y)*cos(t)
     v_ex = ((d_v*gradient(u_ex, Id(3)) - b_v*u_ex)*n_ex + alpha*u_ex)/beta
 
-    # u_ex = cos(pi*x)*sin(3*y)
-    # v_ex = z*cos(5*x)
-
     flux1_v = (b_v*u_ex).Compile()
     flux2_v = (- d_v*gradient(u_ex, Id(3))).Compile()
     rel_flux_v = (w_phi*u_ex).Compile()
@@ -264,23 +285,84 @@ if __name__ == "__main__":
     flux_s = flux1_s + flux2_s
     rhs_s = (v_ex.Diff(t) + rel_flux_s + Trace(gradient(flux_s, P_ex)) + c_s*v_ex + beta*v_ex - alpha*u_ex).Compile()
 
-    fes_order = 1
-    R0 = 1.0
+    ## CONVERGENCE SPHERE
+
     T = 1.0
-    dt = 0.2
-    _, geo = generate_ball(maxh=0.2, R = R0, order_g =2)
-    
-    solver = um_bs_ADR_CGSolver(fes_order=fes_order, b=[b_v, b_s], c=[c_v, c_s], d=[d_v, d_s], dt=dt, t=t, T=T, u0=[u_ex, v_ex], rhs=[rhs_v, rhs_s], bnd_cond = bnd_cond, coupling = [alpha, beta], displ=displ_ex)
+    dt0 = 0.05
+    t_refinements = 2
+    t_power = 1.5
+    dt_vals = dt0/np.power(1.5, np.arange(t_refinements+1))
 
-    conv = Convergence(geom=geo, dh = 0.2, power=1.5, n_refinements=2, time_adapt=True)
+    h_refinements = 2
+    fes_order = 1
+    dh0 = 0.2
+    h_power = 1.5
+    dh_vals = dh0/np.power(1.5, np.arange(h_refinements+1))
 
-    # Convergence order of the bulk solution
-    # order = conv(solver=solver, exact_sol=u_ex, vol_or_bnd_err='VOL')
-    # print(order)
+    _, geo = generate_ball(maxh=dh0, R = 1, order_g = fes_order)
 
-    # # Convergence order of the surface solution. Change in the algorithm above, function __call__ the output to: 
-    # # yield self.dummy
-    order = conv(solver=solver, exact_sol=v_ex, vol_or_bnd_err='BND')
-    print(order)
+    ERR = np.zeros((len(dt_vals), len(dh_vals)))
+
+    ## CONVERGENCE FOR VOLUME PART
+    ## !! SWITCH THE OUTPUT TO u_h !!
+
+    # for i, dt in enumerate(dt_vals):
+
+    #     conv = Convergence(geom=geo, dh = dh0, power=h_power, n_refinements=h_refinements, time_adapt=False, vol_or_bnd='VOL')
+
+    #     solver = um_bs_ADR_CGSolver(fes_order=fes_order, b=[b_v, b_s], c=[c_v, c_s], d=[d_v, d_s], dt=dt, t=t, T=T, u0=[u_ex, v_ex], rhs=[rhs_v, rhs_s], bnd_cond = bnd_cond, coupling = [alpha, beta], displ=displ_ex)
+
+    #     err_dt = conv(solver=solver, exact_sol=u_ex, vol_or_bnd_err='VOL')
+
+    #     ERR[i,:] = err_dt
+
+    # name = "convergence/um_bs/sphere_time_vol_k" + str(fes_order) + ".dat"
+
+    # space_labels =  [f'{x:.2e}' for x in dh_vals]
+    # space_labels = ["dt"] + space_labels
+    # time_output = np.column_stack((dt_vals, ERR))
+
+    # df = pd.DataFrame(time_output, columns=space_labels)
+    # df.to_csv(name, sep='\t', index=False)
+
+    # name = "convergence/um_bs/sphere_space_vol_k" + str(fes_order) + ".dat"
+
+    # time_labels =  [f'{x:.2e}' for x in dt_vals]
+    # time_labels = ["dh"] + time_labels
+    # space_output = np.column_stack((dh_vals, ERR.T))
+
+    # df = pd.DataFrame(space_output, columns=time_labels)
+    # df.to_csv(name, sep='\t', index=False)
+
+    ## CONVERGENCE FOR SURFACE PART
+    ## !! SWITCH THE OUTPUT TO v_h !!
+
+    for i, dt in enumerate(dt_vals):
+
+        conv = Convergence(geom=geo, dh = dh0, power=h_power, n_refinements=h_refinements, time_adapt=False, vol_or_bnd='VOL')
+
+        solver = um_bs_ADR_CGSolver(fes_order=fes_order, b=[b_v, b_s], c=[c_v, c_s], d=[d_v, d_s], dt=dt, t=t, T=T, u0=[u_ex, v_ex], rhs=[rhs_v, rhs_s], bnd_cond = bnd_cond, coupling = [alpha, beta], displ=displ_ex)
+
+        err_dt = conv(solver=solver, exact_sol=v_ex, vol_or_bnd_err='BND')
+
+        ERR[i,:] = err_dt
+
+    name = "convergence/um_bs/sphere_time_bnd_k" + str(fes_order) + ".dat"
+
+    space_labels =  [f'{x:.2e}' for x in dh_vals]
+    space_labels = ["dt"] + space_labels
+    time_output = np.column_stack((dt_vals, ERR))
+
+    df = pd.DataFrame(time_output, columns=space_labels)
+    df.to_csv(name, sep='\t', index=False)
+
+    name = "convergence/um_bs/sphere_space_bnd_k" + str(fes_order) + ".dat"
+
+    time_labels =  [f'{x:.2e}' for x in dt_vals]
+    time_labels = ["dh"] + time_labels
+    space_output = np.column_stack((dh_vals, ERR.T))
+
+    df = pd.DataFrame(space_output, columns=time_labels)
+    df.to_csv(name, sep='\t', index=False)
 
 # %%

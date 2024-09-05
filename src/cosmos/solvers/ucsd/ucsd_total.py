@@ -22,11 +22,11 @@ class ucsd_total(UnsteadySolver):
 
         self.fes_order = fes_order
 
-        # self.u0_v = exp(-5*(x**2+(y-1)**2+z**2))
-        # self.u0_s = exp(-5*(x**2+(y-1)**2+z**2))
+        self.u0_v = exp(-5*(x**2+(y-1)**2+z**2))
+        self.u0_s = exp(-5*(x**2+(y-1)**2+z**2))
 
-        self.u0_v = exp(-5*((x-0.5)**2+(y-0.5)**2+(z-0.5)**2)) + exp(-5*((x-0.5)**2+(y-0.5)**2+(z+0.5)**2))
-        self.u0_s = exp(-5*((x-0.5)**2+(y-0.5)**2+(z-0.5)**2)) + exp(-5*((x-0.5)**2+(y-0.5)**2+(z+0.5)**2))
+        # self.u0_v = exp(-5*((x-0.5)**2+(y-0.5)**2+(z-0.5)**2)) + exp(-5*((x-0.5)**2+(y-0.5)**2+(z+0.5)**2))
+        # self.u0_s = exp(-5*((x-0.5)**2+(y-0.5)**2+(z-0.5)**2)) + exp(-5*((x-0.5)**2+(y-0.5)**2+(z+0.5)**2))
         self.displ = CF((0,)*self.mesh.dim)
         
         self.__setup_willmore__()
@@ -51,43 +51,39 @@ class ucsd_total(UnsteadySolver):
 
         time_vals = np.concatenate((ramp_vals, np.ones(nsteps)*self.dt))
 
+        vtkout1 = VTKOutput(self.mesh, coefs=[self.solver_um.displ_h, self.solver_um.u_h, self.solver_um.b_v_h, self.solver_um.displ], names = ["displ", "u", "vel", "displ_i"], filename = "./examples/total/vtk/total_vol")
+        vtkout1.Do(time = self.solver_um.t.Get())
+
+        vtkout2 = VTKOutput(self.mesh, coefs=[self.solver_w.displ_h, self.solver_um.v_h], names = ["displ", "v"], filename = "./examples/total/vtk/total_bnd")
+        vtkout2.Do(time = self.solver_w.t.Get(), vb = BND)
+
 
         for i, dt_i in enumerate(time_vals):
 
             self.solver_w.dt = dt_i
             self.solver_um.dt = dt_i
 
-            sol1 = next(self.solver_w_generator)
+            _ = next(self.solver_w_generator)
 
-            sol2a = self.__compute_d__(sol1, self.solver_um.displ)
+            bulk_displ = self.__compute_d__(self.solver_w.dXtot_h, self.solver_um.displ_old_h)
 
-            sol2b = self.__compute_vel__(self.solver_um.displ)
+            bulk_vel = self.__compute_vel__(self.solver_um.displ_old_h)
 
+            self.solver_um.displ = bulk_displ
+            self.solver_um.b_v = bulk_vel
 
-            self.solver_um.displ = sol2a
-            self.solver_um.b_v = sol2b
+            bnd_bends = next(self.solver_um_generator)
 
-            sol3 = next(self.solver_um_generator)
+            self.solver_w.barbed_ends = bnd_bends
 
-            self.solver_w.barbed_ends = sol3
-
-            # if k%(out_int+1)==0:
-            #     Draw(self.solver_um.dummy, self.solver_w.mesh, deformation=self.solver_w.displ_h)
-
-            if k==0:
-                vtktmp = VTKOutput(self.mesh, coefs=[self.solver_um.displ_h, self.solver_um.dummy, self.solver_um.u_h, sol2a, sol2b], names = ["displ", "v", "u", "displ_w", "vel"], filename = "./tmp/sol")
-                vtktmp.Do(time = self.solver_um.t.Get())
             if k%(out_int+1)==0:
-                vtktmp.Do(time = self.solver_um.t.Get())
-
-            #     u_tot = Integrate(self.solver_um.u_h, self.mesh, order = self.fes_order+2)
-            #     v_tot =  Integrate(self.solver_um.v_h, self.mesh, order = self.fes_order+2, VOL_or_BND=BND)
-            #     print('u+v: ', u_tot+v_tot)
+                vtkout1.Do(time = self.solver_um.t.Get())
+                vtkout2.Do(time = self.solver_um.t.Get(), vb = BND)
             k+=1
 
             print(self.solver_w.t.Get())
 
-            yield sol3
+            yield
 
 
     def __setup_willmore__(self):
@@ -184,7 +180,7 @@ if __name__ == "__main__":
 
     ## SIMULATION 2
 
-    mesh, geo = generate_cube(maxh=0.08, order_g=1, R=1, b=1)
+    mesh, geo = generate_box(maxh=0.08, order_g=1, a=1, b=1)
 
     dt = 1e-3
     T = 1.0
@@ -196,8 +192,7 @@ if __name__ == "__main__":
 
     for u in solver():
 
-        j=0
-        clipping = { "function" : True,  "pnt" : (0,0,0), "vec" : (0,0,1) }
-        Draw(solver.solver_um.u_h, mesh, deformation = solver.solver_um.displ_h, clipping = clipping)
+        clipping = { "function" : True,  "pnt" : (0,0,0), "vec" : (0,0,-1) }
+        Draw(solver.solver_um.u_h, mesh, deformation = solver.solver_um.displ_h)
 
 # %%

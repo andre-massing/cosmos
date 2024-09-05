@@ -245,9 +245,6 @@ class Convergence():
                     solver.dt = aux/self.power
                 solver.t.Set(0.0)
 
-        print(ERR)
-        order = np.log(ERR[:-1]/ERR[1:])/np.log(self.power)
-
-        return order
+        return ERR
 
 # %%
