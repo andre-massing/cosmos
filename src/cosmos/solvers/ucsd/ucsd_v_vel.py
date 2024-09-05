@@ -1,5 +1,6 @@
 # %%
 from cosmos.utils.manufactured_solution_tools import Convergence
+from cosmos.utils.generate_synapse_meshes import *
 from cosmos.solvers.solver_base import *
 from ngsolve import *
 
@@ -8,14 +9,13 @@ from ngsolve import *
 import numpy as np
 from ngsolve.webgui import Draw
 
-class VectorPoissonSolver(SteadySolver):
+class VelocitySolver(SteadySolver):
 
-    def __init__(self, mesh=None, fes_order=1, bnd_cond=None, rhs=None, verbose = 0, displ = None):
+    def __init__(self, mesh=None, fes_order=1, bnd_cond=None, verbose = 0, displ = None):
         
         super().__init__(mesh, bnd_cond, verbose=verbose, vectorial=True)
 
         self.fes_order = fes_order
-        self.rhs = rhs
     
         self.displ = displ
     
@@ -26,138 +26,81 @@ class VectorPoissonSolver(SteadySolver):
         if self.displ == None:
             self.displ = CF((0,)*self.mesh.dim)
 
-        if self.dir_bnd!=None:
-            V = VectorH1(self.mesh, order= self.fes_order, dirichlet = self.dir_bnd)
+        if self.dir_bnd==None:
+            raise Exception('Computing distance needs the imposition of Dirichlet boundary conditions')
+        
+        fes = H1(self.mesh, order= self.fes_order, dirichlet = self.dir_bnd)
+        fesh = H1(self.mesh, order= self.fes_order+1, dirichlet = self.dir_bnd)
+        fesV = VectorH1(self.mesh, order = self.fes_order, dirichlet = self.dir_bnd)
+        u,v = fes.TnT()
+        uh, vh = fesh.TnT()
+        alpha = specialcf.mesh_size
 
-            fes = V
-            u, v = fes.TnT()
-        else:
-            # In case of fully Neumann boundary conditions
-            # a zero-mean solution is enforced through a lagrange multiplier
-            V = H1(self.mesh, order= self.fes_order, dim = self.mesh.dim)
-            Q = NumberSpace(self.mesh, dim = self.mesh.dim) # Lagrange multiplier for zero mean solution
-            fes = V*Q
-            (u, lam), (v, mu) = fes.TnT()
+        aux = GridFunction(fes)
+        aux.Set(alpha)
+        self.dt = np.max(aux.vec.data)**2
 
-        displ_h = GridFunction(V)
+        gfuh = GridFunction(fesh)
+        gfuh.Set(1, definedon = self.dir_bnd)
+
+        displ_h = GridFunction(fesV)
         displ_h.Set(self.displ)
 
-        a = BilinearForm(fes)
-        a += InnerProduct(Grad(u), Grad(v))*dx(deformation = displ_h)
-        if self.dir_bnd == None:
-            a += (InnerProduct(lam,v)-InnerProduct(mu,u))*dx(deformation = displ_h)
-        f = LinearForm(fes)
-        f += self.rhs*v*dx(deformation = displ_h)
+        a1 = BilinearForm(fesh)
+        a1 += (self.dt*grad(uh)*grad(vh) + uh*vh)*dx(deformation = displ_h)
+        a1.Assemble()
 
-        if self.neu_bnd != None:
-            n = specialcf.normal(self.mesh.dim)
-            f += self.neu_cf*n*v*ds(definedon = self.mesh.Boundaries(self.neu_bnd), deformation=displ_h)
+        l1 = LinearForm(fesh)
+        r = l1.vec - a1.mat * gfuh.vec
 
-        # gfu is the grid function used for computations and containing all
-        # the variables
-        # u_h is a pointer to the function I want to pass as output and on which I want the boundary conditions to be applied
+        gfuh.vec.data += a1.mat.Inverse(freedofs=fesh.FreeDofs()) * r
+
+        X = GridFunction(fesV)
+        X.Set(grad(gfuh)/Norm(grad(gfuh)), dual = True)
+
+        a2 = BilinearForm(fes)
+        a2 += (grad(u)*grad(v))*dx(deformation = displ_h)
+        a2.Assemble()
+        
+        l2 = LinearForm(fes)
+        l2 += X*grad(v)*dx(deformation = displ_h)
+        l2.Assemble()
+
         gfu = GridFunction(fes)
-        if self.dir_bnd == None:
-            u_h = gfu.components[0]
-        else:
-            u_h = gfu
+        gfu.Set(0, definedon = self.dir_bnd)
+        r = l2.vec - a2.mat * gfu.vec
 
-        res = f.vec.CreateVector()    
-        with TaskManager():
-            a.Assemble()
-            f.Assemble()
+        gfu.vec.data += a2.mat.Inverse(freedofs=fes.FreeDofs()) * r
 
-            res = f.vec
-            if self.dir_bnd != None: 
-                u_h.Set(self.dir_cf, definedon = self.mesh.Boundaries(self.dir_bnd))
-                res.data += - a.mat * gfu.vec
+        gfu.vec.data = -gfu.vec.data
 
-                gfu.vec.data += a.mat.Inverse(freedofs=fes.FreeDofs()) * res
-
-            else:
-
-                gfu.vec.data = a.mat.Inverse(freedofs=fes.FreeDofs()) * f.vec
-
-        yield u_h
+        yield X
 
 if __name__ == "__main__":
 
-    ##### 2D CASE #####
+    # fes_order = 2
 
-    u_ex = CF((cos(4*pi*x)*cos(6*pi*y),sin(2*pi*x)*sin(20*pi*y)))
-    grad_u = CF((u_ex[0].Diff(x), u_ex[0].Diff(y), u_ex[1].Diff(x), u_ex[1].Diff(y)), dims = (2,2))
+    # dh = 0.01
+    # mesh = generate_synapse2d(maxh = dh)
+    # bnd_cond=[['dir', 'membrane|membrane_bnd', CF(0.0)]]
+    # solver = DistanceSolver(mesh, fes_order, bnd_cond)
 
-    rhs = CF((-u_ex[0].Diff(x).Diff(x) - u_ex[0].Diff(y).Diff(y), -u_ex[1].Diff(x).Diff(x) - u_ex[1].Diff(y).Diff(y))) 
+    # gfu = solver()
 
-    geo = unit_square
+    # Draw(grad(gfu), mesh)
 
-    ## Case with mixed boundary conditions
-    bnd_cond=[['neu', 'right|left', grad_u],
-              ['dir', 'top|bottom', u_ex]]
     fes_order = 2
-    solver = VectorPoissonSolver(fes_order=fes_order, bnd_cond=bnd_cond, rhs=rhs,  verbose = 0)
 
-    conv = Convergence(geom=geo, dh = 0.1, power=2, n_refinements=3)
-    order = conv(solver=solver, exact_sol=u_ex)
-    print(order)
+    dh = 0.01
+    mesh, geo = generate_synapse2d(maxh=dh)
+    # mesh, geo = generate_circle(maxh = dh)
+    bnd_cond=[['dir', 'membrane|membrane_bnd', CF(0.0)]]
+    solver = VelocitySolver(mesh, fes_order, bnd_cond)
 
-    ## Case with neumann boundary conditions only
-    # The exact solution already has zero mean
-    bnd_cond=[['neu', 'right|left|top|bottom', grad_u]]
-    solver.bnd_cond = bnd_cond
+    gfu = solver()
 
-    conv.n_ref = 2
-    order = conv(solver=solver, exact_sol=u_ex)
-    print(order)
+    gfuv = next(gfu)
 
-    ## Case with dirichlet boundary conditions only
-    bnd_cond=[['dir', 'right|left|top|bottom', u_ex]]
-    solver.bnd_cond = bnd_cond
-
-    conv.n_ref = 3
-    conv.power = 1.5
-    order = conv(solver=solver, exact_sol=u_ex)
-    print(order)
-
-    ##### 3D CASE #####
-
-    u_ex = CF((cos(4*pi*x)*cos(6*pi*y),sin(2*pi*x)*sin(20*pi*y), sin(2*pi*x)*cos(4*pi*y)))
-    grad_u = CF((u_ex[0].Diff(x), u_ex[0].Diff(y), u_ex[0].Diff(z),\
-                  u_ex[1].Diff(x), u_ex[1].Diff(y), u_ex[1].Diff(z),\
-                    u_ex[2].Diff(x), u_ex[2].Diff(y), u_ex[2].Diff(z)), dims = (3,3))
-
-    rhs = CF((-u_ex[0].Diff(x).Diff(x) - u_ex[0].Diff(y).Diff(y) - u_ex[0].Diff(z).Diff(z),\
-               -u_ex[1].Diff(x).Diff(x) - u_ex[1].Diff(y).Diff(y) - u_ex[1].Diff(z).Diff(z),\
-                 -u_ex[2].Diff(x).Diff(x) - u_ex[2].Diff(y).Diff(y) - u_ex[2].Diff(z).Diff(z) )) 
-
-    geo = unit_cube
-
-    ## Case with mixed boundary conditions
-    bnd_cond=[['neu', 'right|left|back', grad_u],
-              ['dir', 'top|bottom|front', u_ex]]
-    fes_order = 1
-    solver = VectorPoissonSolver(fes_order=fes_order, bnd_cond=bnd_cond, rhs=rhs,  verbose = 0)
-
-    conv = Convergence(geom=geo, dh = 0.1, power=1.5, n_refinements=3)
-    order = conv(solver=solver, exact_sol=u_ex)
-    print(order)
-
-    ## Case with neumann boundary conditions only
-    # The exact solution already has zero mean
-    bnd_cond=[['neu', 'right|left|top|bottom|front|back', grad_u]]
-    solver.bnd_cond = bnd_cond
-
-    conv.n_ref = 2
-    order = conv(solver=solver, exact_sol=u_ex)
-    print(order)
-
-    ## Case with dirichlet boundary conditions only
-    bnd_cond=[['dir', 'right|left|top|bottom|front|back', u_ex]]
-    solver.bnd_cond = bnd_cond
-
-    conv.n_ref = 2
-    conv.power = 2
-    order = conv(solver=solver, exact_sol=u_ex)
-    print(order)
+    Draw(gfuv, mesh, vectors = True)
 
 # %%

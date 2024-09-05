@@ -5,6 +5,7 @@ from cosmos.solvers.solver_base import *
 from cosmos.solvers.ucsd.ucsd_um_bs_adr_cg import *
 from cosmos.solvers.ucsd.ucsd_willmore import *
 from cosmos.solvers.ucsd.ucsd_v_poisson import *
+from cosmos.solvers.ucsd.ucsd_v_vel import *
 from ngsolve import *
 import netgen.occ as occ
 
@@ -21,8 +22,11 @@ class ucsd_total(UnsteadySolver):
 
         self.fes_order = fes_order
 
-        self.u0_v = exp(-5*((x-0.5)**2+y**2+z**2))
-        self.u0_s = exp(-5*((x-0.5)**2+y**2+z**2))
+        # self.u0_v = exp(-5*(x**2+(y-1)**2+z**2))
+        # self.u0_s = exp(-5*(x**2+(y-1)**2+z**2))
+
+        self.u0_v = exp(-5*((x-0.5)**2+(y-0.5)**2+(z-0.5)**2)) + exp(-5*((x-0.5)**2+(y-0.5)**2+(z+0.5)**2))
+        self.u0_s = exp(-5*((x-0.5)**2+(y-0.5)**2+(z-0.5)**2)) + exp(-5*((x-0.5)**2+(y-0.5)**2+(z+0.5)**2))
         self.displ = CF((0,)*self.mesh.dim)
         
         self.__setup_willmore__()
@@ -30,6 +34,8 @@ class ucsd_total(UnsteadySolver):
         self.__setup_um__()
 
         self.__setup_vp__()
+
+        self.__setup_vel__()
 
     def __call__(self):
 
@@ -53,9 +59,13 @@ class ucsd_total(UnsteadySolver):
 
             sol1 = next(self.solver_w_generator)
 
-            sol2 = self.__compute_d__(sol1, self.solver_um.displ)
+            sol2a = self.__compute_d__(sol1, self.solver_um.displ)
 
-            self.solver_um.displ = sol2
+            sol2b = self.__compute_vel__(self.solver_um.displ)
+
+
+            self.solver_um.displ = sol2a
+            self.solver_um.b_v = sol2b
 
             sol3 = next(self.solver_um_generator)
 
@@ -65,7 +75,7 @@ class ucsd_total(UnsteadySolver):
             #     Draw(self.solver_um.dummy, self.solver_w.mesh, deformation=self.solver_w.displ_h)
 
             if k==0:
-                vtktmp = VTKOutput(self.mesh, coefs=[self.solver_um.displ_h, self.solver_um.dummy, self.solver_um.u_h, sol2], names = ["displ", "v", "u", "displ_w"], filename = "./tmp/sol")
+                vtktmp = VTKOutput(self.mesh, coefs=[self.solver_um.displ_h, self.solver_um.dummy, self.solver_um.u_h, sol2a, sol2b], names = ["displ", "v", "u", "displ_w", "vel"], filename = "./tmp/sol")
                 vtktmp.Do(time = self.solver_um.t.Get())
             if k%(out_int+1)==0:
                 vtktmp.Do(time = self.solver_um.t.Get())
@@ -93,7 +103,7 @@ class ucsd_total(UnsteadySolver):
 
         d_v = 0.001
         c_v = 0.0
-        b_v = CF((1,0,0))
+        b_v = CF((0,0,0))
 
         d_s = 0.001
         c_s = 0.0
@@ -119,6 +129,12 @@ class ucsd_total(UnsteadySolver):
         bnd_cond = [['dir', 'membrane', CF((0,)*self.mesh.dim)]]
         self.vp_solver = VectorPoissonSolver(mesh = self.mesh, fes_order=self.fes_order, bnd_cond=bnd_cond, rhs=CF((0,)*self.mesh.dim), displ=self.displ)
 
+    def __setup_vel__(self):
+
+        bnd_cond = [['dir', 'membrane', CF(0.0)]]
+        self.vel_solver = VelocitySolver(mesh = self.mesh, fes_order=self.fes_order, bnd_cond=bnd_cond, displ=self.displ)
+
+
     def __compute_d__(self, u0, displ=None):
 
         if displ==None:
@@ -131,25 +147,44 @@ class ucsd_total(UnsteadySolver):
         res = next(solver_generator)
 
         return res
+    
+    def __compute_vel__(self, displ=None):
+
+        if displ==None:
+            displ = CF((0,)*self.mesh.dim)
+
+        self.vel_solver.displ = displ
+        solver_generator = self.vel_solver()
+
+        res = next(solver_generator)
+
+        return res
 
 
         
 
 if __name__ == "__main__":
 
-    # mesh, _ = generate_ball(maxh=0.05, R = 0.5, order_g =1)
-    # mesh, _ = generate_cube(maxh=0.03, R = 0.5, order_g =1)
-    mesh, geo = generate_cube(maxh=0.05, order_g=1, R=1, b=1)
+    ## SIMULATION
 
-    # mesh, _ = generate_circle(maxh=0.2, R = 1.0, order_g =2)
+    # mesh, geo = generate_cube(maxh=0.1, order_g=1, R=1, b=2)
 
-    # R = 1.0
-    # body = occ.Box(occ.Pnt(-R/2,-R/2,-R/2), occ.Pnt(R/2, R/2, R/2))
-    # body.faces.name = "membrane"
+    # dt = 1e-3
+    # T = 1.0
 
-    # geo= occ.OCCGeometry(body)
-    # mesh = geo.GenerateMesh(maxh=0.1)
-    # mesh = Mesh(mesh)
+    # solver = ucsd_total(mesh = mesh, dt=dt, T = T)
+
+    # i=0
+    # out_int = int(((T-0.0)/dt)//100)
+
+    # for u in solver():
+
+    #     j=0
+    #     Draw(solver.solver_w.barbed_ends, mesh, deformation = solver.solver_um.displ_h)
+
+    ## SIMULATION 2
+
+    mesh, geo = generate_cube(maxh=0.08, order_g=1, R=1, b=1)
 
     dt = 1e-3
     T = 1.0
@@ -162,10 +197,7 @@ if __name__ == "__main__":
     for u in solver():
 
         j=0
-        # Draw(solver.solver_w.barbed_ends, mesh, deformation = solver.solver_um.displ_h)
-
-        # if i%(out_int+1)==0:
-        #     Draw(solver.solver_w.barbed_ends, mesh, deformation = solver.solver_um.displ_h)
-        # i+=1
+        clipping = { "function" : True,  "pnt" : (0,0,0), "vec" : (0,0,1) }
+        Draw(solver.solver_um.u_h, mesh, deformation = solver.solver_um.displ_h, clipping = clipping)
 
 # %%
