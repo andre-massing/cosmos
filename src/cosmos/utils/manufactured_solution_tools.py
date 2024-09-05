@@ -216,9 +216,9 @@ class Convergence():
         for i in range(self.n_ref+1):
 
             if self.vol_or_bnd == 'VOL':
-                solver.mesh = Mesh(self.geom.GenerateMesh(maxh = maxh)).Curve(solver.geo_order)
+                solver.mesh = Mesh(self.geom.GenerateMesh(maxh = maxh))
             elif self.vol_or_bnd == 'BND':
-                solver.mesh = Mesh(self.geom.GenerateMesh(maxh = maxh, optsteps2d=3, perfstepsend=MeshingStep.MESHSURFACE)).Curve(solver.geo_order)
+                solver.mesh = Mesh(self.geom.GenerateMesh(maxh = maxh, optsteps2d=3, perfstepsend=MeshingStep.MESHSURFACE))
 
             for sol in solver():
 
@@ -245,6 +245,7 @@ class Convergence():
                     solver.dt = aux/self.power
                 solver.t.Set(0.0)
 
+        print(ERR)
         order = np.log(ERR[:-1]/ERR[1:])/np.log(self.power)
 
         return order

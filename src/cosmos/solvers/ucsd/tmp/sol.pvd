@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<VTKFile type ="Collection" version="1.0" byte_order="LittleEndian">
+<Collection>
+<DataSet timestep="1e-07" file="sol.vtu"/>
+<DataSet timestep="1e-07" file="sol_step00001.vtu"/>
+<DataSet timestep="2.10655e-06" file="sol_step00002.vtu"/>
+<DataSet timestep="7.68988e-06" file="sol_step00003.vtu"/>
+<DataSet timestep="2.32258e-05" file="sol_step00004.vtu"/>
+<DataSet timestep="6.64555e-05" file="sol_step00005.vtu"/>
+<DataSet timestep="0.000186745" file="sol_step00006.vtu"/>
+<DataSet timestep="0.000521457" file="sol_step00007.vtu"/>
+<DataSet timestep="0.00145281" file="sol_step00008.vtu"/>
+<DataSet timestep="0.00404437" file="sol_step00009.vtu"/>
+<DataSet timestep="0.0112555" file="sol_step00010.vtu"/>
+<DataSet timestep="0.0222555" file="sol_step00011.vtu"/>
+</Collection>
+</VTKFile>

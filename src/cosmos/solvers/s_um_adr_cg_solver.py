@@ -11,12 +11,11 @@ import numpy as np
 
 class s_umADR_CGSolver(UnsteadySolver):
 
-    def __init__(self, mesh=None, fes_order=1, geo_order = 1, b=None, c=None, d=None, dt=0.1, t = Parameter(0.0), T=1.0, bnd_cond=None, u0 = None, rhs = CF(0.0), displ_ex = None, verbose = 0):
+    def __init__(self, mesh=None, fes_order=1, b=None, c=None, d=None, dt=0.1, t = Parameter(0.0), T=1.0, bnd_cond=None, u0 = None, rhs = CF(0.0), displ_ex = None, verbose = 0):
         
         super().__init__(mesh=mesh, dt = dt, t = t, T=T, bnd_cond=bnd_cond, verbose=verbose)
 
         self.fes_order = fes_order
-        self.geo_order = geo_order
         self.rhs = rhs
         self.u0 = u0
         self.b = b

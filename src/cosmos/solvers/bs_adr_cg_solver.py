@@ -11,12 +11,11 @@ import numpy as np
 
 class bs_ADR_CGSolver(SteadySolver):
 
-    def __init__(self, mesh=None, fes_order=1, geo_order = 1, b=None, c=None, d=None, bnd_cond=None, rhs = CF(0.0), coupling = [CF(1.0), CF(1.0)], verbose = 0):
+    def __init__(self, mesh=None, fes_order=1, b=None, c=None, d=None, bnd_cond=None, rhs = CF(0.0), coupling = [CF(1.0), CF(1.0)], verbose = 0):
         
         super().__init__(mesh=mesh, bnd_cond=bnd_cond, verbose=verbose)
 
         self.fes_order = fes_order
-        self.geo_order = geo_order
         self.rhs_v = rhs[0]
         self.b_v = b[0]
         self.c_v = c[0]
@@ -182,7 +181,7 @@ if __name__ == "__main__":
 
     # Convergence order of the surface solution. Change in the algorithm above, function __call__ the output to: 
     # yield self.dummy
-    order = conv(solver=solver, exact_sol=v_ex, vol_or_bnd_err='BND')
-    print(order)
+    # order = conv(solver=solver, exact_sol=v_ex, vol_or_bnd_err='BND')
+    # print(order)
 
 # %%

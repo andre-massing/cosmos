@@ -9,13 +9,12 @@ import numpy as np
 
 class PoissonSolver(SteadySolver):
 
-    def __init__(self, mesh=None, fes_order=1, geo_order=1, bnd_cond=None, rhs=CF(0.0), verbose = 0):
+    def __init__(self, mesh=None, fes_order=1, bnd_cond=None, rhs=CF(0.0), verbose = 0):
         
         super().__init__(mesh, bnd_cond, verbose=verbose)
 
         self.fes_order = fes_order
         self.rhs = rhs
-        self.geo_order = geo_order
     
     def __call__(self):
 
@@ -114,40 +113,39 @@ if __name__ == "__main__":
 
     ##### 3D CASE #####
 
-    # u_ex = cos(4*pi*x)*cos(6*pi*y)*cos(5*pi*z)
-    # grad_u = CF((u_ex.Diff(x), u_ex.Diff(y), u_ex.Diff(z)))
+    u_ex = cos(4*pi*x)*cos(6*pi*y)*cos(5*pi*z)
+    grad_u = CF((u_ex.Diff(x), u_ex.Diff(y), u_ex.Diff(z)))
 
-    # rhs = -u_ex.Diff(x).Diff(x) - u_ex.Diff(y).Diff(y) - u_ex.Diff(z).Diff(z)
+    rhs = -u_ex.Diff(x).Diff(x) - u_ex.Diff(y).Diff(y) - u_ex.Diff(z).Diff(z)
 
-    # dh = 0.2
-    # geo = unit_cube
+    geo = unit_cube
 
-    # ## Case with mixed boundary conditions
-    # bnd_cond=[['neu', 'right|left|back', grad_u],
-    #           ['dir', 'top|bottom|front', u_ex]]
-    # fes_order = 1
-    # solver = PoissonSolver(fes_order=fes_order, bnd_cond=bnd_cond, rhs=rhs,  verbose = 0)
+    ## Case with mixed boundary conditions
+    bnd_cond=[['neu', 'right|left|back', grad_u],
+              ['dir', 'top|bottom|front', u_ex]]
+    fes_order = 1
+    solver = PoissonSolver(fes_order=fes_order, bnd_cond=bnd_cond, rhs=rhs,  verbose = 0)
 
-    # conv = Convergence(geom=geo, dh = 0.1, power=1.5, n_refinements=3)
-    # order = conv(solver=solver, exact_sol=u_ex)
-    # print(order)
+    conv = Convergence(geom=geo, dh = 0.1, power=1.5, n_refinements=3)
+    order = conv(solver=solver, exact_sol=u_ex)
+    print(order)
 
-    # ## Case with neumann boundary conditions only
-    # # The exact solution already has zero mean
-    # bnd_cond=[['neu', 'right|left|top|bottom|front|back', grad_u]]
-    # solver.bnd_cond = bnd_cond
+    ## Case with neumann boundary conditions only
+    # The exact solution already has zero mean
+    bnd_cond=[['neu', 'right|left|top|bottom|front|back', grad_u]]
+    solver.bnd_cond = bnd_cond
 
-    # conv.n_ref = 2
-    # order = conv(solver=solver, exact_sol=u_ex)
-    # print(order)
+    conv.n_ref = 2
+    order = conv(solver=solver, exact_sol=u_ex)
+    print(order)
 
-    # ## Case with dirichlet boundary conditions only
-    # bnd_cond=[['dir', 'right|left|top|bottom|front|back', u_ex]]
-    # solver.bnd_cond = bnd_cond
+    ## Case with dirichlet boundary conditions only
+    bnd_cond=[['dir', 'right|left|top|bottom|front|back', u_ex]]
+    solver.bnd_cond = bnd_cond
 
-    # conv.n_ref = 2
-    # conv.power = 2
-    # order = conv(solver=solver, exact_sol=u_ex)
-    # print(order)
+    conv.n_ref = 2
+    conv.power = 2
+    order = conv(solver=solver, exact_sol=u_ex)
+    print(order)
 
 # %%

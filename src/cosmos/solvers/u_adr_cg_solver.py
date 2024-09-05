@@ -9,13 +9,12 @@ import time as time
 
 class uADR_CGSolver(UnsteadySolver):
 
-    def __init__(self, mesh=None, fes_order=1, geo_order = 1, b=None, c=None, d=None, dt=0.1, t = Parameter(0.0), T=1.0, bnd_cond=None, u0 = None, rhs = CF(0.0), verbose = 0):
+    def __init__(self, mesh=None, fes_order=1, b=None, c=None, d=None, dt=0.1, t = Parameter(0.0), T=1.0, bnd_cond=None, u0 = None, rhs = CF(0.0), verbose = 0):
         
         super().__init__(mesh=mesh, dt = dt, t = t, T=T, bnd_cond=bnd_cond, verbose=verbose)
 
         self.fes_order = fes_order
         self.rhs = rhs
-        self.geo_order = geo_order
         self.u0 = u0
         self.b = b # Coefficient function/ for convection term
         self.c = c # Coefficient function/scalar for reaction term

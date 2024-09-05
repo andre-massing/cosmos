@@ -3,7 +3,7 @@ from ngsolve import *
 
 class SteadySolver():
 
-    def __init__(self, mesh=None, bnd_cond=None, verbose = 0):
+    def __init__(self, mesh=None, bnd_cond=None, vectorial = False, verbose = 0):
 
         # Definition of some internal variables
         self.mesh = mesh
@@ -15,6 +15,7 @@ class SteadySolver():
         self.verbose = verbose
         # Boundary conditions
         self.bnd_cond = bnd_cond
+        self.vectorial = vectorial
 
     def __setup__(self):
 
@@ -87,8 +88,12 @@ class SteadySolver():
             else:
                 raise Exception("Only flags -dir- and -neu- are allowed, i.e. dirichlet or neumann boundary conditions")
         # Creating the boundary coefficient functions
-        self.dir_cf = self.mesh.BoundaryCF(dir_dict, default=0)
-        self.neu_cf = self.mesh.BoundaryCF(neu_dict, default=CF((0,) * self.mesh.dim))
+        if self.vectorial:
+            self.dir_cf = self.mesh.BoundaryCF(dir_dict, default=CF((0,) * self.mesh.dim))
+            self.neu_cf = self.mesh.BoundaryCF(neu_dict, default=CF((0,) * self.mesh.dim*self.mesh.dim, dims = (self.mesh.dim, self.mesh.dim) ))
+        else:
+            self.dir_cf = self.mesh.BoundaryCF(dir_dict, default=0)
+            self.neu_cf = self.mesh.BoundaryCF(neu_dict, default=CF((0,) * self.mesh.dim))
             
         # Some message describing the boundary conditions
         if self.verbose == 1:
