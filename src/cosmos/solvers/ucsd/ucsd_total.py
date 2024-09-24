@@ -16,17 +16,15 @@ import numpy as np
 
 class ucsd_total(UnsteadySolver):
 
-    def __init__(self, mesh=None, fes_order = 1, dt = 0.1, T = 1.0):
+    def __init__(self, mesh=None, fes_order = 1, dt = 0.1, T = 1.0, u0 = None):
 
         super().__init__(mesh=mesh, dt = dt, T=T)
 
         self.fes_order = fes_order
 
-        self.u0_v = exp(-5*(x**2+(y-1)**2+z**2))
-        self.u0_s = exp(-5*(x**2+(y-1)**2+z**2))
+        self.u0_v = u0[0]
+        self.u0_s = u0[1]
 
-        # self.u0_v = exp(-5*((x-0.5)**2+(y-0.5)**2+(z-0.5)**2)) + exp(-5*((x-0.5)**2+(y-0.5)**2+(z+0.5)**2))
-        # self.u0_s = exp(-5*((x-0.5)**2+(y-0.5)**2+(z-0.5)**2)) + exp(-5*((x-0.5)**2+(y-0.5)**2+(z+0.5)**2))
         self.displ = CF((0,)*self.mesh.dim)
         
         self.__setup_willmore__()
@@ -42,20 +40,11 @@ class ucsd_total(UnsteadySolver):
         nsteps = int((self.T-0.0)/self.dt)
         ramp_steps = int(nsteps*0.1)
         
-        k=0
-        n_out = 100
-        out_int = int(nsteps//n_out)
         exp0 = -7
         exp1 = int(np.log10(self.dt))
         ramp_vals = np.logspace(exp0, exp1, num=ramp_steps)
 
         time_vals = np.concatenate((ramp_vals, np.ones(nsteps)*self.dt))
-
-        vtkout1 = VTKOutput(self.mesh, coefs=[self.solver_um.displ_h, self.solver_um.u_h, self.solver_um.b_v_h, self.solver_um.displ], names = ["displ", "u", "vel", "displ_i"], filename = "./examples/total/vtk/total_vol")
-        vtkout1.Do(time = self.solver_um.t.Get())
-
-        vtkout2 = VTKOutput(self.mesh, coefs=[self.solver_w.displ_h, self.solver_um.v_h], names = ["displ", "v"], filename = "./examples/total/vtk/total_bnd")
-        vtkout2.Do(time = self.solver_w.t.Get(), vb = BND)
 
 
         for i, dt_i in enumerate(time_vals):
@@ -75,11 +64,6 @@ class ucsd_total(UnsteadySolver):
             bnd_bends = next(self.solver_um_generator)
 
             self.solver_w.barbed_ends = bnd_bends
-
-            if k%(out_int+1)==0:
-                vtkout1.Do(time = self.solver_um.t.Get())
-                vtkout2.Do(time = self.solver_um.t.Get(), vb = BND)
-            k+=1
 
             print(self.solver_w.t.Get())
 
@@ -161,38 +145,63 @@ class ucsd_total(UnsteadySolver):
 
 if __name__ == "__main__":
 
-    ## SIMULATION
+    # ## SIMULATION
 
-    # mesh, geo = generate_cube(maxh=0.1, order_g=1, R=1, b=2)
+    # mesh, geo = generate_box(maxh=0.1, order_g=1, a=1, b=2)
 
     # dt = 1e-3
     # T = 1.0
+    # u0_v = exp(-5*(x**2+(y-1)**2+z**2))
+    # u0_s = exp(-5*(x**2+(y-1)**2+z**2))
 
-    # solver = ucsd_total(mesh = mesh, dt=dt, T = T)
+    # solver = ucsd_total(mesh = mesh, dt=dt, T = T, u0=[u0_v, u0_s])
 
-    # i=0
-    # out_int = int(((T-0.0)/dt)//100)
+    # vtkout1 = VTKOutput(solver.mesh, coefs=[solver.solver_um.displ_h, solver.solver_um.u_h, solver.solver_um.b_v_h, solver.solver_um.displ], names = ["displ", "u", "vel", "displ_i"], filename = "./examples/total/vtk/total_vol")
+    # vtkout1.Do(time = solver.solver_um.t.Get())
+
+    # vtkout2 = VTKOutput(solver.mesh, coefs=[solver.solver_w.displ_h, solver.solver_um.v_h], names = ["displ", "v"], filename = "./examples/total/vtk/total_bnd")
+    # vtkout2.Do(time = solver.solver_w.t.Get(), vb = BND)
+
+    # k=0
+    # n_out = 100
+    # nsteps = int((T-0.0)/dt)
+    # out_int = int(nsteps//n_out)
 
     # for u in solver():
+    #     # Draw(solver.solver_w.barbed_ends, mesh, deformation = solver.solver_um.displ_h)
 
-    #     j=0
-    #     Draw(solver.solver_w.barbed_ends, mesh, deformation = solver.solver_um.displ_h)
+    #     if k%(out_int+1)==0:
+    #         vtkout1.Do(time = solver.solver_um.t.Get())
+    #         vtkout2.Do(time = solver.solver_um.t.Get(), vb = BND)
+    #     k+=1
 
-    ## SIMULATION 2
+    # SIMULATION 2
 
-    mesh, geo = generate_box(maxh=0.08, order_g=1, a=1, b=1)
+    mesh, geo = generate_box(maxh=0.1, order_g=1, a=1, b=2)
 
     dt = 1e-3
     T = 1.0
+    u0_v = sin(pi*y)**2*IfPos(y,1,0)
+    u0_s = sin(pi*y)**2*IfPos(y,1,0)
 
-    solver = ucsd_total(mesh = mesh, dt=dt, T = T)
+    solver = ucsd_total(mesh = mesh, dt=dt, T = T, u0=[u0_v, u0_s])
 
-    i=0
-    out_int = int(((T-0.0)/dt)//100)
+    vtkout1 = VTKOutput(solver.mesh, coefs=[solver.solver_um.displ_h, solver.solver_um.u_h, solver.solver_um.b_v_h, solver.solver_um.displ], names = ["displ", "u", "vel", "displ_i"], filename = "./examples/total/vtk/total_vol2")
+    vtkout1.Do(time = solver.solver_um.t.Get())
+
+    vtkout2 = VTKOutput(solver.mesh, coefs=[solver.solver_w.displ_h, solver.solver_um.v_h], names = ["displ", "v"], filename = "./examples/total/vtk/total_bnd2")
+    vtkout2.Do(time = solver.solver_w.t.Get(), vb = BND)
+
+    k=0
+    n_out = 100
+    nsteps = int((T-0.0)/dt)
+    out_int = int(nsteps//n_out)
 
     for u in solver():
+        # Draw(CF((x,y,z)), mesh, deformation = solver.solver_um.displ_h)
 
-        clipping = { "function" : True,  "pnt" : (0,0,0), "vec" : (0,0,-1) }
-        Draw(solver.solver_um.u_h, mesh, deformation = solver.solver_um.displ_h)
-
+        if k%(out_int+1)==0:
+            vtkout1.Do(time = solver.solver_um.t.Get())
+            vtkout2.Do(time = solver.solver_um.t.Get(), vb = BND)
+        k+=1
 # %%

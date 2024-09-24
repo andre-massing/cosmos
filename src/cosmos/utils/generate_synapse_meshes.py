@@ -1,16 +1,19 @@
 # %%
 from ngsolve import *
 import netgen.occ as occ
+import netgen.csg as csg
 from netgen.meshing import MeshingStep
 from ngsolve.webgui import Draw
 
 __all__ = [
     'generate_circle',
     'generate_sphere',
+    'generate_open_sphere',
     'generate_ball',
     'generate_box',
     'generate_cube_g5',
     'generate_torus',
+    'generate_open_torus',
     'generate_n_torus',
     'generate_synapse2d',
     'generate_synapse3d'
@@ -21,7 +24,7 @@ def Meshing(geo, maxh, order_g, vol_or_bnd):
     if vol_or_bnd == 'BND':
         mesh = geo.GenerateMesh(maxh=maxh, optsteps2d=3, perfstepsend=MeshingStep.MESHSURFACE)
     elif vol_or_bnd == 'VOL':
-        mesh = geo.GenerateMesh(maxh=maxh)
+        mesh = geo.GenerateMesh(maxh=maxh, optsteps2d=3)
     mesh = Mesh(mesh)
     mesh.Curve(order_g)
 
@@ -57,6 +60,22 @@ def generate_sphere(maxh, order_g = 1, center=occ.Pnt(0,0,0), R = 0.5):
     mesh = Mesh(mesh)
     mesh.Curve(order_g)
 
+    return mesh, geo
+
+def generate_open_sphere(maxh, order_g = 1, center=occ.Pnt(0,0,0), R = 0.5):
+
+    geo          = csg.CSGeometry()
+    sphere       = csg.Sphere(csg.Pnt(0,0,0), R)
+    bot          = csg.Plane(csg.Pnt(0,0,0), csg.Vec(0,0,-1))
+    finitesphere = sphere * bot
+
+    geo.AddSurface(sphere, finitesphere.bc("membrane"))
+    geo.NameEdge(sphere,bot, "boundary")
+    
+    mesh = geo.GenerateMesh(maxh=maxh, optsteps2d=3, perfstepsend=MeshingStep.MESHSURFACE)
+    mesh = Mesh(mesh)
+    mesh.Curve(order_g)
+
     return mesh, geo 
 
 def generate_ball(maxh, order_g = 1, center=occ.Pnt(0,0,0), R = 0.5, vol_or_bnd = 'VOL'):
@@ -74,14 +93,49 @@ def generate_ball(maxh, order_g = 1, center=occ.Pnt(0,0,0), R = 0.5, vol_or_bnd 
 
 def generate_torus(maxh, order_g = 1, center=occ.Pnt(0,0,0), R = 1.0, r = 0.4, vol_or_bnd = 'VOL'):
 
-    circ = occ.WorkPlane(occ.Axes((R,0,0), -occ.Y,occ.X)).Circle(r).Wire()
-    body = occ.Revolve(circ, occ.Axis((0,0,0), (0,0,1)), 360)
-    body = body.Move((center[0], center[1], center[2]))
-    body.faces.name = "membrane"
+    spline = csg.SplineCurve2d() # create a 2d spline
+    eps = r*1e-2
+
+    # define the control points
+    pnts = [ (0,R-r), (-r+eps,R-r+eps), (-r,R),
+            (-r+eps,R+r-eps), (0,R+r), (r-eps,R+r-eps), (r,R), (r-eps,R-r+eps) ]
+    # define the splines using the control points
+    segs = [ (0,1,2), (2,3,4), (4,5,6), (6,7,0) ]
+
+    # add the points and segments to the spline
+    for pnt in pnts:
+        spline.AddPoint (*pnt)
+
+    for seg in segs:
+        spline.AddSegment (*seg)
+
+    rev = csg.Revolution ( csg.Pnt(0,0,-1), csg.Pnt(0,0,1), spline)
+    geo = csg.CSGeometry()
+    geo.Add (rev.col([0,0,1]))
+
+    mesh = Meshing(geo, maxh, order_g, vol_or_bnd)
+
+    return mesh, geo
+
+def generate_open_torus(maxh, order_g = 1, center=occ.Pnt(0,0,0), R = 1.0, r = 0.4):
+
+    pnt1 = occ.Pnt(R-r + center[0], 0 + center[1], 0 + center[2])
+    pnt2 = occ.Pnt(R + center[0], 0 + center[1], r + center[2])
+    pnt3 = occ.Pnt(R+r + center[0], 0 + center[1], 0 + center[2])
+    pnt4 = occ.Pnt(R + center[0], 0 + center[1], -r + center[2])
+
+    arc1 = occ.ArcOfCircle(pnt1, pnt2, pnt3)
+    arc2 = occ.ArcOfCircle(pnt3, pnt4, pnt1)
+
+    w = occ.Wire([arc1, arc2])
+    w.edges.name = "membrane"
+    body = w.Revolve(occ.Axis((0,0,0),occ.Z), 180).Rotate(occ.Axis((0,0,0),occ.X), 90)
+
+    body.edges[occ.Z<maxh/2].name = "boundary"
 
     geo = occ.OCCGeometry(body)
 
-    mesh = Meshing(geo, maxh, order_g, vol_or_bnd)
+    mesh = Meshing(geo, maxh, order_g, vol_or_bnd = 'BND')
 
     return mesh, geo
 
@@ -271,24 +325,33 @@ def generate_synapse3d(maxh, order_g = 1, external = False, vol_or_bnd = 'VOL'):
 if __name__ == "__main__":
     order_g = 3
 
-    circle, _ = generate_circle(maxh=0.05, order_g = order_g)
-    Draw(circle)
+    # circle, _ = generate_circle(maxh=0.05, order_g = order_g)
+    # Draw(circle)
 
-    sphere, _ = generate_sphere(maxh=0.05, order_g = order_g)
-    Draw(sphere, clipping={"x": 0, "y": 1, "z": 0, "dist": 0.0})
+    # sphere, _ = generate_sphere(maxh=0.05, order_g = order_g)
+    # Draw(sphere, clipping={"x": 0, "y": 1, "z": 0, "dist": 0.0})
 
-    ball, _ = generate_ball(maxh=0.05, order_g = order_g)
-    Draw(ball, clipping={"x": 0, "y": 1, "z": 0, "dist": 0.0})
+    # open_sphere, _ = generate_open_sphere(maxh=0.05, order_g = order_g)
+    # Draw(open_sphere)
 
-    cube_g5, _ = generate_cube_g5(maxh=0.05, order_g = order_g, vol_or_bnd='BND')
-    Draw(cube_g5, clipping={"x": 0, "y": 1, "z": 0, "dist": 0.0})
+    # ball, _ = generate_ball(maxh=0.05, order_g = order_g)
+    # Draw(ball, clipping={"x": 0, "y": 1, "z": 0, "dist": 0.0})
 
-    torus, _ = generate_torus(maxh=0.2, order_g = order_g, R = sqrt(2), r = 1.0, vol_or_bnd='BND')
-    Draw(torus, clipping={"x": 0, "y": 1, "z": 0, "dist": 0.0})
+    # cube_g5, _ = generate_cube_g5(maxh=0.05, order_g = order_g, vol_or_bnd='BND')
+    # Draw(cube_g5, clipping={"x": 0, "y": 1, "z": 0, "dist": 0.0})
 
-    synapse2d, _ = generate_synapse2d(maxh=0.05, order_g = order_g)
-    Draw(synapse2d)
+    # torus, _ = generate_torus(maxh=0.2, order_g = order_g, R = sqrt(2), r = 1.0, vol_or_bnd='BND')
+    # Draw(torus, clipping={"x": 0, "y": 1, "z": 0, "dist": 0.0})
 
-    synapse3d, _ = generate_synapse3d(maxh=0.1, order_g = order_g)
-    Draw(synapse3d, draw_surf = False, clipping={"x": 0, "y": 1, "z": 0, "dist": 0.0})
+    open_torus, _ = generate_open_torus(maxh=0.2, order_g = order_g, R = sqrt(2), r = 1.0)
+    Draw(open_torus)
+    print(open_torus.GetBoundaries())
+    print(open_torus.GetBBoundaries())
+    print(open_torus.GetBBBoundaries())
+
+    # synapse2d, _ = generate_synapse2d(maxh=0.05, order_g = order_g)
+    # Draw(synapse2d)
+
+    # synapse3d, _ = generate_synapse3d(maxh=0.1, order_g = order_g)
+    # Draw(synapse3d, draw_surf = False, clipping={"x": 0, "y": 1, "z": 0, "dist": 0.0})
 # %%

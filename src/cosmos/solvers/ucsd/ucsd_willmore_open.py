@@ -10,9 +10,9 @@ import time as time
 import numpy as np
 import pandas as pd
 
-class WillmoreSolver(UnsteadySolver):
+class WillmoreSolverOpen(UnsteadySolver):
 
-    def __init__(self, mesh=None, fes_order=1, dt=0.1, t = Parameter(0.0), T=1.0, bnd_cond=None, u0 = None, rhs=None, barbed_ends = CF(0.0), verbose = 0):
+    def __init__(self, mesh=None, fes_order=1, dt=0.1, t = Parameter(0.0), T=1.0, bnd_cond=None, u0 = None, rhs=None, barbed_ends = CF(0.0), bnd_name = "default", verbose = 0):
 
         super().__init__(mesh=mesh, dt = dt, t = t, T=T, bnd_cond=bnd_cond, verbose=verbose)
 
@@ -20,6 +20,7 @@ class WillmoreSolver(UnsteadySolver):
         self.rhs = rhs
         self.u0 = u0
         self.barbed_ends = barbed_ends
+        self.bnd_name = bnd_name
 
         self.setup = False
         if mesh != None:
@@ -31,23 +32,24 @@ class WillmoreSolver(UnsteadySolver):
         
     def __build_Ab__(self):
 
+        V1_0 = VectorH1(self.mesh, order=self.fes_order, definedon=self.mesh.Boundaries('.*'), dirichlet_bbnd = self.mesh.BBoundaries(self.bnd_name))
         V1 = VectorH1(self.mesh, order=self.fes_order, definedon=self.mesh.Boundaries('.*'))
         V2 = H1(self.mesh, order=self.fes_order, definedon=self.mesh.Boundaries('.*'))
 
-        self.displ_h = GridFunction(V1)
-        self.displ_h_old = GridFunction(V1)
-        self.dXtot_h = GridFunction(V1)
+        self.displ_h = GridFunction(V1_0)
+        self.displ_h_old = GridFunction(V1_0)
+        self.dXtot_h = GridFunction(V1_0)
 
         if self.mesh.dim == 3:
             Ident = CF((x,y,z))
         elif self.mesh.dim == 2:
             Ident = CF((x,y))
 
-        self.X_m = GridFunction(V1)
-        self.X_m.Set(Ident, definedon=self.mesh.Boundaries(".*"))
+        self.X_m = GridFunction(V1_0)
+        self.X_m.Set(Ident, definedon = self.mesh.Boundaries(".*"))
 
-        self.X0 = GridFunction(V1)
-        self.X0.Set(Ident, definedon=self.mesh.Boundaries(".*"))
+        self.X0 = GridFunction(V1_0)
+        self.X0.Set(Ident, definedon = self.mesh.Boundaries(".*"))
 
         self.u_h = GridFunction(V1)
 
@@ -62,11 +64,14 @@ class WillmoreSolver(UnsteadySolver):
             sym = 0.5*(Grad(chi).Trace()+Grad(chi).Trace().trans)
             return sym
         
-        X = V1*V1
+        X = V1_0*V1
         (dX, kappa), (chi, eta) = X.TnT()
 
         self.dXk1_h = GridFunction(X)
         self.dX1_h, self.kappa1_h = self.dXk1_h.components
+
+        rho = pi
+        xsi = CF((x,y,z))*sin(rho) + CF((0,0,1))*cos(rho)
         
         (kappa0, eta0) = V1.TnT()
         M0 = BilinearForm(V1)
@@ -74,9 +79,12 @@ class WillmoreSolver(UnsteadySolver):
         M0 += kappa0*eta0*ds
         M0.Assemble()
         l0 += -InnerProduct(self.Ps, Grad(eta0).Trace())*ds
+        l0 += InnerProduct(xsi, eta0)*ds(definedon=self.mesh.BBoundaries(self.bnd_name))
         l0.Assemble()
 
         self.kappa1_h.vec.data = M0.mat.Inverse(V1.FreeDofs())*l0.vec
+
+        Draw(self.kappa1_h)
 
         self.dt_var = Parameter(self.dt)
 
@@ -93,6 +101,12 @@ class WillmoreSolver(UnsteadySolver):
         self.M += (kappa*eta+InnerProduct(gradient(dX), gradient(eta)))*ds(deformation = self.displ_h)
 
         self.l += -InnerProduct(gradient(self.X_m),gradient(eta))*ds(deformation = self.displ_h)
+
+        ## Addition for the open boundary
+        rho = pi
+        xsi = CF((x,y,z))*sin(rho) + CF((0,0,1))*cos(rho)
+        self.l += InnerProduct(xsi, eta)*ds(deformation = self.displ_h, definedon=mesh.BBoundaries(self.bnd_name))
+
 
         # self.M += InnerProduct(dX, chi)/self.dt_var*ds(deformation = self.displ_h)
         # self.M += -InnerProduct(gradient(kappa), gradient(chi))*ds(deformation = self.displ_h)
@@ -153,14 +167,12 @@ class WillmoreSolver(UnsteadySolver):
 
         ## DUAN LI
 
-        W = V1*V2
+        W = V1_0*V2
 
         (u2, p),(v2, q) = W.TnT()
 
         self.dXk2_h = GridFunction(W)
         self.dX2_h, self.kappa2_h = self.dXk2_h.components
-
-        self.nu_aux = GridFunction(V1)
 
 
         self.M2 = BilinearForm(W)
@@ -370,24 +382,24 @@ if __name__ == "__main__":
 
     # EXAMPLE
 
-    # mesh, _ = generate_torus(maxh=0.2, R=sqrt(2), r=1, order_g=1)
+    # mesh, _ = generate_open_sphere(maxh=0.1, R = 1, order_g = 1)
     # Draw(mesh)
 
     # t = Parameter(0.0)
 
-    # T = 1.0
+    # T = 0.1
     # dt = 0.001
     # fes_order = 1
 
-    # solver = WillmoreSolver(mesh=mesh, fes_order=fes_order, dt=dt, t=t, T=T)
+    # solver = WillmoreSolverOpen(mesh=mesh, fes_order=fes_order, dt=dt, t=t, T=T, bnd_name = "boundary")
 
     # solver_generator = solver()
 
-    # vtkout = VTKOutput(mesh,coefs=[solver.displ_h], names=["displ"],filename="./examples/willmore/vtk/torus")
+    # vtkout = VTKOutput(mesh,coefs=[solver.displ_h], names=["displ"],filename="./examples/willmore_open/vtk/sphere")
     # vtkout.Do(time = solver.t.Get(), vb = BND)
 
     # i=0
-    # out_int = int(((T-0.0)/dt)//100)
+    # out_int = int(((T-0.0)/dt)//10)
 
     # nsteps = int((T-0.0)/dt)
     # ramp_steps = int(nsteps*0.1)
@@ -398,6 +410,9 @@ if __name__ == "__main__":
 
     # time_vals = np.concatenate((ramp_vals, np.ones(nsteps)*dt))
 
+    # settings={"camera": {"transformations": [{"type": "rotateX", "angle": -45}]}}
+    # scene = Draw(solver.displ_h, solver.mesh, deformation=solver.displ_h, settings= settings)
+
     # for i, dt_i in enumerate(time_vals):
 
     #     solver.dt = dt_i
@@ -406,38 +421,41 @@ if __name__ == "__main__":
 
     #     if i%(out_int+1)==0:
     #         vtkout.Do(time = solver.t.Get(), vb = BND)
-    #         Draw(solver.displ_h, solver.mesh, deformation=solver.displ_h)
+    #         scene.Redraw()
     #     i+=1
 
     # EXAMPLE 2
 
-    mesh, _ = generate_box(maxh=0.1, a=1, b=4, order_g=1)
+    mesh, _ = generate_open_torus(maxh=0.15, R = 2, r = 1, order_g = 1)
     Draw(mesh)
 
     t = Parameter(0.0)
 
-    T = 1.0
+    T = 0.5
     dt = 0.001
     fes_order = 1
 
-    solver = WillmoreSolver(mesh=mesh, fes_order=fes_order, dt=dt, t=t, T=T)
+    solver = WillmoreSolverOpen(mesh=mesh, fes_order=fes_order, dt=dt, t=t, T=T, bnd_name = "boundary")
 
     solver_generator = solver()
 
-    vtkout = VTKOutput(mesh,coefs=[solver.displ_h], names=["displ"],filename="./examples/willmore/vtk/random")
+    vtkout = VTKOutput(mesh,coefs=[solver.displ_h], names=["displ"],filename="./examples/willmore_open/vtk/torus")
     vtkout.Do(time = solver.t.Get(), vb = BND)
 
     i=0
-    out_int = int(((T-0.0)/dt)//100)
+    out_int = int(((T-0.0)/dt)//10)
 
     nsteps = int((T-0.0)/dt)
     ramp_steps = int(nsteps*0.1)
     
-    exp0 = -6
+    exp0 = -3
     exp1 = int(np.log10(dt))
     ramp_vals = np.logspace(exp0, exp1, num=ramp_steps)
 
     time_vals = np.concatenate((ramp_vals, np.ones(nsteps)*dt))
+
+    settings={"camera": {"transformations": [{"type": "rotateX", "angle": -45}]}}
+    scene = Draw(solver.displ_h, solver.mesh, deformation=solver.displ_h, settings= settings)
 
     for i, dt_i in enumerate(time_vals):
 
@@ -447,7 +465,6 @@ if __name__ == "__main__":
 
         if i%(out_int+1)==0:
             vtkout.Do(time = solver.t.Get(), vb = BND)
-            Draw(solver.displ_h, solver.mesh, deformation=solver.displ_h)
+            scene.Redraw()
         i+=1
-
 # %%

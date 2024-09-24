@@ -137,7 +137,7 @@ class um_bs_ADR_CGSolver(UnsteadySolver):
 
             self.__finalize__()
 
-            yield self.v_h
+            yield self.u_h
 
 
     def __update__(self):
@@ -154,7 +154,7 @@ class um_bs_ADR_CGSolver(UnsteadySolver):
             '''
             Switch the above to  :
 
-            self.displ_h.Set(self.displ_old_h+self.displ)
+            self.displ_h.Set(self.displ)
 
             in case convergence studies are being run
             '''
@@ -183,7 +183,7 @@ def gradient(f,P):
     l = len(f.dims)
 
     if l == 0:
-        # scalar gradient is deifed traditionally
+        # scalar gradient is defined traditionally
 
         if m == 2:
             output = P*CoefficientFunction((f.Diff(x), f.Diff(y)))
@@ -255,11 +255,11 @@ if __name__ == "__main__":
 
     displ_ex = phi - CF((x,y,z))
     
-    d_v = 1 + x**2
+    d_v = 0.0
     c_v = cos(x)
     b_v = CF((2,1,0))
 
-    d_s = 1 + y**2
+    d_s = 0.0
     c_s = cos(y)
     b_s = P_ex*CF((0,0,0))
 
@@ -289,13 +289,13 @@ if __name__ == "__main__":
 
     T = 1.0
     dt0 = 0.05
-    t_refinements = 2
+    t_refinements = 3
     t_power = 1.5
     dt_vals = dt0/np.power(1.5, np.arange(t_refinements+1))
 
     h_refinements = 2
     fes_order = 1
-    dh0 = 0.2
+    dh0 = 0.1
     h_power = 1.5
     dh_vals = dh0/np.power(1.5, np.arange(h_refinements+1))
 
@@ -306,48 +306,17 @@ if __name__ == "__main__":
     ## CONVERGENCE FOR VOLUME PART
     ## !! SWITCH THE OUTPUT TO u_h !!
 
-    # for i, dt in enumerate(dt_vals):
-
-    #     conv = Convergence(geom=geo, dh = dh0, power=h_power, n_refinements=h_refinements, time_adapt=False, vol_or_bnd='VOL')
-
-    #     solver = um_bs_ADR_CGSolver(fes_order=fes_order, b=[b_v, b_s], c=[c_v, c_s], d=[d_v, d_s], dt=dt, t=t, T=T, u0=[u_ex, v_ex], rhs=[rhs_v, rhs_s], bnd_cond = bnd_cond, coupling = [alpha, beta], displ=displ_ex)
-
-    #     err_dt = conv(solver=solver, exact_sol=u_ex, vol_or_bnd_err='VOL')
-
-    #     ERR[i,:] = err_dt
-
-    # name = "convergence/um_bs/sphere_time_vol_k" + str(fes_order) + ".dat"
-
-    # space_labels =  [f'{x:.2e}' for x in dh_vals]
-    # space_labels = ["dt"] + space_labels
-    # time_output = np.column_stack((dt_vals, ERR))
-
-    # df = pd.DataFrame(time_output, columns=space_labels)
-    # df.to_csv(name, sep='\t', index=False)
-
-    # name = "convergence/um_bs/sphere_space_vol_k" + str(fes_order) + ".dat"
-
-    # time_labels =  [f'{x:.2e}' for x in dt_vals]
-    # time_labels = ["dh"] + time_labels
-    # space_output = np.column_stack((dh_vals, ERR.T))
-
-    # df = pd.DataFrame(space_output, columns=time_labels)
-    # df.to_csv(name, sep='\t', index=False)
-
-    ## CONVERGENCE FOR SURFACE PART
-    ## !! SWITCH THE OUTPUT TO v_h !!
-
     for i, dt in enumerate(dt_vals):
 
         conv = Convergence(geom=geo, dh = dh0, power=h_power, n_refinements=h_refinements, time_adapt=False, vol_or_bnd='VOL')
 
         solver = um_bs_ADR_CGSolver(fes_order=fes_order, b=[b_v, b_s], c=[c_v, c_s], d=[d_v, d_s], dt=dt, t=t, T=T, u0=[u_ex, v_ex], rhs=[rhs_v, rhs_s], bnd_cond = bnd_cond, coupling = [alpha, beta], displ=displ_ex)
 
-        err_dt = conv(solver=solver, exact_sol=v_ex, vol_or_bnd_err='BND')
+        err_dt = conv(solver=solver, exact_sol=u_ex, vol_or_bnd_err='VOL')
 
         ERR[i,:] = err_dt
 
-    name = "convergence/um_bs/sphere_time_bnd_k" + str(fes_order) + ".dat"
+    name = "convergence/um_bs/sphere_time_vol_k" + str(fes_order) + ".dat"
 
     space_labels =  [f'{x:.2e}' for x in dh_vals]
     space_labels = ["dt"] + space_labels
@@ -356,7 +325,7 @@ if __name__ == "__main__":
     df = pd.DataFrame(time_output, columns=space_labels)
     df.to_csv(name, sep='\t', index=False)
 
-    name = "convergence/um_bs/sphere_space_bnd_k" + str(fes_order) + ".dat"
+    name = "convergence/um_bs/sphere_space_vol_k" + str(fes_order) + ".dat"
 
     time_labels =  [f'{x:.2e}' for x in dt_vals]
     time_labels = ["dh"] + time_labels
@@ -364,5 +333,36 @@ if __name__ == "__main__":
 
     df = pd.DataFrame(space_output, columns=time_labels)
     df.to_csv(name, sep='\t', index=False)
+
+    # CONVERGENCE FOR SURFACE PART
+    # !! SWITCH THE OUTPUT TO v_h !!
+
+    # for i, dt in enumerate(dt_vals):
+
+    #     conv = Convergence(geom=geo, dh = dh0, power=h_power, n_refinements=h_refinements, time_adapt=False, vol_or_bnd='VOL')
+
+    #     solver = um_bs_ADR_CGSolver(fes_order=fes_order, b=[b_v, b_s], c=[c_v, c_s], d=[d_v, d_s], dt=dt, t=t, T=T, u0=[u_ex, v_ex], rhs=[rhs_v, rhs_s], bnd_cond = bnd_cond, coupling = [alpha, beta], displ=displ_ex)
+
+    #     err_dt = conv(solver=solver, exact_sol=v_ex, vol_or_bnd_err='BND')
+
+    #     ERR[i,:] = err_dt
+
+    # name = "convergence/um_bs/sphere_time_bnd_k" + str(fes_order) + ".dat"
+
+    # space_labels =  [f'{x:.2e}' for x in dh_vals]
+    # space_labels = ["dt"] + space_labels
+    # time_output = np.column_stack((dt_vals, ERR))
+
+    # df = pd.DataFrame(time_output, columns=space_labels)
+    # df.to_csv(name, sep='\t', index=False)
+
+    # name = "convergence/um_bs/sphere_space_bnd_k" + str(fes_order) + ".dat"
+
+    # time_labels =  [f'{x:.2e}' for x in dt_vals]
+    # time_labels = ["dh"] + time_labels
+    # space_output = np.column_stack((dh_vals, ERR.T))
+
+    # df = pd.DataFrame(space_output, columns=time_labels)
+    # df.to_csv(name, sep='\t', index=False)
 
 # %%

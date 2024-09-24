@@ -40,14 +40,16 @@ class VelocitySolver(SteadySolver):
         aux.Set(alpha)
         self.dt = np.max(aux.vec.data)**2
 
-        gfuh = GridFunction(fesh)
-        gfuh.Set(1, definedon = self.dir_bnd)
-
         displ_h = GridFunction(fesV)
         displ_h.Set(self.displ)
 
+        gfuh = GridFunction(fesh)
+        gfuh.Set(1, definedon = self.dir_bnd)
+
+        self.mesh.SetDeformation(displ_h)
+
         a1 = BilinearForm(fesh)
-        a1 += (self.dt*grad(uh)*grad(vh) + uh*vh)*dx(deformation = displ_h)
+        a1 += (self.dt*grad(uh)*grad(vh) + uh*vh)*dx
         a1.Assemble()
 
         l1 = LinearForm(fesh)
@@ -59,11 +61,11 @@ class VelocitySolver(SteadySolver):
         X.Set(grad(gfuh)/Norm(grad(gfuh)))
 
         a2 = BilinearForm(fes)
-        a2 += (grad(u)*grad(v))*dx(deformation = displ_h)
+        a2 += (grad(u)*grad(v))*dx
         a2.Assemble()
         
         l2 = LinearForm(fes)
-        l2 += X*grad(v)*dx(deformation = displ_h)
+        l2 += X*grad(v)*dx
         l2.Assemble()
 
         gfu = GridFunction(fes)
@@ -73,6 +75,8 @@ class VelocitySolver(SteadySolver):
         gfu.vec.data += a2.mat.Inverse(freedofs=fes.FreeDofs()) * r
 
         gfu.vec.data = -gfu.vec.data
+
+        self.mesh.UnsetDeformation()
 
         yield X
 
