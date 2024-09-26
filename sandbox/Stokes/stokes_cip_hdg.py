@@ -112,3 +112,4 @@ def StokesCIPHDG(mesh, *, order_u, nu, f, g, filename="results/stokes_cip_sol"):
     vtkout.Do(vb=BND)
     
     return u_h, p_h
+# %%

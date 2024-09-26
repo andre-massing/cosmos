@@ -8,7 +8,7 @@ from cosmos.utils.generate_surface_meshes import *
 from cosmos.solvers.curvature_calculators import *
 
 # %% Define geometry and mesh it
-# shape = "sphere"
+# shape = "torus"
 shape = "sphere"
 order_g = 1
 maxh = 0.1
@@ -34,6 +34,7 @@ Draw(kappah, mesh)
 
 # %%
 # With this choice of the stabilization parameter, the norm of discrete mean curvature is almost exact 2 for the unit sphere
+# gamma_E = 10.0e-3
 gamma_E = 7.0e-3
 kappah_stab = compute_stabilized_mean_curvature_vector(mesh, gamma_E)
 Draw(kappah_stab, mesh)

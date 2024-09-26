@@ -53,6 +53,8 @@ def compute_stabilized_mean_curvature_vector(mesh, gamma_E=0.01):
     m += InnerProduct(kappa.Trace(), eta.Trace())*ds
     jump_dkappadn = (kappa.Trace().Deriv()*nE-dkappa.Trace())
     jump_detadn = (eta.Trace().Deriv()*nE-deta.Trace())
+    # jump_dkappadn = (kappa.Trace().Deriv().trans*nE-dkappa.Trace())
+    # jump_detadn = (eta.Trace().Deriv().trans*nE-deta.Trace())
     m += gamma_E*h*InnerProduct(jump_dkappadn,jump_detadn)*ds(element_boundary=True)
     
     l = LinearForm(W)
