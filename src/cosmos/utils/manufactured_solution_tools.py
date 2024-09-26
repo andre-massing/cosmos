@@ -2,6 +2,10 @@
 from sympy import *
 from sympy.printing import latex, pretty
 from IPython.display import display, Math
+from ngsolve import Integrate, Mesh, BND, unit_square
+from netgen.meshing import MeshingStep
+from ngsolve.webgui import Draw
+import numpy as np
 
 def vec_simplify(f):
     "Simplify vector expression."
@@ -189,4 +193,58 @@ def get_solution_str(u_str, levelset_str, epsilon_str="1", b_str=["0","0","0"], 
 # %% [markdown]
 # 
 
+# define function to compute the convergence and print the order
 
+class Convergence():
+    
+    def __init__(self, geom=unit_square, dh=0.1, power = 2, n_refinements = 0, time_adapt = False, vol_or_bnd = 'VOL'):
+
+        self.geom = geom
+        self.dh = dh
+        self.power = power
+        self.n_ref = n_refinements
+        self.t_adapt = time_adapt
+        self.vol_or_bnd = vol_or_bnd
+
+    def __call__(self, solver, exact_sol, vol_or_bnd_err='VOL'):
+
+        # Array of errors used for convergence order computation
+        ERR = -np.ones(self.n_ref+1)*np.inf
+
+        maxh = self.dh
+
+        for i in range(self.n_ref+1):
+
+            if self.vol_or_bnd == 'VOL':
+                solver.mesh = Mesh(self.geom.GenerateMesh(maxh = maxh))
+            elif self.vol_or_bnd == 'BND':
+                solver.mesh = Mesh(self.geom.GenerateMesh(maxh = maxh, optsteps2d=3, perfstepsend=MeshingStep.MESHSURFACE))
+
+            for sol in solver():
+
+                if hasattr(solver, 'displ_h'):
+                    solver.mesh.SetDeformation(solver.displ_h)
+
+                if vol_or_bnd_err == 'VOL':
+                    err = sqrt(Integrate((exact_sol-sol)*(exact_sol-sol), solver.mesh, order = solver.fes_order +2))
+                elif vol_or_bnd_err == 'BND':
+                    err = sqrt(Integrate((exact_sol-sol)*(exact_sol-sol), solver.mesh, order = solver.fes_order +2, VOL_or_BND = BND))
+
+                if hasattr(solver, 'displ_h'):
+                    solver.mesh.UnsetDeformation()
+        
+                ERR[i] = np.maximum(ERR[i], err)
+
+            # Update for refinement
+            maxh = maxh/self.power
+            if solver.type == 'unsteady':
+                aux = solver.dt
+                if self.t_adapt:
+                    solver.dt = aux*self.power**(-(solver.fes_order+1))
+                else: 
+                    solver.dt = aux/self.power
+                solver.t.Set(0.0)
+
+        return ERR
+
+# %%
