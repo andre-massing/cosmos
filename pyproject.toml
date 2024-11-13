@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "cosmos"
 version = "0.0.1"
-description = "CoSMoS - Continuum Surface Mechanics Simulator"
+description = "CoSMoS: the Continuum Surface Mechanics Simulator"
 authors = [
 {name = "Andre Massing", email = "andre.massing@ntnu.no"},
 {name = "Alessandro Contri", email = "alecontri@ntnu.no"}
@@ -13,9 +13,9 @@ authors = [
 license = {file = "LICENSE"}
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = [
-"ngsolve>=6.2.2402",
-]
+#dependencies = [
+#"ngsolve>=6.2.2402",
+#]
 
 
 [project.optional-dependencies]
