@@ -1,264 +1,200 @@
 # %%
-from cosmos.utils.generate_synapse_meshes import *
-from cosmos.utils.manufactured_solution_tools import Convergence
-from cosmos.solvers.solver_base import *
+from cosmos.utils.generate_surface_meshes import *
+from cosmos.solvers.base import *
 from ngsolve import *
 
-# Only needed for testing
-from ngsolve.webgui import Draw
-import time as time
-import numpy as np
+class um_sb_ADR_CGSolver(UnsteadySolver):
 
-class um_bs_ADR_CGSolver(UnsteadySolver):
+    def __init__(self, mesh, fes_order=1, dt=0.1, t=Parameter(0.0), T=1.0, params = {}, verbose = 0):
+        """_summary_
 
-    def __init__(self, mesh=None, fes_order=1,  b=None, c=None, d=None, dt=0.1, t=Parameter(0.0), T=1.0, u0=None, bnd_cond=None, rhs = CF(0.0), coupling = [CF(1.0), CF(1.0)], displ_ex = None, verbose = 0):
+        Args:
+            mesh (_type_): _description_
+            fes_order (int, optional): _description_. Defaults to 1.
+            dt (float, optional): _description_. Defaults to 0.1.
+            t (_type_, optional): _description_. Defaults to Parameter(0.0).
+            T (float, optional): _description_. Defaults to 1.0.
+            params (dict, optional): _description_. Defaults to {}.
+            verbose (int, optional): _description_. Defaults to 0.
+        """
         
-        super().__init__(mesh=mesh, dt = dt, t = t, T=T, bnd_cond=bnd_cond, verbose=verbose)
+        super().__init__(mesh, dt = dt, t = t, T=T, verbose=verbose)
 
         self.fes_order = fes_order
-        self.rhs_v = rhs[0]
-        self.b_v = b[0]
-        self.c_v = c[0]
-        self.d_v = d[0]
-        self.u0 = u0[0]
+        self.params = params
 
-        self.rhs_s = rhs[1]
-        self.b_s = b[1]
-        self.c_s = c[1]
-        self.d_s = d[1]
-        self.v0 = u0[1]
+        # Updating the parameters
+        self.__update_params__()
 
-        self.displ_ex = displ_ex
+        # Constructing (without assembling) the bilinear and linear forms
+        self.__build_MAF__()
 
-        self.alpha = coupling[0]
-        self.beta = coupling[1]
+    def __update_params__(self):
+        """_summary_
+        """
 
-    def __build_Ab__(self):
+        # Initialize the parameters
+        accepted_keys = ['rhs_v',  'rhs_s', 'convection_v', 'convection_s',
+                'k_diffusion_v', 'k_diffusion_s', 'k_reaction_v', 'k_reaction_s',
+                'initial_c_v', 'initial_c_s', 'displacement', 'coupling_coefs',
+                'boundary_c']
+        defaults = [CF(0.0), CF(0.0), CF((0,)*self.mesh.dim), CF((0,)*self.mesh.dim),
+                    CF(0.0), CF(0.0), CF(0.0), CF(0.0),
+                    CF(0.0), CF(0.0), CF((0,)*self.mesh.dim), [CF(0.0), CF(0.0)],
+                    {}]
+        BaseSolver.__params_setup__(self.params, accepted_keys, defaults)
 
+        # Initialize boundary conditions
+        accepted_keys = ['convective_flux', 'diffusive_flux']
+        defaults = [['.*', CF((0,)*self.mesh.dim)],
+                    ['.*', CF((0,)*self.mesh.dim)]]  
+        BaseSolver.__params_setup__(self.params['boundary_c'], accepted_keys, defaults)
+
+    def __build_MAF__(self):
+        """_summary_
+        """
+
+        # Setting up the finite element space
         fes_v = H1(self.mesh, order=self.fes_order, dgjumps = True)
         fes_s = H1(self.mesh, order=self.fes_order, definedon=self.mesh.Boundaries('.*'))
-        fes = fes_v*fes_s
+        self.fes = fes_v*fes_s
         V = VectorH1(self.mesh, order=self.fes_order)
-        (u_v, u_s), (v_v, v_s) = fes.TnT()
+        (u_v, u_s), (v_v, v_s) = self.fes.TnT()
 
-        self.dummy = GridFunction(fes_v)
+        # Creating the bilinear and linear forms
+        self.A = BilinearForm(self.fes)
+        self.M = BilinearForm(self.fes, symmetric = True)
+        self.F = LinearForm(self.fes)
+        self.M_old = BilinearForm(self.fes, symmetric = True)
 
+        # Creating the grid functions
+        self.gfu = GridFunction(self.fes)
+        self.gfu_old = GridFunction(self.fes)
         self.displ_h = GridFunction(V)
+        self.displ_h_old = GridFunction(V)
 
-        self.a = BilinearForm(fes)
-        self.m = BilinearForm(fes, symmetric = True)
-        self.f = LinearForm(fes)
-
-        ## Volume part
-
+        # Auxiliary functions for the bilinear forms
         n = specialcf.normal(self.mesh.dim)
         h = specialcf.mesh_size
 
-        diffusion_v = self.d_v*grad(u_v)*grad(v_v) * dx(deformation = self.displ_h)
-        reaction_v = self.c_v * u_v*v_v * dx(deformation = self.displ_h)
-        time_form_v = 1/self.dt*u_v*v_v*dx(deformation = self.displ_h)
+        ## VOLUME PART
 
-        # CIP stabilization
-        S_int = 0.5*Norm(self.b_v*n) # Parameter corresponding to upwind stabilization
+        diffusion_v = self.params['k_diffusion_v']*grad(u_v)*grad(v_v) * dx(deformation = self.displ_h)
+        reaction_v = self.params['k_reaction_v'] * u_v*v_v * dx(deformation = self.displ_h)
+
+        # CIP stabilization for convection part
+        S_int = 0.5*Norm(self.params['convection_v']*n) # Parameter corresponding to upwind stabilization
         jump_u = n*(grad(u_v) - (grad(u_v)).Other())
         jump_v = n*(grad(v_v) - (grad(v_v)).Other())
-        convection_v = -self.b_v*grad(v_v) * u_v *dx(deformation = self.displ_h) \
+        convection_v = -self.params['convection_v']*grad(v_v) * u_v *dx(deformation = self.displ_h) \
             + h**2*S_int*jump_u*jump_v*dx(skeleton=True, deformation = self.displ_h)
         
-        coupling_v = (self.alpha*u_v - self.beta*u_s)*v_v*ds(deformation = self.displ_h)
+        coupling_v = (self.params['coupling_coefs'][0]*u_v \
+                      - self.params['coupling_coefs'][1]*u_s)*v_v*ds(deformation = self.displ_h)
 
-        self.a += diffusion_v + reaction_v + time_form_v + convection_v + coupling_v
+        self.A += diffusion_v + reaction_v + convection_v + coupling_v
 
-        self.m += 1/self.dt*u_v*v_v*dx(deformation = self.displ_h)
-
-        self.f += self.rhs_v*v_v*dx(deformation = self.displ_h)
-
-        ## Surface part
+        ## SURFACE PART
         
-        diffusion_s = self.d_s*grad(u_s).Trace()*grad(v_s).Trace() * ds(deformation = self.displ_h)
-        reaction_s = self.c_s*u_s*v_s*ds(deformation = self.displ_h)
-        time_form_s = 1/self.dt*u_s*v_s*ds(deformation = self.displ_h)
-        convection_s = -self.b_s*grad(v_s).Trace() * u_s *ds(deformation = self.displ_h)
-        coupling_s = -(self.alpha*u_v - self.beta*u_s)*v_s*ds(deformation = self.displ_h)
+        diffusion_s = self.params['k_diffusion_s']*grad(u_s).Trace()*grad(v_s).Trace() * ds(deformation = self.displ_h)
+        reaction_s = self.params['k_reaction_s']*u_s*v_s*ds(deformation = self.displ_h)
+        convection_s = -self.params['convection_s']*grad(v_s).Trace() * u_s *ds(deformation = self.displ_h)
+        coupling_s = -(self.params['coupling_coefs'][0]*u_v \
+                        - self.params['coupling_coefs'][1]*u_s)*v_s*ds(deformation = self.displ_h)
 
-        self.a += diffusion_s + reaction_s + time_form_s + convection_s + coupling_s
+        self.A += diffusion_s + reaction_s + convection_s + coupling_s
 
-        self.m += 1/self.dt*u_s*v_s*ds(deformation = self.displ_h)
+        # Time mass matrix
+        self.M += 1/self.dt*u_v*v_v*dx(deformation = self.displ_h)
+        self.M += 1/self.dt*u_s*v_s*ds(deformation = self.displ_h)
 
-        self.f += self.rhs_s*v_s*ds(deformation = self.displ_h)
+        # Old time mass matrix
+        self.M_old += 1/self.dt*u_v*v_v*dx(deformation = self.displ_h_old)
+        self.M_old += 1/self.dt*u_s*v_s*ds(deformation = self.displ_h_old)
 
-        with TaskManager():
-            self.a.Assemble()
-            self.a_inv = self.a.mat.Inverse(freedofs = fes.FreeDofs())
+        # Right-hand side
+        self.F += self.params['rhs_v']*v_v*dx(deformation = self.displ_h)
+        self.F += self.params['rhs_s']*v_s*ds(deformation = self.displ_h)
 
-        self.gfu = GridFunction(fes)
-        self.gfu_old = GridFunction(fes)
+        self.sol_h = [self.gfu.components[0], self.gfu.components[1]]
 
-        self.u_h = self.gfu.components[0]
-        self.v_h = self.gfu.components[1]
-
-        self.u_h.Set(self.u0)
-        self.v_h.Set(self.v0, definedon=self.mesh.Boundaries(".*"))
+        self.sol_h[0].Set(self.params['initial_c_v'])
+        self.sol_h[1].Set(self.params['initial_c_s'], definedon = self.mesh.Boundaries(".*"))
+        self.displ_h_old.Set(self.params['displacement'])
+        self.displ_h.Set(self.params['displacement'])
 
     def __call__(self):
+        """_summary_
+        """
 
-        self.__setup__()
+        # Updating the parameters
+        self.__update_params__()
 
-        self.__build_Ab__()
+        # Constructing (without assembling) the bilinear and linear forms
+        self.__build_MAF__()
 
-        res = self.f.vec.CreateVector()
+        yield
 
-        while self.t.Get()<self.T- 0.5 * self.dt:
+        while self.t.Get()<self.T - 0.5 * self.dt.Get():
 
-            self.__update__()
+            self.__initialize_step__()
 
-            res.data = self.f.vec \
-                + self.m.mat*self.gfu_old.vec
-            self.gfu.vec.data = self.a_inv * res
+            self.__solve_step__()
 
-            self.dummy.Set(self.v_h, definedon = self.mesh.Boundaries('.*'))
+            self.__finalize_step__()
 
-            yield self.dummy
+            yield
 
+    
+    def __initialize_step__(self):
+        """_summary_
+        """
 
-    def __update__(self):
+        self.__update_params__()
 
         self.gfu_old.vec.data = self.gfu.vec.data
+        self.displ_h_old.vec.data = self.displ_h.vec.data
+
+    def __solve_step__(self):
+        """_summary_
+        """
 
         with TaskManager():
 
-            self.displ_h.Set(self.displ_ex)
-            self.m.Assemble()
+            # Building the forms
+            self.M_old.Assemble()
+            self.F.Assemble()
 
-            self.t.Set(self.t.Get() + self.dt)
-            self.displ_h.Set(self.displ_ex)
+            res = self.F.vec.CreateVector()
+            # Previous time-step
+            res.data =  self.M_old.mat*self.gfu_old.vec
 
-            self.a.Assemble() 
-            self.a_inv.Update()
+            self.t.Set(self.t.Get() + self.dt.Get())
+            self.displ_h.Set(self.params['displacement'])
 
-            self.f.Assemble()
+            self.A.Assemble()
+            self.M.Assemble()
+            self.F.Assemble()
 
+            # Right-hand side
+            res.data += self.F.vec
 
-def gradient(f,P):
+            Mstar = self.M.mat.CreateMatrix()
+            Mstar.AsVector().data = self.M.mat.AsVector() + self.A.mat.AsVector()
 
-    m, _ = P.dims
-    l = len(f.dims)
+            # Possible dirichlet boundary conditions
+            self.sol_h[0].Set(0)
+            self.sol_h[1].Set(0, definedon = self.mesh.Boundaries(".*"))
+            res.data -= Mstar*self.gfu.vec
 
-    if l == 0:
-        # scalar gradient is deifed traditionally
+            # corresponds to M* = M + A
+            invMstar = Mstar.Inverse(freedofs=self.fes.FreeDofs())
 
-        if m == 2:
-            output = P*CoefficientFunction((f.Diff(x), f.Diff(y)))
-        elif m == 3:
-            output = P*CoefficientFunction((f.Diff(x), f.Diff(y), f.Diff(z))) 
-            
-    elif l == 1:
-        # vector gradient is defined component by component
-        # and disposed along columns
+            self.gfu.vec.data += invMstar*res
 
-        if m == 2:
-            aux1 = gradient(f[0], P)
-            aux2 = gradient(f[1], P)
-            output = CoefficientFunction((aux1[0], aux2[0], \
-                aux1[1], aux2[1]), dims = (m,m))
-        elif m == 3:
-            aux1 = gradient(f[0], P)
-            aux2 = gradient(f[1], P)
-            aux3 = gradient(f[2], P)
-            output = CoefficientFunction((aux1[0], aux2[0], aux3[0], \
-                aux1[1], aux2[1], aux3[1],\
-                    aux1[2], aux2[2], aux3[2]), dims = (m,m))
-            
-    else:
+    def __finalize_step__(self):
+        """_summary_
+        """
 
-        raise RuntimeError("Don't know how to take the gradient. Only scalars and vectors are accepted.")
-    
-    return output
-        
-
-if __name__ == "__main__":
-
-    t = Parameter(0.0)
-
-    # General affine transformation (sphere to ellipse)
-    A = CF(((1+0.25*sin(t))*cos(t), -sin(t), 0,\
-                sin(t), (1-0.25*sin(t))*cos(t), 0,\
-                    0, 0, 1), dims = (3,3))
-    b = CF((0.2*t, 0.1*t, 0))
-
-
-    def compute_transformation(A, b):
-
-        phi = A*CF((x,y,z)) + b
-        detJ = Det(A)
-        invA = Cof(A).trans/detJ
-        inv_phi = invA*(CF((x,y,z)) - b)
-        w_phi = A.Diff(t)*inv_phi + b.Diff(t)
-
-        e1 = A[:,0]
-        e2 = A[:,1]
-        e3 = A[:,2]
-
-        n_ex = Cross(e2, e3)*inv_phi[0]+Cross(e3, e1)*inv_phi[1] + Cross(e1, e2)*inv_phi[2]
-        n_ex = n_ex/Norm(n_ex)
-
-        return phi, inv_phi, w_phi, detJ, n_ex
-
-    phi, inv_phi, w_phi, detJ, n_ex = compute_transformation(A, b)
-    P_ex = Id(3)-OuterProduct(n_ex, n_ex)
-
-    displ_ex = phi - CF((x,y,z))
-    
-    d_v = 1 + x**2
-    c_v = cos(x)
-    b_v = CF((2,1,0))
-
-    d_s = 1 + y**2
-    c_s = cos(y)
-    b_s = P_ex*CF((0,0,0))
-
-    alpha = 1.0
-    beta = 1.0
-
-    # I want a stationary solution on the moving mesh
-    u_ex = cos(pi*x)*sin(3*y)*cos(t)
-    v_ex = ((d_v*gradient(u_ex, Id(3)) - b_v*u_ex)*n_ex + alpha*u_ex)/beta
-
-    # u_ex = cos(pi*x)*sin(3*y)
-    # v_ex = z*cos(5*x)
-
-    flux1_v = (b_v*u_ex).Compile()
-    flux2_v = (- d_v*gradient(u_ex, Id(3))).Compile()
-    rel_flux_v = (w_phi*u_ex).Compile()
-    flux_v = flux1_v + flux2_v + rel_flux_v
-    rhs_v = (u_ex.Diff(t) + Trace(gradient(flux_v, Id(3))) + c_v*u_ex).Compile()
-
-    bnd_cond=[['neu', 'membrane', flux2_v],
-              ['dir', 'membrane', flux1_v]]
-
-    flux1_s = b_s*v_ex
-    flux2_s = - d_s*gradient(v_ex, P_ex)
-    rel_flux_s = v_ex*Trace(gradient(w_phi, P_ex)) + w_phi*gradient(v_ex, Id(3))
-    flux_s = flux1_s + flux2_s
-    rhs_s = (v_ex.Diff(t) + rel_flux_s + Trace(gradient(flux_s, P_ex)) + c_s*v_ex + beta*v_ex - alpha*u_ex).Compile()
-
-    fes_order = 1
-    R0 = 1.0
-    T = 1.0
-    dt = 0.2
-    _, geo = generate_ball(maxh=0.2, R = R0, order_g =2)
-    
-    solver = um_bs_ADR_CGSolver(fes_order=fes_order, b=[b_v, b_s], c=[c_v, c_s], d=[d_v, d_s], dt=dt, t=t, T=T, u0=[u_ex, v_ex], rhs=[rhs_v, rhs_s], bnd_cond = bnd_cond, coupling = [alpha, beta], displ_ex=displ_ex)
-
-    conv = Convergence(geom=geo, dh = 0.2, power=1.5, n_refinements=2, time_adapt=True)
-
-    # Convergence order of the bulk solution
-    # order = conv(solver=solver, exact_sol=u_ex, vol_or_bnd_err='VOL')
-    # print(order)
-
-    # # Convergence order of the surface solution. Change in the algorithm above, function __call__ the output to: 
-    # # yield self.dummy
-    order = conv(solver=solver, exact_sol=v_ex, vol_or_bnd_err='BND')
-    print(order)
-
+        pass
 # %%

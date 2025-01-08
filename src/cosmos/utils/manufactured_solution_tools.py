@@ -2,7 +2,7 @@
 from sympy import *
 from sympy.printing import latex, pretty
 from IPython.display import display, Math
-from ngsolve import Integrate, Mesh, BND, unit_square
+from ngsolve import *
 from netgen.meshing import MeshingStep
 from ngsolve.webgui import Draw
 import numpy as np
@@ -193,58 +193,232 @@ def get_solution_str(u_str, levelset_str, epsilon_str="1", b_str=["0","0","0"], 
 # %% [markdown]
 # 
 
-# define function to compute the convergence and print the order
-
-class Convergence():
+class ErrorTools():
     
-    def __init__(self, geom=unit_square, dh=0.1, power = 2, n_refinements = 0, time_adapt = False, vol_or_bnd = 'VOL'):
+    def __init__(self, solver, params):
 
-        self.geom = geom
-        self.dh = dh
-        self.power = power
-        self.n_ref = n_refinements
-        self.t_adapt = time_adapt
-        self.vol_or_bnd = vol_or_bnd
+        self.solver = solver
+        self.params = params
 
-    def __call__(self, solver, exact_sol, vol_or_bnd_err='VOL'):
-
-        # Array of errors used for convergence order computation
-        ERR = -np.ones(self.n_ref+1)*np.inf
-
-        maxh = self.dh
-
-        for i in range(self.n_ref+1):
-
-            if self.vol_or_bnd == 'VOL':
-                solver.mesh = Mesh(self.geom.GenerateMesh(maxh = maxh))
-            elif self.vol_or_bnd == 'BND':
-                solver.mesh = Mesh(self.geom.GenerateMesh(maxh = maxh, optsteps2d=3, perfstepsend=MeshingStep.MESHSURFACE))
-
-            for sol in solver():
-
-                if hasattr(solver, 'displ_h'):
-                    solver.mesh.SetDeformation(solver.displ_h)
-
-                if vol_or_bnd_err == 'VOL':
-                    err = sqrt(Integrate((exact_sol-sol)*(exact_sol-sol), solver.mesh, order = solver.fes_order +2))
-                elif vol_or_bnd_err == 'BND':
-                    err = sqrt(Integrate((exact_sol-sol)*(exact_sol-sol), solver.mesh, order = solver.fes_order +2, VOL_or_BND = BND))
-
-                if hasattr(solver, 'displ_h'):
-                    solver.mesh.UnsetDeformation()
+        self.__params_setup__()
         
-                ERR[i] = np.maximum(ERR[i], err)
+    def __params_setup__(self):
 
-            # Update for refinement
-            maxh = maxh/self.power
-            if solver.type == 'unsteady':
-                aux = solver.dt
-                if self.t_adapt:
-                    solver.dt = aux*self.power**(-(solver.fes_order+1))
-                else: 
-                    solver.dt = aux/self.power
-                solver.t.Set(0.0)
+        for key, value in self.params.items():
+
+            if key == 'exact_solutions':
+
+                self.u_ex = value
+
+            elif key == 'vol_or_bnd':
+
+                self.vol_or_bnd = value
+
+            elif key == 'norms':
+
+                self.norm = value
+
+            else:
+
+                raise Exception("Dictionary key for parameters unknown!")
+            
+    def compute_errors(self):
+
+        dim = len(self.solver.sol_h)
+
+        ERR = [ [] for i in range(dim) ]
+
+        dt_vec = []
+
+        generator = self.solver()
+
+        try:
+
+            for _ in generator:
+
+                errs = self.compute_space_error(dim)
+                for i in range(dim): ERR[i].append(errs[i])
+
+                if hasattr(self.solver, 'dt'):
+                    dt_vec.append(self.solver.dt.Get())
+
+        except:
+
+            print('-'*40)
+            print('SIMULATION FAILED!')
+            print('-'*40)
+
+        for i in range(dim):
+
+            if self.norm[i][:2] == 'L2' and len(self.norm[i])>2:
+
+                ERR[i] = sqrt(np.inner(np.array(dt_vec), np.array(ERR[i])**2))
+
+            elif self.norm[i][:4] == 'Linf' and len(self.norm[i])>4:
+
+                ERR[i] = np.max(np.array(ERR[i]))
+
+            else:
+
+                ERR[i] = ERR[i][0]
 
         return ERR
+    
+    def compute_space_error(self, dim):
 
+        errs = np.zeros(dim)
+
+        if hasattr(self.solver, 'displ_h'):
+            self.solver.mesh.SetDeformation(self.solver.displ_h)
+
+        for i in range(dim):   
+
+            if self.norm[i][-2:] == 'H1':
+
+                aux = InnerProduct(grad(self.solver.sol_h[i])-gradient(self.u_ex[i], Id(self.solver.mesh.dim)), \
+                                   grad(self.solver.sol_h[i])-gradient(self.u_ex[i], Id(self.solver.mesh.dim)))
+
+                errs[i] = sqrt(Integrate(aux, mesh = self.solver.mesh, order = self.solver.fes_order*2, VOL_or_BND=self.vol_or_bnd[i]))
+
+            elif self.norm[i][-2:] == 'L2':
+
+                aux = InnerProduct(self.solver.sol_h[i]-self.u_ex[i], self.solver.sol_h[i]-self.u_ex[i])
+
+                errs[i] = sqrt(Integrate(aux, mesh = self.solver.mesh, order = self.solver.fes_order*2, VOL_or_BND=self.vol_or_bnd[i]))
+
+        if hasattr(self.solver, 'displ_h'):
+            self.solver.mesh.UnsetDeformation()
+
+        return errs
+
+  
+    def compute_eoc(self, conv_params):
+
+        dim = len(self.solver.sol_h)
+
+        for key, value in conv_params.items():
+
+            if key == 'geometry':
+
+                geo = value
+
+            elif key == 'space_params':
+
+                dh0 = value[0]
+                h_power = value[1]
+                h_n_ref = value[2]
+
+            elif key == 'time_params':
+
+                dt0 = value[0]
+                t_power = value[1]
+                t_n_ref = value[2]
+
+        geo_order = self.solver.mesh.GetCurveOrder()
+
+        if hasattr(self.solver, 't'):
+
+            ERRS = [np.zeros((t_n_ref+1, h_n_ref+1)) for i in range(dim)]
+
+            dt_vec = dt0/(np.power(t_power, np.arange(t_n_ref+1)))
+            dh_vec = dh0/(np.power(h_power, np.arange(h_n_ref+1)))
+
+            t0 = self.solver.t.Get()
+
+            for i, dt_i in enumerate(dt_vec):
+                for j, dh_j in enumerate(dh_vec):
+
+                    if self.solver.mesh.ne == 0:
+                        self.solver.mesh = Mesh(geo.GenerateMesh(maxh = dh_j, optsteps2d=3, perfstepsend=MeshingStep.MESHSURFACE))
+                        self.solver.mesh.Curve(geo_order)
+                    else:
+                        self.solver.mesh = Mesh(geo.GenerateMesh(maxh = dh_j))
+                        self.solver.mesh.Curve(geo_order)
+
+                    self.solver.dt.Set(dt_i)
+                    self.solver.t.Set(t0)
+
+                    err_ij = self.compute_errors()
+
+                    for k in range(dim):
+
+                        ERRS[k][i,j] = err_ij[k]
+
+        else:
+
+            ERRS = [np.zeros(h_n_ref+1) for i in range(dim)]
+
+            dh_vec = dh0/(np.power(h_power, np.arange(h_n_ref+1)))
+
+            for j, dh_j in enumerate(dh_vec):
+
+                if self.solver.mesh.ne == 0:
+                    self.solver.mesh = Mesh(geo.GenerateMesh(maxh = dh_j, optsteps2d=3, perfstepsend=MeshingStep.MESHSURFACE))
+                    self.solver.mesh.Curve(geo_order)
+                else:
+                    self.solver.mesh = Mesh(geo.GenerateMesh(maxh = dh_j))
+                    self.solver.mesh.Curve(geo_order)
+
+                err_j = self.compute_errors()
+
+                for k in range(dim):
+
+                    ERRS[k][j] = err_j[k]
+
+        return ERRS
+
+# %%
+
+def gradient(f,P):
+
+    m, _ = P.dims
+    l = len(f.dims)
+
+    if l == 0:
+        # scalar gradient is deifed traditionally
+
+        if m == 2:
+            output = P*CoefficientFunction((f.Diff(x), f.Diff(y)))
+        elif m == 3:
+            output = P*CoefficientFunction((f.Diff(x), f.Diff(y), f.Diff(z))) 
+            
+    elif l == 1:
+        # vector gradient is defined component by component
+        # and disposed along columns
+
+        if m == 2:
+            aux1 = gradient(f[0], P)
+            aux2 = gradient(f[1], P)
+            output = CoefficientFunction((aux1[0], aux2[0], \
+                aux1[1], aux2[1]), dims = (m,m))
+        elif m == 3:
+            aux1 = gradient(f[0], P)
+            aux2 = gradient(f[1], P)
+            aux3 = gradient(f[2], P)
+            output = CoefficientFunction((aux1[0], aux2[0], aux3[0], \
+                aux1[1], aux2[1], aux3[1],\
+                    aux1[2], aux2[2], aux3[2]), dims = (m,m))
+            
+    else:
+
+        raise RuntimeError("Don't know how to take the gradient. Only scalars and vectors are accepted.")
+    
+    return output
+
+def get_lin_trans_params(A, b, t):
+
+    phi = A*CF((x,y,z)) + b
+    detJ = Det(A)
+    invA = Cof(A).trans/detJ
+    inv_phi = invA*(CF((x,y,z)) - b)
+    w_phi = A.Diff(t)*inv_phi + b.Diff(t)
+
+    e1 = A[:,0]
+    e2 = A[:,1]
+    e3 = A[:,2]
+
+    n_ex = Cross(e2, e3)*inv_phi[0]+Cross(e3, e1)*inv_phi[1] + Cross(e1, e2)*inv_phi[2]
+    n_ex = n_ex/Norm(n_ex)
+
+    return phi, inv_phi, w_phi, detJ, n_ex
 # %%

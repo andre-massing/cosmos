@@ -3,7 +3,7 @@ from cosmos.utils.generate_surface_meshes import *
 from cosmos.solvers.base import *
 from ngsolve import *
 
-class PoissonSolver(BaseSolver):
+class VectorPoissonSolver(BaseSolver):
 
     def __init__(self, mesh, fes_order=1, params = None, verbose = 0):
         """_summary_
@@ -32,13 +32,13 @@ class PoissonSolver(BaseSolver):
 
         # Initialize the parameters
         accepted_keys = ['rhs', 'boundary_c']
-        defaults = [CF(0.0), {}]  
+        defaults = [CF((0,)*self.mesh.dim), {}]  
         BaseSolver.__params_setup__(self.params, accepted_keys, defaults)
 
         # Initialize boundary conditions
         accepted_keys = ['dirichlet', 'neumann']
         defaults = [[None],
-                    [['.*', CF((0,)*self.mesh.dim)]]]  
+                    [['.*', CF((0,)*self.mesh.dim*self.mesh.dim, dims = (self.mesh.dim, self.mesh.dim))]]]  
         BaseSolver.__params_setup__(self.params['boundary_c'], accepted_keys, defaults)
             
     def __build_MAF__(self):
@@ -56,33 +56,34 @@ class PoissonSolver(BaseSolver):
 
             self.dir_bnd += elem[0] + '|'
             self.dirichlet_bnds[elem[0]] = elem[1]
-        self.dir_cf = self.mesh.BoundaryCF(self.dirichlet_bnds, default=0)
+        self.dir_cf = self.mesh.BoundaryCF(self.dirichlet_bnds, default= CF ((0,)*self.mesh.dim))
 
         neu_bnd = ''
         self.neumann_bnds = {}
         for elem in self.params['boundary_c']['neumann']: 
             neu_bnd += elem[0] + '|'
             self.neumann_bnds[elem[0]] = elem[1]
-        neu_cf = self.mesh.BoundaryCF(self.neumann_bnds, default=CF((0,) * self.mesh.dim))
+        neu_cf = self.mesh.BoundaryCF(self.neumann_bnds, \
+            default=CF((0,)*self.mesh.dim*self.mesh.dim, dims = (self.mesh.dim, self.mesh.dim)))
 
         if self.dir_bnd!=None:
 
-            V = H1(self.mesh, order= self.fes_order, dirichlet = self.dir_bnd)
+            V = VectorH1(self.mesh, order= self.fes_order, dirichlet = self.dir_bnd)
             self.fes = V
             u, v = self.fes.TnT()
 
         else:
             # In case of fully Neumann boundary conditions
             # self.A zero-mean solution is enforced through self.A lagrange multiplier
-            V = H1(self.mesh, order= self.fes_order)
-            Q = NumberSpace(self.mesh) # Lagrange multiplier for zero mean solution
+            V = H1(self.mesh, order= self.fes_order, dim = self.mesh.dim)
+            Q = NumberSpace(self.mesh, dim = self.mesh.dim) # Lagrange multiplier for zero mean solution
             self.fes = V*Q
             (u, lam), (v, mu) = self.fes.TnT()
 
         self.A = BilinearForm(self.fes)
-        self.A += grad(u)*grad(v)*dx
+        self.A += InnerProduct(Grad(u), Grad(v))*dx
         if self.dir_bnd == None:
-            self.A += (lam*v-mu*u)*dx
+            self.A += (InnerProduct(lam,v)-InnerProduct(mu,u))*dx
         self.F = LinearForm(self.fes)
         self.F += self.params['rhs']*v*dx
 
@@ -107,20 +108,24 @@ class PoissonSolver(BaseSolver):
         # Constructing (without assembling) the bilinear and linear forms
         self.__build_MAF__()
 
-        res = self.F.vec.CreateVector()    
+        res = self.F.vec.CreateVector()  
+          
         with TaskManager():
+
             self.A.Assemble()
             self.F.Assemble()
 
             res = self.F.vec
             if self.dir_bnd != None: 
                 self.sol_h[0].Set(self.dir_cf, definedon = self.mesh.Boundaries(self.dir_bnd))
+
                 res.data += - self.A.mat * self.gfu.vec
 
                 self.gfu.vec.data += self.A.mat.Inverse(freedofs=self.fes.FreeDofs()) * res
-
             else:
 
                 self.gfu.vec.data = self.A.mat.Inverse(freedofs=self.fes.FreeDofs()) * self.F.vec
 
         yield
+
+# %%
