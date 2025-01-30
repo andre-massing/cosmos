@@ -127,8 +127,8 @@ class BulkADRSolver(BaseSolver):
         data = self.problem.data
 
         params = kwargs
-        accepted_keys = ['filename', 'subdivision']
-        defaults = ['sol', 1]  
+        accepted_keys = ['filename', 'subdivision', 'n_steps']
+        defaults = ['sol', 1, 100]  
         self.params_check(params, accepted_keys, defaults)
         
         vtk = VTKOutput(data['mesh'],
@@ -137,7 +137,12 @@ class BulkADRSolver(BaseSolver):
                         filename=params['filename'],
                         subdivision=params['subdivision'])
         
-        for i, sol_i in enumerate(self.sol):
+        tot_steps = len(self.sol)
+        jump = max(int(tot_steps/params['n_steps']), 1)
+
+        for i in range(0, tot_steps, jump):
+
+            sol_i = self.sol[i]
 
             self.gfu.vec.data = sol_i.data
             vtk.Do(time=data['t_array'][i])

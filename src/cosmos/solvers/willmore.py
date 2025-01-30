@@ -142,7 +142,7 @@ class StabWillmoreSolver(BaseSolver):
 
         data = self.problem.data
 
-        # self.initialize_curv(data)
+        self.initialize_curv(data)
 
         ds_def = ds(deformation = data['dX_old'])
         if data['mesh'].dim == 2:
@@ -271,8 +271,8 @@ class StabWillmoreSolver(BaseSolver):
     def save_solution(self, **kwargs):
 
         params = kwargs
-        accepted_keys = ['filename', 'subdivision']
-        defaults = ['sol', 1]  
+        accepted_keys = ['filename', 'subdivision', 'n_steps']
+        defaults = ['sol', 1, 100]  
         self.params_check(params, accepted_keys, defaults)
 
         data = self.problem.data
@@ -292,8 +292,12 @@ class StabWillmoreSolver(BaseSolver):
                         subdivision=params['subdivision']) 
             v_or_b = BND
 
-        
-        for i, sol_i in enumerate(self.sol):
+        tot_steps = len(self.sol)
+        jump = max(int(tot_steps/params['n_steps']), 1)
+
+        for i in range(0, tot_steps, jump):
+
+            sol_i = self.sol[i]
 
             data['dX'].vec.data = data['dX_array'][i].data
             data['mesh'].SetDeformation(data['dX'])
