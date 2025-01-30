@@ -1,8 +1,8 @@
 # Import necessary libraries
 from ngsolve import *
 from collections import Counter
-from glapypack.solvers.base import Base
-from glapypack.solvers.base_solver import BaseSolver
+from cosmos.solvers.base import Base
+from cosmos.solvers.base_solver import BaseSolver
 from tqdm import tqdm
 
 class SteadyProblem(Base):

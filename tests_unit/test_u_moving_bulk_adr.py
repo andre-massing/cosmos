@@ -1,5 +1,5 @@
-from glapypack.solvers.moving_bulk_adr import MovingBulkADRSolver
-from glapypack.solvers.base_problem import MovingProblem
+from cosmos.solvers.moving_bulk_adr import MovingBulkADRSolver
+from cosmos.solvers.base_problem import MovingProblem
 from ngsolve import *
 
 def test_u_bulk_adr_solver_fes_order():

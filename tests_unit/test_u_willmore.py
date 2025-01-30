@@ -1,2 +1,1 @@
-from glapypack.solvers.willmore import StabWillmoreSolver
-
+from cosmos.solvers.willmore import StabWillmoreSolver

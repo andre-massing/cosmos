@@ -1,7 +1,7 @@
-from glapypack.solvers.moving_sb_adr import MovingSurfaceBulkADRSolver
-from glapypack.solvers.base_problem import MovingProblem
-from glapypack.utils.test_tools import gradient
-from glapypack.utils.meshes import generate_circle
+from cosmos.solvers.moving_sb_adr import MovingSurfaceBulkADRSolver
+from cosmos.solvers.base_problem import MovingProblem
+from cosmos.utils.manufactured_solution_tools import gradient
+from cosmos.utils.generate_surface_meshes import generate_circle
 from ngsolve import *
 import numpy as np
 

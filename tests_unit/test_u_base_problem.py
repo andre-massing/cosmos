@@ -1,6 +1,6 @@
-from glapypack.solvers.base_problem import SteadyProblem, UnsteadyProblem, MovingProblem
-from glapypack.solvers.base_solver import BaseSolver
-from glapypack.solvers.base import Base
+from cosmos.solvers.base_problem import SteadyProblem, UnsteadyProblem, MovingProblem
+from cosmos.solvers.base_solver import BaseSolver
+from cosmos.solvers.base import Base
 from ngsolve import *
 from netgen.csg import *
 

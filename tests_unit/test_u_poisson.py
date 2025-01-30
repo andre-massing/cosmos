@@ -1,5 +1,5 @@
-from glapypack.solvers.poisson import PoissonSolver
-from glapypack.solvers.base_problem import SteadyProblem
+from cosmos.solvers.poisson import PoissonSolver
+from cosmos.solvers.base_problem import SteadyProblem
 from ngsolve import *
 
 def test_u_poisson_solver_attributes():

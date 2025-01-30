@@ -1,4 +1,4 @@
-from glapypack.solvers.base import Base
+from cosmos.solvers.base import Base
 from ngsolve import *
 
 def test_u_base():

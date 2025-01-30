@@ -1,5 +1,5 @@
-from glapypack.solvers.sb_adr import SurfaceBulkADRSolver
-from glapypack.solvers.base_problem import UnsteadyProblem
+from cosmos.solvers.sb_adr import SurfaceBulkADRSolver
+from cosmos.solvers.base_problem import UnsteadyProblem
 from ngsolve import *
 
 def test_u_sb_adr_solver_fes_order():

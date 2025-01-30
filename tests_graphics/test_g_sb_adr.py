@@ -1,7 +1,7 @@
-from glapypack.solvers.sb_adr import SurfaceBulkADRSolver
-from glapypack.solvers.base_problem import UnsteadyProblem
-from glapypack.utils.test_tools import gradient
-from glapypack.utils.meshes import generate_circle, generate_sphere
+from cosmos.solvers.sb_adr import SurfaceBulkADRSolver
+from cosmos.solvers.base_problem import UnsteadyProblem
+from cosmos.utils.manufactured_solution_tools import gradient
+from cosmos.utils.generate_surface_meshes import generate_circle, generate_sphere
 from ngsolve import *
 import numpy as np
 

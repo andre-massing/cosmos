@@ -1,6 +1,6 @@
 # %%
 from ngsolve import *
-from glapypack.solvers.base import Base
+from cosmos.solvers.base import Base
 
 class BaseSolver(Base):
 

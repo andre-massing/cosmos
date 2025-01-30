@@ -1,6 +1,6 @@
-from glapypack.solvers.poisson import PoissonSolver
-from glapypack.solvers.base_problem import SteadyProblem
-from glapypack.utils.test_tools import gradient
+from cosmos.solvers.poisson import PoissonSolver
+from cosmos.solvers.base_problem import SteadyProblem
+from cosmos.utils.manufactured_solution_tools import gradient
 
 from ngsolve import *
 import numpy as np

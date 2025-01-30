@@ -1,6 +1,6 @@
 from ngsolve import *
-from glapypack.solvers.base_solver import BaseSolver
-from glapypack.utils.test_tools import gradient
+from cosmos.solvers.base_solver import BaseSolver
+from cosmos.utils.manufactured_solution_tools import gradient
 from ngsolve.webgui import Draw
 from ngsolve.solvers import *
 import time
