@@ -7,17 +7,33 @@ from ngsolve import *
 import numpy as np
 from ngsolve.webgui import Draw
 
+'''
+Non-deforming domain bulk ADR simulation seems ok
+'''
+
 def solve_bulk_adr(dh, dt, neu = False):
 
+    '''
+    Generation of the mesh
+    '''
     geo = unit_square
     mesh = Mesh(geo.GenerateMesh(maxh = dh))
 
+    '''
+    Definition of time variables
+    '''
     T = 1.0
     dt = Parameter(dt)
     t = Parameter(0)
 
+    '''
+    Initialization of the time-dependent simulation (that can contain multiple solvers)
+    '''
     simulation = UnsteadyProblem(mesh=mesh, dt=dt, t=t, T=T)
 
+    '''
+    Generation of the manufactured solution and relative coefficients
+    '''
     u_ex = cos(pi*x)*sin(pi*y)*cos(t)
     d = 1 + x**2
     c = y**2
@@ -31,6 +47,9 @@ def solve_bulk_adr(dh, dt, neu = False):
     flux_d_bc = {'.*': flux2}
     dirichlet_bc = {'.*': u_ex}
 
+    '''
+    Creation of the solver with relative parameters based on boundary conditions imposed
+    '''
     if neu:
 
         adr_sol = BulkADRSolver(fes_order=fes_order,
@@ -52,21 +71,33 @@ def solve_bulk_adr(dh, dt, neu = False):
                                 u0 = u_ex,
                                 dir_bc = dirichlet_bc)
         
-    # Adding the solver to the simulation
+    '''
+    Adding the solver to the simulation
+    '''
     simulation.attach_solver(adr_sol)
 
+    '''
+    Run the simulation
+    '''
     simulation.run()
 
+    '''
+    Computation and printing of the error
+    '''
     err = adr_sol.compute_error(u_ex, 'L2')
-
     err = np.sqrt(np.sum(simulation.dt.Get()*np.array(err)**2))
-
     print(err)
 
+    '''
+    Commands to draw or save the solution
+    '''
     # adr_sol.draw_solution()
-
     # adr_sol.save_solution(filename = 'results/bulk_adr')
 
+
+'''
+Repeated simulation to see if there is convergence
+'''
 neu = True
 solve_bulk_adr(0.2, 0.2)
 solve_bulk_adr(0.1, 0.1)

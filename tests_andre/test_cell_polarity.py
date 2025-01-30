@@ -1,24 +1,37 @@
 # %%
 
 from cosmos.solvers.moving_sb_adr import MovingSurfaceBulkADRSolver
-from cosmos.solvers.sb_adr import SurfaceBulkADRSolver
 from cosmos.solvers.base_problem import MovingProblem
 from cosmos.solvers.mesh_moving import HarmonicMMSolver
-from cosmos.utils.manufactured_solution_tools import gradient
 from cosmos.utils.generate_surface_meshes import generate_circle
 from ngsolve import *
 import numpy as np
 from ngsolve.webgui import Draw
-    
-from netgen.occ import *
 
+'''
+Article: https://pubmed.ncbi.nlm.nih.gov/26414403/
+Problems:
+- The simulation as of now does not reach a stationary state
+- I fear it's related to mass conservation, I will read more in depth 
+    the article and try to see if that's what is missing
+'''
+
+'''
+Creating of the initial mesh and computation of the initial circumference
+'''
 mesh, _ = generate_circle(R=1)
 Area0 = Integrate(CF(1), mesh, VOL_or_BND=BND)
 
+'''
+Definition of the time parameters
+'''
 T = 12
 dt = Parameter(0.01)
-t = Parameter(0)
+t =Parameter(0)
 
+'''
+Definition of the simulation
+'''
 simulation = MovingProblem(mesh=mesh, dt=dt, t=t, T=T)
 
 '''
@@ -36,6 +49,11 @@ simulation.attach_solver(sb_sol)
 '''
 Defining the coefficients of the species on the surface
 '''
+# Below the normal velocity (scalar), which is a function of various parameters
+# as described in the supplements of:
+# https://pubmed.ncbi.nlm.nih.gov/26414403/
+m = 4 
+s = 8
 def velocity_n():
 
     mesh.SetDeformation(simulation.data['dX'])
@@ -48,12 +66,15 @@ def velocity_n():
     V = (A**m/(A**m + stretch**m) - B**m/(B**m + 1**m))
 
     return V
+# Here I define the velocity as vector
+# TO DO: double check if this is actually what I want
+# Maybe better to create a GridFunction?
 def velocity():
     mesh.SetDeformation(simulation.data['dX'])
     V = velocity_n()*specialcf.normal(mesh.dim)
     mesh.UnsetDeformation()
     return V
-
+# Reaction parameters
 def reaction1():
     cf = -1-0.4*velocity_n()
     return cf
@@ -64,7 +85,7 @@ def reaction2():
 '''
 Adding the species to the solver
 '''
-angle = 160
+angle = 80
 ## Species 1
 sb_sol.attach_surface_adr(diffusion = CF(1),
                           reaction = reaction1,
@@ -73,9 +94,6 @@ sb_sol.attach_surface_adr(diffusion = CF(1),
 sb_sol.attach_surface_adr(diffusion = CF(1),
                           reaction = reaction2,
                           u0 = IfPos(x/Norm(CF((x,y))) - cos(angle/180*pi), 0.1, 1))
-# sb_sol.attach_surface_adr(diffusion = CF(0.1),
-#                           reaction = reaction2,
-#                           u0 = CF(1))
 
 '''
 Add the non-linear coupling between the species
@@ -92,8 +110,6 @@ sb_sol.add_coupling(mrk1 = 0, mrk2 = 1, f1 = f1, f2 = f2)
 '''
 Prescribing the displacement and the mesh-motion
 '''
-m = 4 
-s = 8
 harmonic_mm_sol = HarmonicMMSolver(velocity=velocity)
 simulation.attach_mm_solver(harmonic_mm_sol)
 
@@ -114,12 +130,12 @@ for step in simulation():
 
     pass
 
+# Drawing the final state
 sb_sol.draw_solution()
 
 '''
-Plotting the solution
+Saving the solution
 '''
-
 # sb_sol.save_solution(filename = './results/cell_polarity', n_steps = 200)
 
 # %%
