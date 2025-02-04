@@ -106,12 +106,19 @@ def solve_m_surface_adr_closed(dh, dt):
 '''
 Repeated simulation to see if there is convergence
 '''
-neu = False
 solve_m_surface_adr_closed(0.2, 0.2)
 solve_m_surface_adr_closed(0.1, 0.1)
 solve_m_surface_adr_closed(0.05, 0.05)
 
 #%%
+
+from cosmos.solvers.moving_surface_adr import MovingSurfaceADRSolver
+from cosmos.solvers.base_problem import MovingProblem
+from cosmos.utils.manufactured_solution_tools import gradient, get_lin_trans_params
+from cosmos.utils.generate_surface_meshes import *
+from ngsolve import *
+import numpy as np
+from ngsolve.webgui import Draw
 
 '''
 Deforming domain surface ADR simulation with no boundary

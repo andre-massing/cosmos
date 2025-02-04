@@ -84,12 +84,9 @@ class MovingSurfaceADRSolver(BaseSolver):
         else:
             nE = Cross(ns, tE)
 
-        ds_new = ds(deformation = data['dX'])
-        ds_old = ds(deformation = data['dX_old'])
-
         A = BilinearForm(self.fes)
-        diffusion = params['diffusion']*grad(u).Trace()*grad(v).Trace()*ds_new
-        reaction = params['reaction']*u*v*ds_new
+        diffusion = params['diffusion']*grad(u).Trace()*grad(v).Trace()*ds(deformation = data['dX'])
+        reaction = params['reaction']*u*v*ds(deformation = data['dX'])
         # CIP stabilization for convection part
         S_int = 0.5*Norm(params['advection']*nE) # Parameter corresponding to upwind stabilization
         jump_u = nE*(grad(u).Trace() - (grad(u).Trace()).Other())
@@ -101,26 +98,26 @@ class MovingSurfaceADRSolver(BaseSolver):
         else:
             gfF = GridFunction(FacetSurface(data['mesh'], order = 0))
             gfF.Set(1, definedon=data['mesh'].BBoundaries(flux_c_bnd))
-        advection = -params['advection']*grad(v).Trace() * u *ds_new\
+        advection = -params['advection']*grad(v).Trace() * u *ds(deformation = data['dX'])\
                     + IfPos(InnerProduct(nE, params['advection']), 
                             InnerProduct(nE, params['advection'])*u, 0)\
-                                *gfF*v*ds_new(element_boundary=True)
+                                *gfF*v*ds(deformation = data['dX'], element_boundary=True)
         
         A += reaction + diffusion + advection
         
         F = LinearForm(self.fes)
-        F += params['rhs']*v*ds_new
+        F += params['rhs']*v*ds(deformation = data['dX'])
         if params['flux_c_bc']:
             F += -IfPos(InnerProduct(nE, params['advection']), 0,
-                         InnerProduct(nE, flux_c_cf))*gfF*v*ds_new(element_boundary=True)
+                         InnerProduct(nE, flux_c_cf))*gfF*v*ds(deformation = data['dX'], element_boundary=True)
         if params['flux_d_bc']:
-            F += -InnerProduct(nE, flux_d_cf)*gfF*v*ds_new(element_boundary=True)
+            F += -InnerProduct(nE, flux_d_cf)*gfF*v*ds(deformation = data['dX'], element_boundary=True)
 
         M = BilinearForm(self.fes, symmetric = True)
-        M += 1/data['dt']*u*v*ds_new
+        M += 1/data['dt']*u*v*ds(deformation = data['dX'])
 
         M_old = BilinearForm(self.fes, symmetric = True)
-        M_old += 1/data['dt']*u*v*ds_old
+        M_old += 1/data['dt']*u*v*ds(deformation = data['dX_old'])
 
         with TaskManager():
             A.Assemble()

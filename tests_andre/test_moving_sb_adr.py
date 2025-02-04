@@ -81,16 +81,19 @@ def solve_moving_sb_adr(dh, dt):
     flux_v = flux1_v + flux2_v
     rhs_v = (u_v_ex.Diff(t) + Trace(gradient(flux_v + rel_flux_v, Id(2))) + 
              c_v*u_v_ex).Compile()
+    flux_c_bc = {'.*': flux1_v}
+    flux_d_bc = {'.*': flux2_v}
     # Attaching this PDE to the Surface-Bulk Solver
     sb_sol.attach_bulk_adr(rhs = rhs_v,
                               advection = b_v, 
                               diffusion = d_v,
                               reaction = c_v,
                               u0 = u_v_ex,
-                              neu_bc = -flux_v)
+                              flux_c_bc = flux_c_bc,
+                              flux_d_bc = flux_d_bc)
 
     ## Coupling parameter
-    alpha = 1.0
+    alpha = 3.0
 
     '''
     Generation of the manufactured solution and relative coefficients for the surface part

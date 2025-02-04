@@ -63,37 +63,33 @@ class MovingBulkADRSolver(BaseSolver):
         n = specialcf.normal(data['mesh'].dim)
         h = specialcf.mesh_size
 
-        dx_new = dx(deformation = data['dX'])
-        dx_old = dx(deformation = data['dX_old'])
-        ds_new = ds(deformation = data['dX'])
-
         A = BilinearForm(self.fes)
-        diffusion = params['diffusion']*grad(u)*grad(v)*dx_new
-        reaction = params['reaction']*u*v*dx_new
+        diffusion = params['diffusion']*grad(u)*grad(v)*dx(deformation = data['dX'])
+        reaction = params['reaction']*u*v*dx(deformation = data['dX'])
         # CIP stabilization for convection part
         S_int = 0.5*Norm(params['advection']*n) # Parameter corresponding to upwind stabilization
         jump_u = n*(grad(u) - (grad(u)).Other())
         jump_v = n*(grad(v) - (grad(v)).Other())
-        advection = -params['advection']*grad(v) * u *dx_new \
+        advection = -params['advection']*grad(v) * u *dx(deformation = data['dX']) \
             + IfPos(params['advection']*n, params['advection']*n*u, 0)\
-                *v*ds_new(definedon = data['mesh'].Boundaries(flux_c_bnd)) \
-            + h**2*S_int*jump_u*jump_v*dx_new(skeleton=True)
+                *v*ds(deformation = data['dX'], definedon = data['mesh'].Boundaries(flux_c_bnd)) \
+            + h**2*S_int*jump_u*jump_v*dx(deformation = data['dX'], skeleton=True)
         
         A += reaction + diffusion + advection
         
         F = LinearForm(self.fes)
-        F += params['rhs']*v*dx_new
+        F += params['rhs']*v*dx(deformation = data['dX'])
         if params['flux_d_bc']:
-            F += -flux_d_cf*n*v*ds_new(definedon = data['mesh'].Boundaries(flux_d_bnd))
+            F += -flux_d_cf*n*v*ds(deformation = data['dX'], definedon = data['mesh'].Boundaries(flux_d_bnd))
         if params['flux_c_bc']:
             F += -IfPos(params['advection']*n, CF((0,) * data['mesh'].dim), flux_c_cf)\
-            *n*v*ds_new(definedon = data['mesh'].Boundaries(flux_c_bnd))
+            *n*v*ds(deformation = data['dX'], definedon = data['mesh'].Boundaries(flux_c_bnd))
 
         M = BilinearForm(self.fes, symmetric = True)
-        M += 1/data['dt']*u*v*dx_new
+        M += 1/data['dt']*u*v*dx(deformation = data['dX'])
 
         M_old = BilinearForm(self.fes, symmetric = True)
-        M_old += 1/data['dt']*u*v*dx_old
+        M_old += 1/data['dt']*u*v*dx(deformation = data['dX_old'])
 
         with TaskManager():
             A.Assemble()
