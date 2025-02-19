@@ -1,5 +1,6 @@
 from ngsolve import *
 import types
+import numbers
 
 class Base:
 
@@ -26,5 +27,9 @@ class Base:
             if isinstance(value, types.FunctionType):
 
                 params_copy[key] = value()
+
+            if isinstance(value, numbers.Number):
+
+                params_copy[key] = CF(value)
 
         return params_copy

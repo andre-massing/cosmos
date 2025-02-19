@@ -15,9 +15,28 @@ release = '0.0.1'
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = [
-    "myst_nb",
     "autoapi.extension",
+    "myst_nb",
+    "sphinx.ext.mathjax"
+
 ]
+
+myst_enable_extensions = [
+    "amsmath",
+]
+
+mathjax_path = "https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"
+
+mathjax3_config = {
+    "tex": {
+        "inlineMath": [["$", "$"], ["\\(", "\\)"]],
+        "displayMath": [["$$", "$$"], ["\\[", "\\]"]],
+    }
+}
+
+nb_output_stderr = "remove"
+nb_execution_mode = "force"
+# nb_execution_mode = "off"
 
 autoapi_dirs = ["../src"]
 
@@ -31,3 +50,6 @@ language = 'python'
 
 html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
+html_theme_options = {
+    "collapse_navigation" : False
+}

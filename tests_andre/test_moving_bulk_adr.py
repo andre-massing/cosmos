@@ -16,6 +16,7 @@ Deforming domain bulk ADR:
 
 def solve_m_bulk_adr(dh, dt, neu = False):
 
+
     '''
     Generation of the mesh
     '''
@@ -58,8 +59,8 @@ def solve_m_bulk_adr(dh, dt, neu = False):
     Generation of the manufactured solution and relative coefficients
     '''
     u_ex = cos(pi*x)*sin(pi*y)*cos(t)
-    d = 1 + t**2
-    c = 1
+    d = 1 + x**2
+    c = 1 + x**2
     b = CF((sin(x), 1))
     flux = b*u_ex - d*gradient(u_ex, Id(2)) + w_phi*u_ex
     rhs = (u_ex.Diff(t) + Trace(gradient(flux, Id(2))) + c*u_ex).Compile()
@@ -110,7 +111,7 @@ def solve_m_bulk_adr(dh, dt, neu = False):
     print(err)
 
     # adr_sol.draw_solution()
-    # adr_sol.save_solution(filename = 'results/moving_bulk_adr')
+    # adr_sol.save_solution(filename = './moving_bulk_adr/moving_bulk_adr')
 
 '''
 Repeated simulation to see if there is convergence

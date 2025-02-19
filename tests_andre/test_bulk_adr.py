@@ -98,7 +98,7 @@ def solve_bulk_adr(dh, dt, neu = False):
 '''
 Repeated simulation to see if there is convergence
 '''
-neu = True
+neu = False
 solve_bulk_adr(0.2, 0.2)
 solve_bulk_adr(0.1, 0.1)
 solve_bulk_adr(0.05, 0.05)

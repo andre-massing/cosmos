@@ -20,6 +20,16 @@ class HarmonicMMSolver(BaseSolver):
         data = self.problem.data
 
         self.fes_order = data['mesh'].GetCurveOrder()
+
+        V1_s = VectorH1(data['mesh'], order=self.fes_order,\
+                        definedon=data['mesh'].Boundaries('.*'))
+        V2_s = H1(data['mesh'], order=self.fes_order, definedon=data['mesh'].Boundaries('.*'))
+        self.fes_s = V1_s*V2_s
+        self.dX_m = GridFunction(V1_s)
+        self.X_m = GridFunction(V1_s)
+
+        self.fes_v = VectorH1(data['mesh'], order= self.fes_order, dirichlet = data['mesh'].Boundaries('.*'))
+        self.gfu_v = GridFunction(self.fes_v)
     
     def solve_step(self):
 
@@ -27,11 +37,6 @@ class HarmonicMMSolver(BaseSolver):
 
         params = self.params_update(self.params)
 
-        V1_s = VectorH1(data['mesh'], order=self.fes_order,\
-                        definedon=data['mesh'].Boundaries('.*'))
-        V2_s = H1(data['mesh'], order=self.fes_order, definedon=data['mesh'].Boundaries('.*'))
-
-        self.fes_s = V1_s*V2_s
         (u, p),(v, q) = self.fes_s.TnT()
         self.gfu_s = GridFunction(self.fes_s)
 
@@ -40,23 +45,22 @@ class HarmonicMMSolver(BaseSolver):
 
         data['mesh'].SetDeformation(data['dX_old'])
 
-        dX_m = GridFunction(V1_s)
-        dX_m.Set(params['velocity']*data['dt'], definedon=data['mesh'].Boundaries('.*'))
+        
+        self.dX_m.Set(params['velocity']*data['dt'], definedon=data['mesh'].Boundaries('.*'))
 
-        X_m = GridFunction(V1_s)
-        X_m.Set(data['dX_old'] + dX_m, definedon=data['mesh'].Boundaries('.*'))
+        self.X_m.Set(data['dX_old'] + self.dX_m, definedon=data['mesh'].Boundaries('.*'))
 
         data['mesh'].UnsetDeformation()
 
         ds_old = ds(deformation=data['dX_old'])
-        ds_new = ds(deformation=X_m)
+        ds_new = ds(deformation=self.X_m)
 
         A_s = BilinearForm(self.fes_s)
         A_s += InnerProduct(Grad(u).Trace(), Grad(v).Trace())*ds_old
         A_s += -p*n*v*ds_new
         A_s += -q*n*u*ds_new
         F_s = LinearForm(self.fes_s)
-        F_s += (-InnerProduct(Grad(X_m).Trace(), Grad(v).Trace()))*ds_old
+        F_s += (-InnerProduct(Grad(self.X_m).Trace(), Grad(v).Trace()))*ds_old
 
         with TaskManager():
             A_s.Assemble()
@@ -70,15 +74,13 @@ class HarmonicMMSolver(BaseSolver):
 
             dx_old = dx(deformation=data['dX_old'])
 
-            self.fes_v = VectorH1(data['mesh'], order= self.fes_order, dirichlet = data['mesh'].Boundaries('.*'))
+            
             u, v = self.fes_v.TnT()
 
             A = BilinearForm(self.fes_v)
             A += InnerProduct(Grad(u), Grad(v))*dx_old
 
-            self.gfu_v = GridFunction(self.fes_v)
-
-            self.gfu_v.Set(dX_m + self.gfu_s.components[0], definedon = data['mesh'].Boundaries('.*'))
+            self.gfu_v.Set(self.dX_m + self.gfu_s.components[0], definedon = data['mesh'].Boundaries('.*'))
     
             with TaskManager():
                 A.Assemble()
@@ -87,13 +89,13 @@ class HarmonicMMSolver(BaseSolver):
 
                 self.gfu_v.vec.data += A.mat.Inverse(freedofs=self.fes_v.FreeDofs()) * res
 
-                X_m = GridFunction(VectorH1(data['mesh'], order= self.fes_order))
-                X_m.Set(data['dX_old'] + self.gfu_v)
-                data['dX'].Set(X_m)
+                self.X_m = GridFunction(VectorH1(data['mesh'], order= self.fes_order))
+                self.X_m.Set(data['dX_old'] + self.gfu_v)
+                data['dX'].Set(self.X_m)
 
         else:
 
-            data['dX'].Set(data['dX_old'] + dX_m + self.gfu_s.components[0], definedon = data['mesh'].Boundaries('.*'))
+            data['dX'].Set(data['dX_old'] + self.dX_m + self.gfu_s.components[0], definedon = data['mesh'].Boundaries('.*'))
 
 
     def update(self):

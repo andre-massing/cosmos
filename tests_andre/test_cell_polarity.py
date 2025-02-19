@@ -7,6 +7,7 @@ from cosmos.utils.generate_surface_meshes import generate_circle
 from ngsolve import *
 import numpy as np
 from ngsolve.webgui import Draw
+import matplotlib.pyplot as plt
 
 '''
 Article: https://pubmed.ncbi.nlm.nih.gov/26414403/
@@ -25,7 +26,7 @@ Area0 = Integrate(CF(1), mesh, VOL_or_BND=BND)
 '''
 Definition of the time parameters
 '''
-T = 12
+T = 10
 dt = Parameter(0.01)
 t =Parameter(0)
 
@@ -85,15 +86,16 @@ def reaction2():
 '''
 Adding the species to the solver
 '''
-angle = 80
+angle = 120
 ## Species 1
 sb_sol.attach_surface_adr(diffusion = CF(1),
-                          reaction = reaction1,
+                          reaction = CF(-1),
                           u0 = CF(1))
 ## Species 2
 sb_sol.attach_surface_adr(diffusion = CF(1),
-                          reaction = reaction2,
-                          u0 = IfPos(x/Norm(CF((x,y))) - cos(angle/180*pi), 0.1, 1))
+                          reaction = CF(-1),
+                        #   u0 = CF(1))
+                         u0 = CF(1))
 
 '''
 Add the non-linear coupling between the species
@@ -117,25 +119,45 @@ simulation.attach_mm_solver(harmonic_mm_sol)
 Running the simulation
 '''
 modified = False
+mass = []
+
+simulation.initialize()
+
+scene = Draw(mesh, deformation = simulation.data['dX'])
+
+sA = []
+sB = []
 
 for step in simulation():
 
-    # if simulation.t.Get() > 10 and not modified:
+    mesh.SetDeformation(simulation.data['dX'])
+    sA.append( Integrate(sb_sol.get_solution()[0], mesh, BND) )
+    sB.append( Integrate(sb_sol.get_solution()[1], mesh, BND) )
+    mesh.UnsetDeformation()
 
-    #     A, B = sb_sol.get_solution()
+    scene.Redraw()
 
-    #     sb_sol.set_solution([A, IfPos(x/Norm(CF((x,y))) - cos(angle/180*pi), 0.1*B, B)])
+    if simulation.t.Get() > 5 and not modified:
 
-    #     modified = True
+        print('Entered the loop')
 
-    pass
+        A, B = sb_sol.get_solution()
 
+        sb_sol.set_solution([A, IfPos(x/Norm(CF((x,y))) - cos(angle/180*pi), 0.1*B, B)])
+
+        modified = True
+
+plt.plot(simulation.data['t_array'], np.array(sA), label = 'A')
+plt.plot(simulation.data['t_array'], np.array(sB), label = 'B')
+plt.plot(simulation.data['t_array'], np.array(sA)+np.array(sB), label = 'A+B')
+plt.legend()
+plt.show()
 # Drawing the final state
-sb_sol.draw_solution()
+# sb_sol.draw_solution()
 
 '''
 Saving the solution
 '''
-# sb_sol.save_solution(filename = './results/cell_polarity', n_steps = 200)
+sb_sol.save_solution(filename = './cell_polarity/cell_polarity', n_steps = 200)
 
 # %%

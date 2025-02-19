@@ -12,8 +12,12 @@ import netgen.occ as occ
 from netgen.meshing import MeshingStep
 from ngsolve.webgui import Draw as DrawMesh
 from netgen import stl
+from netgen.meshing import Element0D, Element1D, Element2D, MeshPoint, Pnt
+from netgen.meshing import Mesh as NetGenMesh
+import numpy as np
 
 __all__ = [
+    'generate_arc',
     'generate_plane',
     'generate_circle',
     'generate_sphere',
@@ -39,6 +43,43 @@ def Meshing(geo, maxh, order_g, vol_or_bnd):
     mesh.Curve(order_g)
 
     return mesh
+
+'''
+Arc
+'''
+def generate_arc(r=1, N=20, bnd_name = "boundary", geo_only = False):
+    # order_g is maintained just for compatibility, but it does not improve the 
+    # description of the plane. a,b are the side length. The boundary of the plane
+    # has been named to facilitate handling of boundary conditions
+
+
+    ngmesh = NetGenMesh(dim=2)
+    pids = []
+    radius = 1.0
+    n_segments = N  # Number of segments for smoothness
+    theta_vals = np.linspace(0, np.pi, n_segments + 1)  # Angles from 0 to π
+    # Add points to the mesh.
+    for theta in theta_vals:
+        pids.append(ngmesh.Add(MeshPoint(Pnt(radius * np.cos(theta), radius * np.sin(theta), 0))))
+    # Left half of the domain is material 1, right half material 2.
+
+    idx_doml = ngmesh.AddRegion("default", dim=1)
+    idx_domr = ngmesh.AddRegion("default", dim=1)
+        
+    for i in range(n_segments):
+        ngmesh.Add(Element1D([pids[i], pids[i + 1]], index=idx_doml if i < 10 else idx_domr))
+
+    # Add BC to the mesh.
+
+    idx_l = ngmesh.AddRegion(bnd_name, dim=0)
+    idx_r = ngmesh.AddRegion(bnd_name, dim=0)
+    ngmesh.Add(Element0D(pids[0], index=idx_l))  
+    ngmesh.Add(Element0D(pids[n_segments], index=idx_r))
+    mesh = Mesh(ngmesh)
+    if geo_only:
+        raise Exception('No geometry is created in this case')
+    else:	
+        return mesh , None
 
 '''
 Plane

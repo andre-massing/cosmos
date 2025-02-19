@@ -28,8 +28,8 @@ class SurfaceBulkADRSolver(BaseSolver):
         params = kwargs
 
         # Initialize the parameters
-        accepted_keys = ['rhs', 'advection', 'diffusion', 'reaction', 'u0', 'neu_bc']
-        defaults = [CF(0.0), CF((0,)*data['mesh'].dim), CF(0.0), CF(0.0), CF(0.0), CF((0,)*data['mesh'].dim)]  
+        accepted_keys = ['rhs', 'advection', 'diffusion', 'reaction', 'u0', 'flux_c_bc', 'flux_d_bc']
+        defaults = [CF(0.0), CF((0,)*data['mesh'].dim), CF(0.0), CF(0.0), CF(0.0), {}, {}]  
         self.params_check(params, accepted_keys, defaults)
 
         params['type'] = VOL
@@ -153,6 +153,13 @@ class SurfaceBulkADRSolver(BaseSolver):
 
         sp_up = self.params_update(sp)
 
+        flux_c_cf = data['mesh'].BoundaryCF(sp_up['flux_c_bc'], default=CF((0,) * data['mesh'].dim))
+        flux_d_cf = data['mesh'].BoundaryCF(sp_up['flux_d_bc'], default=CF((0,) * data['mesh'].dim))
+
+        separator = '|'
+        flux_c_bnd = separator.join(list(sp_up['flux_c_bc'].keys()))
+        flux_d_bnd = separator.join(list(sp_up['flux_d_bc'].keys()))
+
         n = specialcf.normal(data['mesh'].dim)
         h = specialcf.mesh_size
 
@@ -163,9 +170,15 @@ class SurfaceBulkADRSolver(BaseSolver):
         jump_u = n*(grad(self.u[i]) - (grad(self.u[i])).Other())
         jump_v = n*(grad(self.v[i]) - (grad(self.v[i])).Other())
         advection = -sp_up['advection']*grad(self.v[i]) * self.u[i] *dx \
+            + IfPos(sp_up['advection']*n, sp_up['advection']*n*self.u[i], CF(0))*self.v[i]*ds \
             + h**2*S_int*jump_u*jump_v*dx(skeleton=True)
         
-        rhs = - sp_up['rhs']*self.v[i]*dx - sp_up['neu_bc']*n*self.v[i]*ds
+        rhs = - sp_up['rhs']*self.v[i]*dx
+        if sp_up['flux_d_bc']:
+            rhs += flux_d_cf*n*self.v[i]*ds(definedon = data['mesh'].Boundaries(flux_d_bnd))
+        if sp_up['flux_c_bc']:
+            rhs += IfPos(sp_up['advection']*n, CF((0,) * data['mesh'].dim), flux_c_cf)\
+            *n*self.v[i]*ds(definedon = data['mesh'].Boundaries(flux_c_bnd))
         mass = 1/data['dt']*self.u[i]*self.v[i]*dx
         mass_old =  - 1/data['dt']*self.gfu_old.components[i]*self.v[i]*dx
         
