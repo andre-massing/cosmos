@@ -5,6 +5,7 @@ from ngsolve.webgui import Draw
 from ngsolve.solvers import *
 import time
 import numpy as np
+import scipy.sparse as scipy
 
 class ADRSolver(BaseSolver):
 
@@ -31,9 +32,9 @@ class ADRSolver(BaseSolver):
         # Initialize the parameters
         accepted_keys = ['VorB', 'rhs', 'advection', 'diffusion', 'reaction',
                          'u0', 'dir_bc', 'flux_c_bc', 'flux_d_bc', 'Fflux_c_bc',
-                         'MP', 'domain']
+                         'MP', 'PP', 'domain']
         defaults = [VOL, CF(0.0), CF((0,)*data['mesh'].dim), CF(0.0), CF(0.0),
-                    CF(0.0), {}, {}, {}, {}, False, '.*']
+                    CF(0.0), {}, {}, {}, {}, False, False, '.*']
         self.params_check(params, accepted_keys, defaults)
 
         if data['mesh'].ne == 0 and params['VorB'] == VOL:
@@ -58,29 +59,29 @@ class ADRSolver(BaseSolver):
 
         data = self.problem.data
 
-        V_s = H1(data['mesh'], order = self.fes_order, dgjumps = True, 
+        self.V_s = H1(data['mesh'], order = self.fes_order, dgjumps = True, 
                  definedon=data['mesh'].Boundaries('.*'))
-        V_v = H1(data['mesh'], order = self.fes_order, dgjumps = True)
+        self.V_v = H1(data['mesh'], order = self.fes_order, dgjumps = True)
 
         if self.species[0]['VorB'] == BND:
-            self.fes = V_s
+            self.fes = self.V_s
         else:
-            self.fes = V_v
+            self.fes = self.V_v
 
         if data['mesh'].ne == 0:
-            self.fes_save = V_s
+            self.fes_save = self.V_s
         else:
-            self.fes_save = V_v
+            self.fes_save = self.V_v
 
         if len(self.species)>1:        
             for sp in self.species[1:]:
 
                 if sp['VorB'] == BND:
-                    self.fes = self.fes*V_s
+                    self.fes = self.fes*self.V_s
                 else:
-                    self.fes = self.fes*V_v
+                    self.fes = self.fes*self.V_v
 
-                self.fes_save = self.fes_save*V_v
+                self.fes_save = self.fes_save*self.V_v
         else:
             self.fes = self.fes*NumberSpace(data['mesh'])
             self.fes_save = self.fes_save*NumberSpace(data['mesh'])
@@ -133,7 +134,7 @@ class ADRSolver(BaseSolver):
 
         for i, sp in enumerate(self.species):
 
-            if sp['MP']:
+            if sp['MP'] or sp['PP']:
 
                 self.__mp__(i, sp)
 
@@ -350,26 +351,51 @@ class ADRSolver(BaseSolver):
 
         data = self.problem.data
         dt = data['dt'].Get()
-        tol = 1e-6
-
-        if sp['VorB'] == BND:
-            V_s = H1(data['mesh'], order = self.fes_order, dgjumps = True, 
-                 definedon=data['mesh'].Boundaries('.*'))
-            A = BilinearForm(V_s, diagonal = True)
-            u, v = V_s.TnT()
-            ir = IntegrationRule([(0,0), (1,0),(0,1)], [1/6, 1/6, 1/6])
-            A += u*v*ds(intrules={TRIG:ir})
-        else:
-            V_v = H1(data['mesh'], order = self.fes_order, dgjumps = True)
-            A = BilinearForm(V_v, diagonal = True)
-            u, v = V_v.TnT()
-            ir = IntegrationRule([(0,0), (1,0),(0,1)], [1/6, 1/6, 1/6])
-            A += u*v*dx(intrules={TRIG:ir})
-        A.Assemble()
+        tol = 1e-10
 
         gfu = self.gfu.components[i].vec.FV().NumPy()[:]
-        gfu0 = self.sol[0][i].FV().NumPy()[:]
-        Adiag = np.array(A.mat.AsVector())
+
+        if 'dX' in data and 'dX_old' in data:
+
+            dX = data['dX']
+
+            if sp['PP']:
+                gfu0 = self.gfu.components[i].vec.FV().NumPy()[:]
+                dX_old = dX
+            else:
+                gfu0 = self.sol[0][i].FV().NumPy()[:]
+                dX_old = GridFunction(VectorH1(data['mesh']))
+
+        else:
+            gfu0 = gfu
+            dX = GridFunction(VectorH1(data['mesh']))
+            dX_old = dX
+
+        if sp['VorB'] == BND:
+            u, v = self.V_s.TnT()
+            ir = IntegrationRule([(0,0), (1,0),(0,1)], [1/6, 1/6, 1/6])
+            A = BilinearForm(self.V_s, symmetric = True)
+            A += u*v*ds(deformation = dX, intrules={TRIG:ir})
+            A.Assemble()
+            A_old = BilinearForm(self.V_s, symmetric = True)
+            A_old += u*v*ds(deformation = dX_old, intrules={TRIG:ir})
+            A_old.Assemble()
+        else:
+            u, v = self.V_v.TnT()
+            ir = IntegrationRule([(0,0), (1,0),(0,1)], [1/6, 1/6, 1/6])
+            A = BilinearForm(self.V_v, symmetric = True)
+            A += u*v*dx(intrules={TRIG: ir}, deformation = dX)
+            A.Assemble()
+            A_old = BilinearForm(self.V_v, symmetric = True)
+            A_old += u*v*dx(intrules={TRIG: ir}, deformation = dX_old)
+            A_old.Assemble()
+
+        rows,cols,vals = A.mat.COO()
+        Adiag = scipy.csr_matrix((vals,(rows,cols))).diagonal()
+        rows,cols,vals = A_old.mat.COO()
+        Adiag_old = scipy.csr_matrix((vals,(rows,cols))).diagonal()
+
+        prod0 = np.dot(gfu0, Adiag_old)
 
         def F(xsi):
 
@@ -377,7 +403,7 @@ class ADRSolver(BaseSolver):
 
             temp = gfu + dt * xsi
 
-            result -= np.dot(gfu0, Adiag)
+            result -= prod0
             result += np.sum(Adiag[temp > 0] * temp[temp > 0])
 
             return result
