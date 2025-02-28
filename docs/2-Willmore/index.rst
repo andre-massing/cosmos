@@ -4,4 +4,6 @@ Willmore
 .. toctree::
    :maxdepth: 1
 
-   2-willmore_example.ipynb
+   1-willmore.ipynb
+   2-willmore_closed.ipynb
+   3-willmore_open.ipynb

@@ -1,6 +1,6 @@
 from cosmos.solvers.willmore import StabWillmoreSolver
 from cosmos.utils.generate_surface_meshes import *
-from cosmos.solvers.base_problem import MovingProblem
+from cosmos.solvers.simulation import MovingProblem
 
 from ngsolve import *
 import numpy as np

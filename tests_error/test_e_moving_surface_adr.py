@@ -1,5 +1,5 @@
 from cosmos.solvers.moving_surface_adr import MovingSurfaceADRSolver
-from cosmos.solvers.base_problem import MovingProblem
+from cosmos.solvers.simulation import MovingProblem
 from cosmos.utils.manufactured_solution_tools import gradient, get_lin_trans_params
 from cosmos.utils.generate_surface_meshes import generate_sphere, generate_half_sphere
 from ngsolve import *

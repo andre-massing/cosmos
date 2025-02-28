@@ -1,7 +1,7 @@
 # %%
 
 from cosmos.solvers.surface_adr import SurfaceADRSolver
-from cosmos.solvers.base_problem import UnsteadyProblem
+from cosmos.solvers.simulation import UnsteadyProblem
 from cosmos.utils.manufactured_solution_tools import gradient
 from ngsolve import *
 import numpy as np
@@ -164,7 +164,8 @@ def solve_surface_adr_open(dh, dt, neu = False):
                                    diffusion = d,
                                    reaction = c,
                                    u0 = u_ex,
-                                   dir_bc = dirichlet_bc)
+                                   dir_b = dirichlet_bc,
+                                   dir_d = dirichlet_bc)
     
     '''
     Adding the solver to the simulation
@@ -188,7 +189,7 @@ def solve_surface_adr_open(dh, dt, neu = False):
 '''
 Repeated simulation to see if there is convergence
 '''
-neu = True
+neu = False
 solve_surface_adr_open(0.2, 0.2, neu)
 solve_surface_adr_open(0.1, 0.1, neu)
 solve_surface_adr_open(0.05, 0.05, neu)

@@ -1,5 +1,5 @@
 from cosmos.solvers.bulk_adr import BulkADRSolver
-from cosmos.solvers.base_problem import UnsteadyProblem
+from cosmos.solvers.simulation import UnsteadyProblem
 from cosmos.utils.manufactured_solution_tools import gradient
 from ngsolve import *
 

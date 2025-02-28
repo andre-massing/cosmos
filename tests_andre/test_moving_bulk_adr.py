@@ -1,7 +1,7 @@
 # %%
  
 from cosmos.solvers.moving_bulk_adr import MovingBulkADRSolver
-from cosmos.solvers.base_problem import MovingProblem
+from cosmos.solvers.simulation import MovingProblem
 from cosmos.utils.manufactured_solution_tools import gradient
 from cosmos.utils.generate_surface_meshes import *
 from ngsolve import *

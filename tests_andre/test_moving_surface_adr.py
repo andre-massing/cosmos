@@ -1,7 +1,7 @@
 # %%
 
 from cosmos.solvers.moving_surface_adr import MovingSurfaceADRSolver
-from cosmos.solvers.base_problem import MovingProblem
+from cosmos.solvers.simulation import MovingProblem
 from cosmos.utils.manufactured_solution_tools import gradient, get_lin_trans_params
 from cosmos.utils.generate_surface_meshes import *
 from ngsolve import *
@@ -113,7 +113,7 @@ solve_m_surface_adr_closed(0.05, 0.05)
 #%%
 
 from cosmos.solvers.moving_surface_adr import MovingSurfaceADRSolver
-from cosmos.solvers.base_problem import MovingProblem
+from cosmos.solvers.simulation import MovingProblem
 from cosmos.utils.manufactured_solution_tools import gradient, get_lin_trans_params
 from cosmos.utils.generate_surface_meshes import *
 from ngsolve import *

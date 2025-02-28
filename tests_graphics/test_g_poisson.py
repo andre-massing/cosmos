@@ -1,5 +1,5 @@
 from cosmos.solvers.poisson import PoissonSolver
-from cosmos.solvers.base_problem import SteadyProblem
+from cosmos.solvers.simulation import SteadyProblem
 from cosmos.utils.manufactured_solution_tools import gradient
 
 from ngsolve import *

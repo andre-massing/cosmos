@@ -1,5 +1,5 @@
 from cosmos.solvers.base_solver import BaseSolver
-from cosmos.solvers.base_problem import SteadyProblem
+from cosmos.solvers.simulation import SteadyProblem
 from ngsolve import *
 
 def test_u_base_solver_fes_order():

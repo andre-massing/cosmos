@@ -5,9 +5,9 @@ from ngsolve.webgui import Draw
 
 class StabWillmoreSolver(BaseSolver):
 
-    def __init__(self, fes_order=1, **kwargs):
+    def __init__(self, **kwargs):
 
-        super().__init__(fes_order=fes_order, **kwargs)
+        super().__init__(fes_order=1, **kwargs)
 
         accepted_keys = ['rhs', 'stab', 'sp_curv', 'clamped_bc']
         defaults = [CF(0), CF(1e-3), CF(0.0), {}]
@@ -22,7 +22,6 @@ class StabWillmoreSolver(BaseSolver):
         
         if self.params['clamped_bc']:
             if not set([self.params['clamped_bc']]) <= set(data['boundary_mrk'] + ['.*']):
-
                 raise ValueError('Dirichlet boundary conditions are imposed on boundary regions which name is not in the mesh boundary list')
         
         if self.params['clamped_bc']:
@@ -68,6 +67,7 @@ class StabWillmoreSolver(BaseSolver):
             
             dV = H1(data['mesh'], order=1,\
                      definedon = data['mesh'].Boundaries('.*'))
+            
         elif data['mesh'].dim == 3:
             
             dV = VectorFacetSurface(data['mesh'], order=1,\
@@ -258,8 +258,6 @@ class StabWillmoreSolver(BaseSolver):
             self.kappa_vol.Set(self.kappa_h, definedon = data['mesh'].Boundaries('.*'))
 
             return [self.dX_vol, self.kappa_vol]
-
-        return 
     
     def draw_solution(self, **kwargs):
 

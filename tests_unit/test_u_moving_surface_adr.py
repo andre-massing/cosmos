@@ -1,5 +1,5 @@
 from cosmos.solvers.moving_surface_adr import MovingSurfaceADRSolver
-from cosmos.solvers.base_problem import MovingProblem
+from cosmos.solvers.simulation import MovingProblem
 from ngsolve import *
 
 def test_u_surface_adr_solver_fes_order():

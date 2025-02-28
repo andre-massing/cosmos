@@ -16,9 +16,10 @@ class ADRSolver(BaseSolver):
         if len(kwargs)>1:
             raise Exception('Base Advection-Diffusion-Reaction simulations do \
                             not accept additional keywords as contructor')
-        # accepted_keys = []
-        # defaults = []
-        # self.params_check(self.params, accepted_keys, defaults)
+        
+        accepted_keys = ['linear']
+        defaults = [False]
+        self.params_check(self.params, accepted_keys, defaults)
 
         self.species = []
         self.couplings = []
@@ -31,10 +32,11 @@ class ADRSolver(BaseSolver):
 
         # Initialize the parameters
         accepted_keys = ['VorB', 'rhs', 'advection', 'diffusion', 'reaction',
-                         'u0', 'dir_bc', 'flux_c_bc', 'flux_d_bc', 'Fflux_c_bc',
-                         'MP', 'PP', 'domain']
+                         'u0', 'neu_d', 'neu_b', 'dir_d', 'dir_b', 'Fneu_b',
+                         'MP', 'PP', 'domain', 'stationary']
         defaults = [VOL, CF(0.0), CF((0,)*data['mesh'].dim), CF(0.0), CF(0.0),
-                    CF(0.0), {}, {}, {}, {}, False, False, '.*']
+                    CF(0.0), {}, {}, {}, {}, {},
+                    False, False, '.*', False]
         self.params_check(params, accepted_keys, defaults)
 
         if data['mesh'].ne == 0 and params['VorB'] == VOL:
@@ -46,18 +48,18 @@ class ADRSolver(BaseSolver):
             params['fes'] = Compress(H1(data['mesh'], order = self.fes_order, dgjumps = True, 
                  definedon=data['mesh'].Boundaries(params['domain'])))
         elif params['VorB'] == VOL:
-            params['fes'] = Compress(H1(data['mesh'], order = self.fes_order, dgjumps = True, 
-                 definedon=data['mesh'].Materials(params['domain'])))
+            params['fes'] = Compress(H1(data['mesh'], order = self.fes_order, dgjumps = True,
+                          definedon = params['domain']))
 
         self.species.append(params)
 
-    def AddCoupling(self, **kwargs):
+    def AddNonlinearity(self, **kwargs):
 
         params = kwargs
 
         # Initialize the parameters
-        accepted_keys = ['marker1', 'marker2', 'f1', 'f2']
-        defaults = [0, 1, {}, {}]  
+        accepted_keys = ['marker0', 'markers', 'f', 'VorB', 'domain']
+        defaults = [0, 0, {}, VOL, '.*']  
         self.params_check(params, accepted_keys, defaults)
 
         self.couplings.append(params)
@@ -66,23 +68,22 @@ class ADRSolver(BaseSolver):
 
         data = self.problem.data
 
-        V_s = H1(data['mesh'], order = self.fes_order, dgjumps = True, 
-                 definedon=data['mesh'].Boundaries('.*'))
-        V_v = H1(data['mesh'], order = self.fes_order, dgjumps = True)
-
-        self.fes = self.species[0]['fes']
-
         if data['mesh'].ne == 0:
-            self.fes_save = V_s
+            V = H1(data['mesh'], order = self.fes_order,
+                               definedon=data['mesh'].Boundaries('.*'))
         else:
-            self.fes_save = V_v
+            V = H1(data['mesh'], order = self.fes_order)
+       
+        for i, sp in enumerate(self.species):
 
-        if len(self.species)>1:        
-            for sp in self.species[1:]:
-
+            if i == 0:
+                self.fes = sp['fes']
+                self.fes_save = V
+            else:
                 self.fes = self.fes*sp['fes']
-                self.fes_save = self.fes_save*self.V_v
-        else:
+                self.fes_save = self.fes_save*V
+
+        if len(self.species)<2:
             self.fes = self.fes*NumberSpace(data['mesh'])
             self.fes_save = self.fes_save*NumberSpace(data['mesh'])
         
@@ -95,10 +96,9 @@ class ADRSolver(BaseSolver):
 
             if sp['VorB'] == BND:
                 self.gfu.components[i].Set(sp['u0'], 
-                                           definedon=data['mesh'].Boundaries(sp['domain']))
-            else:
-                self.gfu.components[i].Set(sp['u0'],
-                                           definedon=data['mesh'].Materials(sp['domain']))
+                        definedon=data['mesh'].Boundaries('.*'))
+            elif sp['VorB'] == VOL:
+                self.gfu.components[i].Set(sp['u0'])
 
             list.append(self.gfu.components[i].vec.Copy())
 
@@ -116,31 +116,53 @@ class ADRSolver(BaseSolver):
 
             if sp['VorB'] == BND:
 
-                self.__add_surface_forms__(sp)
+                lhs, rhs, mass, mass_old = self.__add_surface_forms__(sp)
 
             else:
 
-                self.__add_bulk_forms__(sp)
+                lhs, rhs, mass, mass_old = self.__add_bulk_forms__(sp)
+
+            if self.params['linear']:
+
+                if sp['stationary']:
+
+                    self.A += lhs
+                    self.F += rhs
+
+                else:
+
+                    self.A += lhs + mass
+                    self.F += rhs + mass_old
+
+            else:
+
+                if sp['stationary']:
+
+                    self.A += lhs - rhs
+
+                else:
+
+                    self.A += lhs + mass - rhs - mass_old
         
         if len(self.species)<2:
             self.A += self.u[-1]*self.v[-1]*ds
 
         for cp in self.couplings:
 
-            self.__add_coupling_forms__(cp)
+            self.__add_nonlinear_forms__(cp)
 
         with TaskManager():
 
-            if len(self.couplings)>0:
-
-                Newton(self.A, self.gfu, maxit=100, printing = False)
-
-            else:
+            if self.params['linear']:
 
                 self.A.Assemble()
                 self.F.Assemble()
 
-                self.gfu.vec.data = self.A.mat.Inverse(self.fes.FreeDofs())*self.F.vec
+                self.gfu.vec.data = self.A.mat.Inverse(freedofs = self.fes.FreeDofs())*self.F.vec
+
+            else:
+
+                Newton(self.A, self.gfu, maxit=20, printing = False)
 
         for sp in self.species:
 
@@ -155,21 +177,6 @@ class ADRSolver(BaseSolver):
         sp_up = self.params_update(sp)
 
         i = sp['marker']
-
-        separator = '|'
-        dir_bnd = separator.join(list(sp_up['dir_bc'].keys()))
-        flux_c_bnd = separator.join(list(sp_up['flux_c_bc'].keys()))
-        Fflux_c_bnd = separator.join(list(sp_up['Fflux_c_bc'].keys()))
-        flux_d_bnd = separator.join(list(sp_up['flux_d_bc'].keys()))
-
-        if sp_up['dir_bc']:
-            dir_cf = sp_up['dir_bc'][dir_bnd]
-        if sp_up['flux_c_bc']:
-            flux_c_cf = sp_up['flux_c_bc'][flux_c_bnd]
-        if sp_up['Fflux_c_bc']:
-            Fflux_c_cf = sp_up['Fflux_c_bc'][Fflux_c_bnd]
-        if sp_up['flux_d_bc']:
-            flux_d_cf = sp_up['flux_d_bc'][flux_d_bnd]
 
         ns = specialcf.normal(data['mesh'].dim)
         tE = specialcf.tangential(data['mesh'].dim)
@@ -186,88 +193,107 @@ class ADRSolver(BaseSolver):
             dX = GridFunction(VectorH1(data['mesh']))
             dX_old = GridFunction(VectorH1(data['mesh']))
 
-        diffusion = sp_up['diffusion']*grad(self.u[i]).Trace()*grad(self.v[i]).Trace()\
-            *ds(deformation = dX, definedon=data['mesh'].Boundaries(sp['domain']))
-        reaction = sp_up['reaction']*self.u[i]*self.v[i]*ds(deformation = dX, 
-                definedon=data['mesh'].Boundaries(sp['domain']))
+        lhs = sp_up['diffusion']*grad(self.u[i]).Trace()*grad(self.v[i]).Trace()\
+            *ds(deformation = dX)
+        lhs += sp_up['reaction']*self.u[i]*self.v[i]*ds(deformation = dX)
         # CIP stabilization for convection part
-        advection = -sp_up['advection']*grad(self.v[i]).Trace() * self.u[i] *ds(deformation = dX, 
-                definedon=data['mesh'].Boundaries(sp['domain']))
+        S_int = 0.5*Norm(sp_up['advection']*nE) # Parameter corresponding to upwind stabilization
+        jump_u = nE*(grad(self.u[i]).Trace() - (grad(self.u[i])).Other().Trace())
+        jump_v = nE*(grad(self.v[i]).Trace() - (grad(self.v[i])).Other().Trace())
+        lhs += -sp_up['advection']*grad(self.v[i]).Trace() * self.u[i] *ds(deformation = dX)\
 
-        rhs =  sp_up['rhs']*self.v[i]*ds(deformation = dX,
-                definedon=data['mesh'].Boundaries(sp['domain']))
-        mass = 1/data['dt']*self.u[i]*self.v[i]*ds(deformation = dX, 
-                definedon=data['mesh'].Boundaries(sp['domain']))
-        mass_old = 1/data['dt']*self.gfu_old.components[i]*self.v[i]*ds(deformation = dX_old,
-                definedon=data['mesh'].Boundaries(sp['domain']))
+        rhs =  sp_up['rhs']*self.v[i]*ds(deformation = dX)
+        mass = 1/data['dt']*self.u[i]*self.v[i]*ds(deformation = dX)
+        mass_old = 1/data['dt']*self.gfu_old.components[i]*self.v[i]*ds(deformation = dX_old)
 
-        if sp_up['flux_d_bc']:
-            if data['mesh'].dim == 2:
-                gfF = GridFunction(H1(data['mesh'], order = 1,\
-                                        definedon=data['mesh'].Boundaries('.*')))
-                gfF.Set(1, definedon=data['mesh'].BBoundaries(flux_d_bnd))
-            else:
-                gfF = GridFunction(FacetSurface(data['mesh'], order = 0))
-                gfF.Set(1, definedon=data['mesh'].BBoundaries(flux_d_bnd))
-            rhs += -InnerProduct(nE, flux_d_cf)*gfF*self.v[i]*ds(deformation = dX, element_boundary=True)
-        if sp_up['flux_c_bc']:
-            if data['mesh'].dim == 2:
-                gfF = GridFunction(H1(data['mesh'], order = 1,\
-                                        definedon=data['mesh'].Boundaries('.*')))
-                gfF.Set(1, definedon=data['mesh'].BBoundaries(flux_c_bnd))
-            else:
-                gfF = GridFunction(FacetSurface(data['mesh'], order = 0))
-                gfF.Set(1, definedon=data['mesh'].BBoundaries(flux_c_bnd))
-            advection += IfPos(InnerProduct(nE, sp_up['advection']), 
-                            InnerProduct(nE, sp_up['advection'])*self.u[i], 0)\
-                                *gfF*self.v[i]*ds(deformation = dX, element_boundary=True)
-            rhs += -IfPos(InnerProduct(nE, sp_up['advection']), 0,
-                         InnerProduct(nE, flux_c_cf))*gfF*self.v[i]\
-                            *ds(deformation = dX, element_boundary=True)
-        if sp_up['Fflux_c_bc']:
-            if data['mesh'].dim == 2:
-                gfF = GridFunction(H1(data['mesh'], order = 1,\
-                                        definedon=data['mesh'].Boundaries('.*')))
-                gfF1 = GridFunction(H1(data['mesh'], order = 1,\
-                                        definedon=data['mesh'].Boundaries('.*')))
-                gfF.Set(1, definedon=data['mesh'].BBoundaries(Fflux_c_bnd))
-                gfF1.Set(1, definedon=data['mesh'].BBoundaries('.*') - data['mesh'].BBoundaries(Fflux_c_bnd))
-            else:
-                gfF = GridFunction(FacetSurface(data['mesh'], order = 0))
-                gfF1 = GridFunction(FacetSurface(data['mesh'], order = 0))
-                gfF.Set(1, definedon=data['mesh'].BBoundaries(Fflux_c_bnd))
-                gfF1.Set(1, definedon=data['mesh'].BBoundaries('.*') - data['mesh'].BBoundaries(Fflux_c_bnd))
-            advection += IfPos(InnerProduct(nE, sp_up['advection']), 
-                            InnerProduct(nE, sp_up['advection'])*self.u[i], CF(0))\
-                                *gfF1*self.v[i]*ds(deformation = dX, element_boundary=True)
-            rhs += -InnerProduct(nE, Fflux_c_cf)*gfF*self.v[i]\
-                            *ds(deformation = dX, element_boundary=True)
-        if sp_up['dir_bc']:
-            if data['mesh'].dim == 2:
-                gfF = GridFunction(H1(data['mesh'], order = 1,\
-                                        definedon=data['mesh'].Boundaries('.*')))
-                gfF.Set(1, definedon=data['mesh'].BBoundaries(dir_bnd))
-                alpha = 5 * self.fes_order * (self.fes_order+1)
-                diffusion += - InnerProduct(nE, grad(self.u[i]).Trace())*gfF*self.v[i]*ds(deformation = dX, element_boundary=True) \
-                        - InnerProduct(nE, grad(self.v[i]).Trace())*gfF*self.u[i]*ds(deformation = dX, element_boundary=True) \
-                        + alpha/h*self.u[i]*self.v[i]*gfF*ds(deformation = dX, element_boundary=True)
-                rhs += - InnerProduct(nE, grad(self.v[i]).Trace())*gfF*dir_cf*ds(deformation = dX, element_boundary=True) \
-                        + alpha/h*dir_cf*self.v[i]*gfF*ds(deformation = dX, element_boundary=True)
-            else:
-                gfF = GridFunction(FacetSurface(data['mesh'], order = 0))
-                gfF.Set(1, definedon=data['mesh'].BBoundaries(dir_bnd))
-                alpha = 5 * self.fes_order * (self.fes_order+1)
-                diffusion += - InnerProduct(nE, grad(self.u[i]).Trace())*gfF*self.v[i]*ds(deformation = dX, element_boundary=True) \
-                        - InnerProduct(nE, grad(self.v[i]).Trace())*gfF*self.u[i]*ds(deformation = dX, element_boundary=True) \
-                        + alpha/h*self.u[i]*self.v[i]*ds(deformation = dX, definedon = data['mesh'].BBoundaries(dir_bnd))
-                rhs += - InnerProduct(nE, grad(self.v[i]).Trace())*gfF*dir_cf*ds(deformation = dX, element_boundary=True) \
-                        + alpha/h*dir_cf*self.v[i]*ds(deformation = dX, definedon = data['mesh'].BBoundaries(dir_bnd))
+        if sp_up['neu_d']:
 
-        if len(self.couplings)>0:       
-            self.A += mass + reaction + diffusion + advection - rhs - mass_old
-        else:
-            self.A += mass + reaction + diffusion + advection
-            self.F += rhs + mass_old
+            for key, value in sp_up['neu_d'].items():
+
+                if data['mesh'].dim == 2:
+                    gfF = GridFunction(H1(data['mesh'], order = 1,\
+                                            definedon=data['mesh'].Boundaries('.*')))
+                else:
+                    gfF = GridFunction(FacetSurface(data['mesh'], order = 0))
+                gfF.Set(1, definedon=data['mesh'].BBoundaries(key))
+
+                rhs += -InnerProduct(nE, value)*gfF*self.v[i]*ds(deformation = dX, element_boundary=True)
+
+        if sp_up['neu_b']:
+
+            for key, value in sp_up['neu_b'].items():
+
+                if data['mesh'].dim == 2:
+                    gfF = GridFunction(sp_up['fes'])
+                else:
+                    gfF = GridFunction(FacetSurface(data['mesh'], order = 0))
+                gfF.Set(1, definedon=data['mesh'].BBoundaries(key))
+
+                lhs += IfPos(InnerProduct(nE, sp_up['advection']), 
+                                InnerProduct(nE, sp_up['advection'])*self.u[i], 0)\
+                                    *gfF*self.v[i]*ds(deformation = dX, element_boundary=True)
+                rhs += -IfPos(InnerProduct(nE, sp_up['advection']), 0,
+                            InnerProduct(nE, value))*gfF*self.v[i]\
+                                *ds(deformation = dX, element_boundary=True)
+            
+        if sp_up['Fneu_b']:
+
+            for key, value in sp_up['neu_b'].items():
+
+                if data['mesh'].dim == 2:
+                    gfF = GridFunction(H1(data['mesh'], order = 1,\
+                                            definedon=data['mesh'].Boundaries('.*')))
+                    gfF1 = GridFunction(H1(data['mesh'], order = 1,\
+                                            definedon=data['mesh'].Boundaries('.*')))
+                else:
+                    gfF = GridFunction(FacetSurface(data['mesh'], order = 0))
+                    gfF1 = GridFunction(FacetSurface(data['mesh'], order = 0))
+                gfF.Set(1, definedon=data['mesh'].BBoundaries(key))
+                gfF1.Set(1, definedon=data['mesh'].BBoundaries('.*') - data['mesh'].BBoundaries(key))
+
+                lhs += IfPos(InnerProduct(nE, sp_up['advection']), 
+                                InnerProduct(nE, sp_up['advection'])*self.u[i], CF(0))\
+                                    *gfF1*self.v[i]*ds(deformation = dX, element_boundary=True)
+                rhs += -InnerProduct(nE, value)*gfF*self.v[i]\
+                                *ds(deformation = dX, element_boundary=True)
+                
+        if sp_up['dir_d']:
+
+            alpha = sqrt((self.fes_order +1)*(self.fes_order + data['mesh'].dim)/data['mesh'].dim)
+            alpha = 5 * self.fes_order * (self.fes_order+1)
+
+            for key, value in sp_up['dir_d'].items():
+
+                if data['mesh'].dim == 2:
+                    gfF = GridFunction(sp_up['fes'])
+                else:
+                    gfF = GridFunction(FacetSurface(data['mesh'], order = 0))
+                gfF.Set(1, definedon=data['mesh'].BBoundaries(key))
+                lhs += - sp_up['diffusion']*InnerProduct(nE, grad(self.u[i]).Trace())*gfF*self.v[i]*ds(deformation = dX, element_boundary=True) \
+                        - sp_up['diffusion']*InnerProduct(nE, grad(self.v[i]).Trace())*gfF*self.u[i]*ds(deformation = dX, element_boundary=True)\
+                        + sp_up['diffusion']*alpha/h*self.u[i]*self.v[i]*ds(deformation = dX, definedon = data['mesh'].BBoundaries(key))
+                rhs += - sp_up['diffusion']*InnerProduct(nE, grad(self.v[i]).Trace())*gfF*value*ds(deformation = dX, element_boundary=True)\
+                    + sp_up['diffusion']*alpha/h*value*self.v[i]*ds(deformation = dX, definedon = data['mesh'].BBoundaries(key))
+                
+        if sp_up['dir_b']:
+
+            for key, value in sp_up['dir_b'].items():
+
+                if data['mesh'].dim == 2:
+                    gfF = GridFunction(H1(data['mesh'], order = 1,\
+                                            definedon=data['mesh'].Boundaries('.*')))
+                else:
+                    gfF = GridFunction(FacetSurface(data['mesh'], order = 0))
+                gfF.Set(1, definedon=data['mesh'].BBoundaries(key))
+
+                lhs += IfPos(InnerProduct(nE, sp_up['advection']), 
+                                InnerProduct(nE, sp_up['advection'])*self.u[i], 0)\
+                                    *gfF*self.v[i]*ds(deformation = dX, element_boundary=True)
+                rhs += -IfPos(InnerProduct(nE, sp_up['advection']), 0,
+                            InnerProduct(nE, sp_up['advection']*value))*gfF*self.v[i]\
+                                *ds(deformation = dX, element_boundary=True)
+                
+        return lhs, rhs, mass, mass_old
 
     def __add_bulk_forms__(self, sp):
 
@@ -276,17 +302,6 @@ class ADRSolver(BaseSolver):
         sp_up = self.params_update(sp)
 
         i = sp['marker']
-
-        dir_cf = data['mesh'].BoundaryCF(sp_up['dir_bc'], default=0)
-        flux_c_cf = data['mesh'].BoundaryCF(sp_up['flux_c_bc'], default=CF((0,) * data['mesh'].dim))
-        Fflux_c_cf = data['mesh'].BoundaryCF(sp_up['Fflux_c_bc'], default=CF((0,) * data['mesh'].dim))
-        flux_d_cf = data['mesh'].BoundaryCF(sp_up['flux_d_bc'], default=CF((0,) * data['mesh'].dim))
-
-        separator = '|'
-        dir_bnd = separator.join(list(sp_up['dir_bc'].keys()))
-        flux_c_bnd = separator.join(list(sp_up['flux_c_bc'].keys()))
-        Fflux_c_bnd = separator.join(list(sp_up['Fflux_c_bc'].keys()))
-        flux_d_bnd = separator.join(list(sp_up['flux_d_bc'].keys()))
 
         n = specialcf.normal(data['mesh'].dim)
         h = specialcf.mesh_size
@@ -298,15 +313,15 @@ class ADRSolver(BaseSolver):
             dX = GridFunction(VectorH1(data['mesh']))
             dX_old = GridFunction(VectorH1(data['mesh']))
 
-        diffusion = sp_up['diffusion']*grad(self.u[i])*grad(self.v[i])\
+        lhs = sp_up['diffusion']*grad(self.u[i])*grad(self.v[i])\
             *dx(deformation = dX)
-        reaction = sp_up['reaction']*self.u[i]*self.v[i]\
+        lhs += sp_up['reaction']*self.u[i]*self.v[i]\
             *dx(deformation = dX)
         # CIP stabilization for convection part
         S_int = 0.5*Norm(sp_up['advection']*n) # Parameter corresponding to upwind stabilization
         jump_u = n*(grad(self.u[i]) - (grad(self.u[i])).Other())
         jump_v = n*(grad(self.v[i]) - (grad(self.v[i])).Other())
-        advection = -sp_up['advection']*grad(self.v[i]) * self.u[i] \
+        lhs += -sp_up['advection']*grad(self.v[i]) * self.u[i] \
             *dx(deformation = dX)\
                     + h**2*S_int*jump_u*jump_v\
             *dx(deformation = dX, skeleton=True)
@@ -318,56 +333,58 @@ class ADRSolver(BaseSolver):
 
         rhs = sp_up['rhs']*self.v[i]*dx(deformation = dX)
         
-        if sp_up['flux_d_bc']:
-            rhs += -flux_d_cf*n*self.v[i]*ds(deformation = dX, definedon = data['mesh'].Boundaries(flux_d_bnd))
-        if sp_up['flux_c_bc']:
-            advection += IfPos(sp_up['advection']*n, sp_up['advection']*n*self.u[i], CF(0))*self.v[i]\
-                *ds(deformation = dX, definedon = data['mesh'].Boundaries(flux_c_bnd))
-            rhs += -IfPos(sp_up['advection']*n, CF(0), flux_c_cf*n)*self.v[i]*ds(deformation = dX, definedon = data['mesh'].Boundaries(flux_c_bnd))
-        if sp_up['Fflux_c_bc']:
-            advection += IfPos(sp_up['advection']*n, sp_up['advection']*n*self.u[i], CF(0))*self.v[i]\
-                *ds(deformation = dX, definedon = data['mesh'].Boundaries('.*') - data['mesh'].Boundaries(Fflux_c_bnd))
-            rhs += -Fflux_c_cf*n*self.v[i]*ds(deformation = dX, definedon = data['mesh'].Boundaries(Fflux_c_bnd))
-        if sp_up['dir_bc']:
+        if sp_up['neu_d']:
+
+            for key, value in sp_up['neu_d'].items():
+                rhs += -value*n*self.v[i]*ds(deformation = dX, definedon = key)
+
+        if sp_up['neu_b']:
+
+            for key, value in sp_up['neu_b'].items():
+                lhs += IfPos(sp_up['advection']*n, sp_up['advection']*n*self.u[i], CF(0))*self.v[i]\
+                    *ds(deformation = dX, definedon = key)
+                rhs += -IfPos(sp_up['advection']*n, CF(0), value*n)*self.v[i]*ds(deformation = dX, definedon = key)
+
+        if sp_up['Fneu_b']:
+
+            for key, value in sp_up['Fneu_b'].items():
+                lhs += IfPos(sp_up['advection']*n, sp_up['advection']*n*self.u[i], CF(0))*self.v[i]\
+                    *ds(deformation = dX, definedon = data['mesh'].Boundaries('.*') - data['mesh'].Boundaries(key))
+                rhs += -value*n*self.v[i]*ds(deformation = dX, definedon = data['mesh'].Boundaries(key))
+
+        if sp_up['dir_d']:
+
+            alpha = (self.fes_order +1)*(self.fes_order + data['mesh'].dim)/data['mesh'].dim
             alpha = 5 * self.fes_order * (self.fes_order+1)
-            diffusion += - InnerProduct(n, grad(self.u[i]))*self.v[i]*ds(deformation = dX, definedon = data['mesh'].Boundaries(dir_bnd), skeleton=True) \
-                - InnerProduct(n, grad(self.v[i]))*self.u[i]*ds(deformation = dX, definedon = data['mesh'].Boundaries(dir_bnd), skeleton=True) \
-                + alpha/h*self.u[i]*self.v[i]*ds(deformation = dX, definedon = data['mesh'].Boundaries(dir_bnd))
-            rhs += - dir_cf*InnerProduct(n, grad(self.v[i]))*ds(deformation = dX, definedon = data['mesh'].Boundaries(dir_bnd), skeleton=True) \
-                + alpha/h*dir_cf*self.v[i]*ds(deformation = dX, definedon = data['mesh'].Boundaries(dir_bnd))
+
+            for key, value in sp_up['dir_d'].items():
+                lhs += - sp_up['diffusion']*InnerProduct(n, grad(self.u[i]))*self.v[i]*ds(deformation = dX, definedon = key, skeleton=True) \
+                    - sp_up['diffusion']*InnerProduct(n, grad(self.v[i]))*self.u[i]*ds(deformation = dX, definedon = key, skeleton=True) \
+                    + sp_up['diffusion']*alpha/h*self.u[i]*self.v[i]*ds(deformation = dX, definedon = key)
+                rhs += - sp_up['diffusion']*InnerProduct(n, grad(self.v[i]))*value*ds(deformation = dX, definedon = key, skeleton=True) \
+                    + sp_up['diffusion']*alpha/h*value*self.v[i]*ds(deformation = dX, definedon = key)
+
+        if sp_up['dir_b']:
+
+            for key, value in sp_up['dir_b'].items():
+                lhs += IfPos(sp_up['advection']*n, sp_up['advection']*n*self.u[i], CF(0))*self.v[i]\
+                    *ds(deformation = dX, definedon = key)
+                rhs += -IfPos(sp_up['advection']*n, CF(0), sp_up['advection']*value*n)*self.v[i]*ds(deformation = dX, definedon = key)
             
-        if len(self.couplings)>0:       
-            self.A += mass + reaction + diffusion + advection - rhs - mass_old
-        else:
-            self.A += mass + reaction + diffusion + advection
-            self.F += rhs + mass_old
+        return lhs, rhs, mass, mass_old
 
-    def __add_coupling_forms__(self, cp):
+    def __add_nonlinear_forms__(self, cp):
 
-        u1 = self.u[cp['marker1']]
-        v1 = self.v[cp['marker1']]
-        u2 = self.u[cp['marker2']]
-        v2 = self.v[cp['marker2']]
+        trial = [self.u[i] for i in cp['markers']]
+        test = self.v[cp['marker0']]
 
-        if self.species[cp['marker1']]['VorB'] == VOL and self.species[cp['marker2']]['VorB'] == VOL:
+        if cp['VorB'] == BND:
 
-            if cp['f1']:
-
-                self.A += cp['f1'](u1, u2)*v1*dx
-
-            if cp['f2']:
-
-                self.A += cp['f2'](u1, u2)*v2*dx
+            self.A += cp['f'](trial)*test*ds(definedon=cp['domain'])
 
         else:
-            
-            if cp['f1']:
 
-                self.A += cp['f1'](u1, u2)*v1*ds
-
-            if cp['f2']:
-
-                self.A += cp['f2'](u1, u2)*v2*ds
+            self.A += cp['f'](trial)*test*dx(definedon=cp['domain'])
 
     def __mp__(self, sp):
 
@@ -480,10 +497,10 @@ class ADRSolver(BaseSolver):
 
             if sp['VorB'] == BND:
                 self.gfu_save.components[i].Set(self.gfu.components[i],
-                                                definedon=data['mesh'].Boundaries(sp['domain']))
+                        definedon=data['mesh'].Boundaries(sp['domain']))
             else:
                 self.gfu_save.components[i].Set(self.gfu.components[i],
-                                                definedon=data['mesh'].Materials(sp['domain'])) 
+                        definedon=data['mesh'].Materials(sp['domain'])) 
 
         return [self.gfu_save.components[i] for i in range(len(self.species))]
         
@@ -535,7 +552,7 @@ class ADRSolver(BaseSolver):
                 dX = GridFunction(VectorH1(data['mesh']))
      
             data['mesh'].SetDeformation(dX)
-            sol = self.get_solution(data = data)
+            sol = self.get_solution()
             vtk.Do(time=data['t_array'][i])
             data['mesh'].UnsetDeformation()
 
@@ -547,39 +564,7 @@ class ADRSolver(BaseSolver):
         ns = specialcf.normal(data['mesh'].dim)
         Ps = Id(data['mesh'].dim) - OuterProduct(ns, ns)
 
-        if norm == 'H1':
-
-            for i, sol_i in enumerate(self.sol):
-
-                data['t'].Set(data['t_array'][i])
-                if 'dX' in data:
-                    data['dX'].vec.data = data['dX_array'][i].data
-                    dX = data['dX']
-                else:
-                    dX = GridFunction(VectorH1(data['mesh']))
-                data['mesh'].SetDeformation(dX)
-
-                for j in range(len(self.species)):
-
-                    self.gfu.components[j].vec.data = sol_i[j].data
-
-                    if self.species[j]['VorB'] == BND:
-
-                        aux = InnerProduct(grad(self.gfu.components[j]).Trace()-gradient(u_ex[j], Ps), \
-                                            grad(self.gfu.components[j]).Trace()-gradient(u_ex[j], Ps))
-
-                        err[j].append(sqrt(Integrate(aux, mesh = data['mesh'], order = self.fes_order*2, VOL_or_BND=BND)))
-
-                    else:
-
-                        aux = InnerProduct(grad(self.gfu.components[j])-gradient(u_ex[j], Id(data['mesh'].dim)), \
-                                            grad(self.gfu.components[j])-gradient(u_ex[j], Id(data['mesh'].dim)))
-
-                        err[j].append(sqrt(Integrate(aux, mesh = data['mesh'], order = self.fes_order*2, VOL_or_BND=BND)))
-
-                data['mesh'].UnsetDeformation()
-
-        elif norm == 'L2':
+        if norm == 'L2':
 
             for i, sol_i in enumerate(self.sol):
 
@@ -599,14 +584,16 @@ class ADRSolver(BaseSolver):
 
                     if self.species[j]['VorB'] == BND:
 
-                        err[j].append(sqrt(Integrate(aux, mesh = data['mesh'], order = self.fes_order*2, VOL_or_BND=BND)))
+                        err[j].append(sqrt(Integrate(aux, mesh = data['mesh'], order = self.fes_order*2, 
+                                                     VOL_or_BND=BND, 
+                                                     definedon = data['mesh'].Boundaries(self.species[j]['domain']))))
 
                     else:
 
-                        err[j].append(sqrt(Integrate(aux, mesh = data['mesh'], order = self.fes_order*2)))
+                        err[j].append(sqrt(Integrate(aux, mesh = data['mesh'], order = self.fes_order*2,
+                                        definedon = data['mesh'].Materials(self.species[j]['domain']))))
 
                 data['mesh'].UnsetDeformation()
-
 
         else:
 

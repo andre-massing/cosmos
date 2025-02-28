@@ -11,3 +11,5 @@ Advection-Diffusion-Reaction
    5-positivity_preserving.ipynb
    6-moving_bulk_adr.ipynb
    7-moving_surface_adr.ipynb
+   8-subdomains.ipynb
+   9-turing_patterns.ipynb

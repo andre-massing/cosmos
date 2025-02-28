@@ -1,5 +1,5 @@
 from cosmos.solvers.bulk_adr import BulkADRSolver
-from cosmos.solvers.base_problem import UnsteadyProblem
+from cosmos.solvers.simulation import UnsteadyProblem
 from ngsolve import *
 
 def test_u_bulk_adr_solver_fes_order():
