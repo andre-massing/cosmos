@@ -9,13 +9,13 @@ Advection-Diffusion-Reaction
 
    1-ADR/index
 
-Willmore
-========
+Geometrical Flows
+=================
 
 .. toctree::
    :maxdepth: 1
 
-   2-Willmore/index
+   2-Geometrical_flows/index
 
 Coupled
 =======

@@ -41,7 +41,7 @@ def test_u_base_solver_initialize():
     
     simulation = SteadyProblem(mesh=mesh)
     solver = BaseSolver()
-    simulation.attach_solver(solver)
+    simulation.AddSolver(solver)
 
     err = False
     try:
@@ -59,7 +59,7 @@ def test_u_base_solver_solve_step():
     
     simulation = SteadyProblem(mesh=mesh)
     solver = BaseSolver()
-    simulation.attach_solver(solver)
+    simulation.AddSolver(solver)
 
     err = False
     try:
@@ -77,7 +77,7 @@ def test_u_base_solver_update():
     
     simulation = SteadyProblem(mesh=mesh)
     solver = BaseSolver()
-    simulation.attach_solver(solver)
+    simulation.AddSolver(solver)
 
     err = False
     try:
@@ -98,7 +98,7 @@ def test_u_base_solver_compute_error():
     
     simulation = SteadyProblem(mesh=mesh)
     solver = BaseSolver()
-    simulation.attach_solver(solver)
+    simulation.AddSolver(solver)
 
     err = False
     try:
@@ -116,7 +116,7 @@ def test_u_base_solver_get_solution():
     
     simulation = SteadyProblem(mesh=mesh)
     solver = BaseSolver()
-    simulation.attach_solver(solver)
+    simulation.AddSolver(solver)
 
     err = False
     try:
@@ -134,7 +134,7 @@ def test_u_base_solver_draw_solution():
     
     simulation = SteadyProblem(mesh=mesh)
     solver = BaseSolver()
-    simulation.attach_solver(solver)
+    simulation.AddSolver(solver)
 
     err = False
     try:
@@ -152,7 +152,7 @@ def test_u_base_solver_save_solution():
     
     simulation = SteadyProblem(mesh=mesh)
     solver = BaseSolver()
-    simulation.attach_solver(solver)
+    simulation.AddSolver(solver)
 
     err = False
     try:

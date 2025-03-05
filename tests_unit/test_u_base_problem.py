@@ -1,4 +1,4 @@
-from cosmos.solvers.simulation import SteadyProblem, UnsteadyProblem, MovingProblem
+from cosmos.solvers.simulation import SteadyProblem, Simulation, MovingSimulation
 from cosmos.solvers.base_solver import BaseSolver
 from cosmos.solvers.base import Base
 from ngsolve import *
@@ -140,10 +140,10 @@ def test_u_steady_problem_attach_solver():
 
     test = False
     try:
-        simulation.attach_solver(base)
+        simulation.AddSolver(base)
     except TypeError:
         try:
-            simulation.attach_solver(sol)
+            simulation.AddSolver(sol)
         except NotImplementedError:
             test = True
 
@@ -159,7 +159,7 @@ def test_u_steady_problem_initialize():
 
     test = True
     try:
-        simulation.initialize()
+        simulation.__initialize__()
     except:
         test = False
 
@@ -175,7 +175,7 @@ def test_u_steady_problem_solve_step():
 
     test = True
     try:
-        simulation.solve_step()
+        simulation.__solve_step__()
     except:
         test = False
 
@@ -191,7 +191,7 @@ def test_u_steady_problem_run():
 
     sol = BaseSolver(fes_order=1)
 
-    simulation.attach_solver(sol)
+    simulation.AddSolver(sol)
 
     test = False
     try:
@@ -211,7 +211,7 @@ def test_u_steady_problem_post_process():
 
     test = True
     try:
-        simulation.post_process()
+        simulation.__post_process__()
     except:
         test = False
 
@@ -227,7 +227,7 @@ def test_u_unsteady_problem_attributes():
     T = 1.0
     t = Parameter(0)
     
-    simulation = UnsteadyProblem(mesh=mesh, dt = dt, t=t, T = T, verbose=1)
+    simulation = Simulation(mesh=mesh, dt = dt, t=t, T = T, verbose=1)
 
     attributes = ['dt', 'T', 't']
 
@@ -248,7 +248,7 @@ def test_u_unsteady_problem_data_val():
     T = 1.0
     t = Parameter(0)
     
-    simulation = UnsteadyProblem(mesh=mesh, dt = dt, t=t, T = T, verbose=1)
+    simulation = Simulation(mesh=mesh, dt = dt, t=t, T = T, verbose=1)
 
     attributes = ['t', 'dt', 't_array']
 
@@ -269,7 +269,7 @@ def test_u_unsteady_problem_run():
     T = 1.0
     t = Parameter(0)
     
-    simulation = UnsteadyProblem(mesh=mesh, dt = dt, t=t, T = T, verbose=0)
+    simulation = Simulation(mesh=mesh, dt = dt, t=t, T = T, verbose=0)
 
     test = True
     try:
@@ -289,9 +289,9 @@ def test_u_unsteady_problem_post_process():
     T = 1.0
     t = Parameter(0)
     
-    simulation = UnsteadyProblem(mesh=mesh, dt = dt, t=t, T = T, verbose=0)
+    simulation = Simulation(mesh=mesh, dt = dt, t=t, T = T, verbose=0)
 
-    simulation.post_process()
+    simulation.__post_process__()
 
     assert len(simulation.data["t_array"]) == 2
 
@@ -306,11 +306,11 @@ def test_u_unsteady_problem_initialize():
     T = 1.0
     t = Parameter(0)
     
-    simulation = UnsteadyProblem(mesh=mesh, dt = dt, t=t, T = T, verbose=1)
+    simulation = Simulation(mesh=mesh, dt = dt, t=t, T = T, verbose=1)
 
     test = True
     try:
-        simulation.initialize()
+        simulation.__initialize__()
     except:
         test = False
 
@@ -326,7 +326,7 @@ def test_u_unsteady_problem_run():
     T = 1.0
     t = Parameter(0)
     
-    simulation = UnsteadyProblem(mesh=mesh, dt = dt, t=t, T = T, verbose=1)
+    simulation = Simulation(mesh=mesh, dt = dt, t=t, T = T, verbose=1)
 
     test = True
     try:
@@ -346,9 +346,9 @@ def test_u_unsteady_problem_post_process():
     T = 1.0
     t = Parameter(0)
     
-    simulation = UnsteadyProblem(mesh=mesh, dt = dt, t=t, T = T, verbose=1)
+    simulation = Simulation(mesh=mesh, dt = dt, t=t, T = T, verbose=1)
 
-    simulation.post_process()
+    simulation.__post_process__()
     
     test = len(simulation.data['t_array']) == 2
 
@@ -364,7 +364,7 @@ def test_u_moving_problem_attributes():
     T = 1.0
     t = Parameter(0)
     
-    simulation = MovingProblem(mesh=mesh, dt = dt, t=t, T = T, verbose=1)
+    simulation = MovingSimulation(mesh=mesh, dt = dt, t=t, T = T, verbose=1)
 
     attributes = ['displ', 'displ_old', 'displ_solvers', 'mm_solvers']
 
@@ -385,7 +385,7 @@ def test_u_moving_problem_data_val():
     T = 1.0
     t = Parameter(0)
     
-    simulation = MovingProblem(mesh=mesh, dt = dt, t=t, T = T, verbose=1)
+    simulation = MovingSimulation(mesh=mesh, dt = dt, t=t, T = T, verbose=1)
 
     
     attributes = ['dX', 'dX_old', 'dX_array', 'f_dX']
@@ -415,7 +415,7 @@ def test_u_moving_problem():
 
     test = True
     try:
-        simulation = MovingProblem(mesh=mesh, dt = dt, t=t, T = T)
+        simulation = MovingSimulation(mesh=mesh, dt = dt, t=t, T = T)
     except:
         test = False
 
@@ -431,11 +431,11 @@ def test_u_moving_problem_initialize():
     T = 1.0
     t = Parameter(0)
     
-    simulation = MovingProblem(mesh=mesh, dt = dt, t=t, T = T, verbose=1)
+    simulation = MovingSimulation(mesh=mesh, dt = dt, t=t, T = T, verbose=1)
 
     test = True
     try:
-        simulation.initialize()
+        simulation.__initialize__()
     except:
         test = False
 
@@ -451,7 +451,7 @@ def test_u_moving_problem_run():
     T = 1.0
     t = Parameter(0)
     
-    simulation = MovingProblem(mesh=mesh, dt = dt, t=t, T = T, verbose=1)
+    simulation = MovingSimulation(mesh=mesh, dt = dt, t=t, T = T, verbose=1)
 
     test = True
     try:
@@ -471,9 +471,9 @@ def test_u_moving_problem_post_process():
     T = 1.0
     t = Parameter(0)
     
-    simulation = MovingProblem(mesh=mesh, dt = dt, t=t, T = T, verbose=1)
+    simulation = MovingSimulation(mesh=mesh, dt = dt, t=t, T = T, verbose=1)
 
-    simulation.post_process()
+    simulation.__post_process__()
 
     test = len(simulation.data['t_array']) == 2 and \
         len(simulation.data['dX_array']) == 2
@@ -490,7 +490,7 @@ def test_u_moving_problem_set_displacement():
     T = 1.0
     t = Parameter(0)
     
-    simulation = MovingProblem(mesh=mesh, dt = dt, t=t, T = T, verbose=1)
+    simulation = MovingSimulation(mesh=mesh, dt = dt, t=t, T = T, verbose=1)
 
     def f():
         return True
@@ -520,7 +520,7 @@ def test_u_moving_problem_set_displacement_bnd():
     T = 1.0
     t = Parameter(0)
     
-    simulation = MovingProblem(mesh=mesh, dt = dt, t=t, T = T, verbose=1)
+    simulation = MovingSimulation(mesh=mesh, dt = dt, t=t, T = T, verbose=1)
 
     def f():
         return True
@@ -544,7 +544,7 @@ def test_u_moving_problem_displ_step():
     T = 1.0
     t = Parameter(0)
     
-    simulation = MovingProblem(mesh=mesh, dt = dt, t=t, T = T, verbose=1)
+    simulation = MovingSimulation(mesh=mesh, dt = dt, t=t, T = T, verbose=1)
 
     def f():
         return CF((x, y))
@@ -553,7 +553,7 @@ def test_u_moving_problem_displ_step():
 
     test = True
     try:
-        simulation.displ_step()
+        simulation.__update_motion__()
     except:
         test = False
 
@@ -569,17 +569,17 @@ def test_u_moving_problem_attach_displ_solver():
     T = 1.0
     t = Parameter(0)
     
-    simulation = MovingProblem(mesh=mesh, dt = dt, t=t, T = T, verbose = 1)
+    simulation = MovingSimulation(mesh=mesh, dt = dt, t=t, T = T, verbose = 1)
 
     sol = BaseSolver()
     base = Base()
 
     test = False
     try:
-        simulation.attach_displ_solver(base)
+        simulation.AddMotionSolver(base)
     except TypeError:
         try:
-            simulation.attach_displ_solver(sol)
+            simulation.AddMotionSolver(sol)
         except NotImplementedError:
             test = True
 
@@ -595,7 +595,7 @@ def test_u_moving_problem_mm_step():
     T = 1.0
     t = Parameter(0)
     
-    simulation = MovingProblem(mesh=mesh, dt = dt, t=t, T = T, verbose=0)
+    simulation = MovingSimulation(mesh=mesh, dt = dt, t=t, T = T, verbose=0)
 
     test = True
     try:
@@ -615,7 +615,7 @@ def test_u_moving_problem_attach_mm_solver():
     T = 1.0
     t = Parameter(0)
     
-    simulation = MovingProblem(mesh=mesh, dt = dt, t=t, T = T, verbose=1)
+    simulation = MovingSimulation(mesh=mesh, dt = dt, t=t, T = T, verbose=1)
 
     sol = BaseSolver()
     base = Base()

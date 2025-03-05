@@ -1,5 +1,5 @@
 from cosmos.solvers.sb_adr import SurfaceBulkADRSolver
-from cosmos.solvers.simulation import UnsteadyProblem
+from cosmos.solvers.simulation import Simulation
 from cosmos.utils.manufactured_solution_tools import gradient
 from cosmos.utils.generate_surface_meshes import generate_circle, generate_sphere
 from ngsolve import *
@@ -14,9 +14,9 @@ def test_g_sb_adr_vol():
     dt = Parameter(0.1)
     t = Parameter(0)
 
-    simulation = UnsteadyProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = Simulation(mesh=mesh, dt=dt, t=t, T=T)
     sb_sol = SurfaceBulkADRSolver(fes_order=1)
-    simulation.attach_solver(sb_sol)
+    simulation.AddSolver(sb_sol)
 
     ## Volume part
 
@@ -79,9 +79,9 @@ def test_f_sb_adr_bnd():
     dt = Parameter(0.1)
     t = Parameter(0)
 
-    simulation = UnsteadyProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = Simulation(mesh=mesh, dt=dt, t=t, T=T)
     sb_sol = SurfaceBulkADRSolver(fes_order=1)
-    simulation.attach_solver(sb_sol)
+    simulation.AddSolver(sb_sol)
 
     ## Surface part
 

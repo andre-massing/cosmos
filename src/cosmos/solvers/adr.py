@@ -1,8 +1,10 @@
 from ngsolve import *
 from cosmos.solvers.base_solver import BaseSolver
-from cosmos.utils.manufactured_solution_tools import gradient
 from ngsolve.webgui import Draw
 from ngsolve.solvers import *
+from cosmos.solvers.tools import params_update, compute_error
+import os
+import csv
 import time
 import numpy as np
 import scipy.sparse as scipy
@@ -23,6 +25,8 @@ class ADRSolver(BaseSolver):
 
         self.species = []
         self.couplings = []
+        self.error_params = None
+        self.save_params = None
 
     def AddSpecie(self, **kwargs):
 
@@ -33,10 +37,10 @@ class ADRSolver(BaseSolver):
         # Initialize the parameters
         accepted_keys = ['VorB', 'rhs', 'advection', 'diffusion', 'reaction',
                          'u0', 'neu_d', 'neu_b', 'dir_d', 'dir_b', 'Fneu_b',
-                         'MP', 'PP', 'domain', 'stationary']
+                         'MP', 'PP', 'domain', 'stationary', 'name']
         defaults = [VOL, CF(0.0), CF((0,)*data['mesh'].dim), CF(0.0), CF(0.0),
                     CF(0.0), {}, {}, {}, {}, {},
-                    False, False, '.*', False]
+                    False, False, '.*', False, 'specie']
         self.params_check(params, accepted_keys, defaults)
 
         if data['mesh'].ne == 0 and params['VorB'] == VOL:
@@ -91,7 +95,8 @@ class ADRSolver(BaseSolver):
         self.gfu_old = GridFunction(self.fes)
         self.gfu_save = GridFunction(self.fes_save)
 
-        list = []
+        t4 = time.time()
+
         for i, sp in enumerate(self.species):
 
             if sp['VorB'] == BND:
@@ -100,10 +105,59 @@ class ADRSolver(BaseSolver):
             elif sp['VorB'] == VOL:
                 self.gfu.components[i].Set(sp['u0'])
 
-            list.append(self.gfu.components[i].vec.Copy())
 
-        self.sol=[list]
         self.gfu_old.vec.data = self.gfu.vec.data
+
+        if self.error_params:
+
+            err = []
+            for i, sp in enumerate(self.species):
+
+                err_sp = compute_error(data=data, gfu = self.gfu.components[i], u_ex=self.error_params['ex_sol'][i],
+                          norm = self.error_params['norm'], domain = sp['domain'], VorB = sp['VorB'])
+                err.append(err_sp)
+
+            file_path = os.path.join(self.error_params['folderpath'], self.error_params['filename'])
+            os.makedirs(self.error_params['folderpath'], exist_ok=True)
+
+            towrite = [data['t'].Get()] + err
+            
+            columns = ['Time'] + ['specie' + str(i) for i in range(len(self.species))]
+
+            with open(file_path, mode='w', newline='') as file:  # 'w' mode ensures overwriting
+                writer = csv.writer(file)
+                writer.writerow(columns)  # Write header row
+
+            with open(file_path, mode='a', newline='') as file:
+                writer = csv.writer(file)
+                writer.writerow(towrite)
+
+        if self.save_params:
+
+            file_path = os.path.join(self.save_params['folderpath'], self.save_params['filename'])
+        
+            tot_steps = int(data['T']/data['dt'].Get())
+            self.save_params['jump'] = max(int(tot_steps/self.save_params['n_steps']), 1)
+
+            self.save_params['vtk'] = VTKOutput(data['mesh'],
+                        coefs= [self.gfu_save.components[i] for i in range(len(self.species))],
+                        names=["adr_sol" + str(i) for i in range(len(self.species))],
+                        filename = file_path,
+                        subdivision = self.save_params['subdivision'])
+            
+            if data['mesh'].ne == 0:
+                self.save_params['VorB'] = BND
+            else:
+                self.save_params['VorB'] = VOL
+            
+            _ = self.get_solution()
+
+            if 'dX' in data:
+                data['mesh'].SetDeformation(data['dX'])
+            
+            self.save_params['vtk'].Do(time=data['t'].Get(), vb = self.save_params['VorB'])
+            data['mesh'].UnsetDeformation()
+
 
     def solve_step(self):
 
@@ -162,7 +216,7 @@ class ADRSolver(BaseSolver):
 
             else:
 
-                Newton(self.A, self.gfu, maxit=20, printing = False)
+                Newton(self.A, self.gfu, maxit=100, printing = False)
 
         for sp in self.species:
 
@@ -174,7 +228,7 @@ class ADRSolver(BaseSolver):
 
         data = self.problem.data
 
-        sp_up = self.params_update(sp)
+        sp_up = params_update(sp)
 
         i = sp['marker']
 
@@ -299,7 +353,7 @@ class ADRSolver(BaseSolver):
 
         data = self.problem.data
 
-        sp_up = self.params_update(sp)
+        sp_up = params_update(sp)
 
         i = sp['marker']
 
@@ -469,12 +523,40 @@ class ADRSolver(BaseSolver):
 
     def update(self):
 
+        data = self.problem.data
+
         self.gfu_old.vec.data = self.gfu.vec.data
 
-        list = []
-        for i in range(len(self.species)):
-            list.append(self.gfu.components[i].vec.Copy())
-        self.sol.append(list)
+        if self.error_params:
+
+            err = []
+            for i, sp in enumerate(self.species):
+
+                err_sp = compute_error(data=data, gfu = self.gfu.components[i], u_ex=self.error_params['ex_sol'][i],
+                          norm = self.error_params['norm'], domain = sp['domain'], VorB = sp['VorB'])
+                err.append(err_sp)
+            
+            towrite = [data['t'].Get()] + err
+        
+            file_path = os.path.join(self.error_params['folderpath'], self.error_params['filename'])
+
+            # Write the first row
+            with open(file_path, mode='a', newline='') as file:
+                writer = csv.writer(file)
+                writer.writerow(towrite)
+
+        if self.save_params:
+
+            if data['iter']%self.save_params['jump'] == 0:
+
+                _ = self.get_solution()
+
+                if 'dX' in data:
+                    data['mesh'].SetDeformation(data['dX'])
+                
+                self.save_params['vtk'].Do(time=data['t'].Get(), vb = self.save_params['VorB'])
+                data['mesh'].UnsetDeformation()
+
 
     def set_solution(self, values, **kwargs):
 
@@ -517,103 +599,18 @@ class ADRSolver(BaseSolver):
 
         for i, sp in enumerate(self.species):
 
-            Draw(sol[i], deformation = dX)
-
-    def save_solution(self, **kwargs):
-
-        data = self.problem.data
-
-        params = kwargs
-        accepted_keys = ['filename', 'subdivision', 'n_steps']
-        defaults = ['sol', 1, 100]  
-        self.params_check(params, accepted_keys, defaults)
-
-        vtk = VTKOutput(data['mesh'],
-                        coefs= [self.gfu_save.components[i] for i in range(len(self.species))],
-                        names=["adr_sol" + str(i) for i in range(len(self.species))],
-                        filename=params['filename'],
-                        subdivision=params['subdivision'])
-        
-        tot_steps = len(self.sol)
-        jump = max(int(tot_steps/params['n_steps']), 1)
-
-        for i in range(0, tot_steps, jump):
-
-            sol_i = self.sol[i]
-
-            for j, sp in enumerate(self.species):
-
-                self.gfu.components[j].vec.data = sol_i[j].data
-
-            if 'dX' in data:
-                data['dX'].vec.data = data['dX_array'][i].data
-                dX = data['dX']
-            else:
-                dX = GridFunction(VectorH1(data['mesh']))
-     
-            data['mesh'].SetDeformation(dX)
-            sol = self.get_solution()
-            vtk.Do(time=data['t_array'][i])
-            data['mesh'].UnsetDeformation()
-
-    def compute_error(self, u_ex, norm):
-
-        data = self.problem.data
-
-        err = [[] for i in range(len(self.species))]
-        ns = specialcf.normal(data['mesh'].dim)
-        Ps = Id(data['mesh'].dim) - OuterProduct(ns, ns)
-
-        if norm == 'L2':
-
-            for i, sol_i in enumerate(self.sol):
-
-                data['t'].Set(data['t_array'][i])
-                if 'dX' in data:
-                    data['dX'].vec.data = data['dX_array'][i].data
-                    dX = data['dX']
-                else:
-                    dX = GridFunction(VectorH1(data['mesh']))
-                data['mesh'].SetDeformation(dX)
-
-                for j in range(len(self.species)):
-
-                    self.gfu.components[j].vec.data = sol_i[j].data
-
-                    aux = InnerProduct(self.gfu.components[j]-u_ex[j], self.gfu.components[j]-u_ex[j])
-
-                    if self.species[j]['VorB'] == BND:
-
-                        err[j].append(sqrt(Integrate(aux, mesh = data['mesh'], order = self.fes_order*2, 
-                                                     VOL_or_BND=BND, 
-                                                     definedon = data['mesh'].Boundaries(self.species[j]['domain']))))
-
-                    else:
-
-                        err[j].append(sqrt(Integrate(aux, mesh = data['mesh'], order = self.fes_order*2,
-                                        definedon = data['mesh'].Materials(self.species[j]['domain']))))
-
-                data['mesh'].UnsetDeformation()
-
-        else:
-
-            raise ValueError('The norm given is not implemented')
-        
-        if len(self.species) >1:
-            return err
-        else:
-
-            return err[0]
+            Draw(sol[i], deformation = dX)       
 
     def print_info(self):
 
         print(60*'-')
 
-        print('This is a solver for a coupled Bulk-Surface Advection-Diffusion-Reaction problem')
-        print('It uses conforming H-1 elements of order ', self.fes_order)
+        print('This is a general solver for a Advection-Diffusion-Reaction problem.\n \
+              It allows to solve surface, bulk and coupled surface-bulk equations.\n \
+              It uses conforming H-1 elements of order 1.')
 
         print('Its parameters are')
         for key, value in self.params.items():
-            print('  -', key, '- with type ', type(value))
+            print('  -', key, '- with value ', str(value))
 
         print(60*'-', '\n')

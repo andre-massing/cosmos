@@ -1,7 +1,7 @@
 # %%
 
 from cosmos.solvers.bulk_adr import BulkADRSolver
-from cosmos.solvers.simulation import UnsteadyProblem
+from cosmos.solvers.simulation import Simulation
 from cosmos.utils.manufactured_solution_tools import gradient
 from ngsolve import *
 import numpy as np
@@ -29,7 +29,7 @@ def solve_bulk_adr(dh, dt, neu = False):
     '''
     Initialization of the time-dependent simulation (that can contain multiple solvers)
     '''
-    simulation = UnsteadyProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = Simulation(mesh=mesh, dt=dt, t=t, T=T)
 
     '''
     Generation of the manufactured solution and relative coefficients
@@ -74,7 +74,7 @@ def solve_bulk_adr(dh, dt, neu = False):
     '''
     Adding the solver to the simulation
     '''
-    simulation.attach_solver(adr_sol)
+    simulation.AddSolver(adr_sol)
 
     '''
     Run the simulation

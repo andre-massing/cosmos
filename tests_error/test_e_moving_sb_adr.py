@@ -1,5 +1,5 @@
 from cosmos.solvers.moving_sb_adr import MovingSurfaceBulkADRSolver
-from cosmos.solvers.simulation import MovingProblem
+from cosmos.solvers.simulation import MovingSimulation
 from cosmos.utils.manufactured_solution_tools import gradient
 from cosmos.utils.generate_surface_meshes import generate_circle
 from ngsolve import *
@@ -14,7 +14,7 @@ def test_e_moving_sb_adr():
     dt = Parameter(0.1)
     t = Parameter(0)
 
-    simulation = MovingProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = MovingSimulation(mesh=mesh, dt=dt, t=t, T=T)
 
     # General affine transformation (sphere to ellipse)
     A = CF(((1+0.25*sin(t))*cos(t), -sin(t),\
@@ -33,7 +33,7 @@ def test_e_moving_sb_adr():
 
     simulation.set_displacement(displacement)
     sb_sol = MovingSurfaceBulkADRSolver(fes_order=1)
-    simulation.attach_solver(sb_sol)
+    simulation.AddSolver(sb_sol)
 
     ## Surface part 1
     normal = CF((x,y))/Norm(CF((x,y)))

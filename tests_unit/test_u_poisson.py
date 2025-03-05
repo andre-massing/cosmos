@@ -37,7 +37,7 @@ def test_u_poisson_solver_initialize():
     
     simulation = SteadyProblem(mesh=mesh, verbose=0)
     p_sol = PoissonSolver()
-    simulation.attach_solver(p_sol)
+    simulation.AddSolver(p_sol)
 
     test = True
     try:
@@ -55,7 +55,7 @@ def test_u_poisson_solver_solve_step():
     
     simulation = SteadyProblem(mesh=mesh, verbose=0)
     p_sol = PoissonSolver()
-    simulation.attach_solver(p_sol)
+    simulation.AddSolver(p_sol)
 
     test = True
     try:
@@ -74,7 +74,7 @@ def test_u_poisson_solver_update():
     
     simulation = SteadyProblem(mesh=mesh, verbose=0)
     p_sol = PoissonSolver()
-    simulation.attach_solver(p_sol)
+    simulation.AddSolver(p_sol)
 
     test = True
     try:
@@ -94,7 +94,7 @@ def test_u_poisson_solver_set_solution():
     
     simulation = SteadyProblem(mesh=mesh, verbose=0)
     p_sol = PoissonSolver()
-    simulation.attach_solver(p_sol)
+    simulation.AddSolver(p_sol)
 
     test = False
     try:
@@ -115,7 +115,7 @@ def test_u_poisson_solver_get_solution():
     
     simulation = SteadyProblem(mesh=mesh, verbose=0)
     p_sol = PoissonSolver()
-    simulation.attach_solver(p_sol)
+    simulation.AddSolver(p_sol)
 
     test = True
     try:
@@ -136,7 +136,7 @@ def test_u_poisson_solver_draw_solution():
     
     simulation = SteadyProblem(mesh=mesh, verbose=0)
     p_sol = PoissonSolver()
-    simulation.attach_solver(p_sol)
+    simulation.AddSolver(p_sol)
 
     test = True
     try:
@@ -157,7 +157,7 @@ def test_u_poisson_solver_save_solution():
     
     simulation = SteadyProblem(mesh=mesh, verbose=0) 
     p_sol = PoissonSolver()
-    simulation.attach_solver(p_sol)
+    simulation.AddSolver(p_sol)
 
     test = True
     try:
@@ -178,7 +178,7 @@ def test_u_poisson_solver_error():
     
     simulation = SteadyProblem(mesh=mesh, verbose=0)
     p_sol = PoissonSolver()
-    simulation.attach_solver(p_sol)
+    simulation.AddSolver(p_sol)
 
     test = True
     try:

@@ -1,7 +1,7 @@
 # %%
 
 from cosmos.solvers.sb_adr import SurfaceBulkADRSolver
-from cosmos.solvers.simulation import UnsteadyProblem
+from cosmos.solvers.simulation import Simulation
 from cosmos.utils.manufactured_solution_tools import gradient
 from cosmos.utils.generate_surface_meshes import generate_circle
 from ngsolve import *
@@ -35,13 +35,13 @@ def solve_sb_adr(dh, dt):
     '''
     Initialization of the time-dependent deformable simulation (that can contain multiple solvers)
     '''
-    simulation = UnsteadyProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = Simulation(mesh=mesh, dt=dt, t=t, T=T)
     '''
     Initialization of the solver and adding it to the simulation
     '''
     fes_order = 1
     sb_sol = SurfaceBulkADRSolver(fes_order=fes_order)
-    simulation.attach_solver(sb_sol)
+    simulation.AddSolver(sb_sol)
 
     '''
     Generation of the manufactured solution and relative coefficients for the volume part

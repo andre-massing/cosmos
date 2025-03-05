@@ -1,5 +1,5 @@
 from cosmos.solvers.surface_adr import SurfaceADRSolver
-from cosmos.solvers.simulation import UnsteadyProblem
+from cosmos.solvers.simulation import Simulation
 from cosmos.utils.manufactured_solution_tools import gradient
 from cosmos.utils.generate_surface_meshes import generate_circle
 from ngsolve import *
@@ -15,7 +15,7 @@ def test_g_surface_adr_vol():
     dt = Parameter(0.1)
     t = Parameter(0)
 
-    simulation = UnsteadyProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = Simulation(mesh=mesh, dt=dt, t=t, T=T)
 
     normal = CF((x,y))/Norm(CF((x,y)))
     P = Id(2) - OuterProduct(normal, normal)
@@ -36,7 +36,7 @@ def test_g_surface_adr_vol():
                                     reaction = c,
                                     u0 = u_ex)
     # Adding the solver to the simulation
-    simulation.attach_solver(surf_adr_sol)
+    simulation.AddSolver(surf_adr_sol)
 
     simulation.run()
 
@@ -59,7 +59,7 @@ def test_f_surface_adr_bnd():
     dt = Parameter(0.1)
     t = Parameter(0)
 
-    simulation = UnsteadyProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = Simulation(mesh=mesh, dt=dt, t=t, T=T)
 
     normal = CF((x,y,z))/Norm(CF((x,y,z)))
     P = Id(3) - OuterProduct(normal, normal)
@@ -83,7 +83,7 @@ def test_f_surface_adr_bnd():
                                     u0 = u_ex,
                                     flux_c_bc=flux_c_bc, flux_d_bc=flux_d_bc)
     # Adding the solver to the simulation
-    simulation.attach_solver(surf_adr_sol)
+    simulation.AddSolver(surf_adr_sol)
 
     simulation.run()
 

@@ -4,17 +4,23 @@ from collections import Counter
 from cosmos.solvers.base import Base
 from cosmos.solvers.base_solver import BaseSolver
 from tqdm import tqdm
+from cosmos.solvers.tools import params_update, compute_displ
 
-class SteadyProblem(Base):
+import cProfile
+import pstats
+
+class Simulation(Base):
     
     def __init__(self, mesh, **kwargs):
         
         self.mesh = mesh
         self.params = kwargs
         self.solvers = []
+        accepted_keys = ['verbose', 'steady', 't', 'dt', 'T', 'moving']
+        defaults = [0, False, Parameter(0), Parameter(0.1), 0.1, False]
         self.params_check(params = self.params, 
-                             accepted_keys=['verbose'], 
-                             defaults=[0])
+                             accepted_keys = accepted_keys, 
+                             defaults = defaults)
         
         if self.mesh.ne == 0:
 
@@ -27,8 +33,14 @@ class SteadyProblem(Base):
             self.boundary_markers = list(Counter(self.mesh.GetBoundaries()).keys())
         
         self.data = {"mesh": self.mesh,
+                     "t": self.params['t'],
+                     "dt": self.params['dt'],
+                     "T": self.params['T'],
+                     'steady': self.params['steady'],
+                     'moving': self.params['moving'],
                      "verbosity": self.params['verbose'],
                      "solvers": self.solvers,
+                     "iter": 0,
                      "domain_mrk": self.domain_markers,
                      "boundary_mrk": self.boundary_markers}
         
@@ -73,11 +85,11 @@ class SteadyProblem(Base):
 
                 print('Regions of co-dimension ', i,':')
                 for key, value in cnt.items():
-                    print('  - There is(are) ', value, 'region(s) called ', key)
+                    print(' N. ', value, 'region(s) called ', key)
 
         print(60*'-', '\n')
 
-    def attach_solver(self, solver):
+    def AddSolver(self, solver):
 
         if not isinstance(solver, BaseSolver):
             raise TypeError("Solver must inherit from BaseSolver")
@@ -86,13 +98,65 @@ class SteadyProblem(Base):
 
         if self.data['verbosity'] > 0:
             solver.print_info()
+    
+    def __generator__(self):
 
-    def initialize(self):
+        max_steps = int(self.params['T']/self.params['dt'].Get())
+
+        if self.data['verbosity']>0:
+            print('Initializing...')
+
+        self.__initialize__()
+
+        if self.data['verbosity']>0:
+            print('Initialization successful \n\
+                    N.', len(self.solvers), ' solvers have been initialized correctly')
+
+        yield
+
+        if self.data['verbosity']>0:
+            print('-'*10, '\nStarting the simulation...')
+
+        if self.data['verbosity']>0:
+
+            for step in tqdm(range(max_steps), desc="\t Running Simulation...", 
+                ascii=False, ncols=75):
+
+                self.params['t'].Set(self.params['t'].Get() + self.params['dt'].Get())
+                self.data['iter'] += 1
+
+                self.__solve_step__()
+                self.__post_process__()
+
+                yield
+
+        else:
+
+            for step in range(max_steps):
+
+                self.params['t'].Set(self.params['t'].Get() + self.params['dt'].Get())
+                self.data['iter'] += 1
+
+                self.__solve_step__()
+                self.__post_process__()
+
+                yield
+
+        if self.data['verbosity']>0:
+            print('Simulation concluded successfully')
+            print('-'*10)
+
+    def __call__(self):
+        return self.__generator__()
+
+    def __initialize__(self):
 
         for solver in self.solvers:
-            solver.initialize()
+            
+            solver.initialize()  # Direct execution
+            
 
-    def solve_step(self):
+    def __solve_step__(self):
 
         for solver in self.solvers:
             solver.solve_step()
@@ -102,184 +166,183 @@ class SteadyProblem(Base):
 
     def run(self):
 
-        self.initialize()
-        
-        self.solve_step()
+        if self.params['steady']:
 
-        self.post_process()
+            self.__initialize__()
+            
+            self.__solve_step__()
 
-    def post_process(self):
+            self.__post_process__()
+
+        else:
+
+            for step in self(): 
+                pass
+
+    def __post_process__(self):
 
         pass
 
-class UnsteadyProblem(SteadyProblem):
+class MovingSimulation(Simulation):
     
-    def __init__(self, mesh, dt, t, T, **kwargs):
+    def __init__(self, mesh, **kwargs):
 
         super().__init__(mesh=mesh, **kwargs)
 
-        self.dt = dt
-        self.T = T
-        self.t = t
-        self.data["t"] = self.t
-        self.data["dt"] = self.dt
-        self.data["t_array"] = [self.t.Get()]
-
-    def _generator(self):
-
-        max_steps = int(self.T/self.dt.Get())
-
-        self.initialize()
-
-        yield
-
-        for step in tqdm(range(max_steps), desc="Running Simulation...", 
-               ascii=False, ncols=75):
-
-            self.t.Set(self.t.Get() + self.dt.Get())
-            
-            self.solve_step()
-            self.post_process()
-
-            yield
-
-    def __call__(self):
-        return self._generator()
-    
-    def run(self):
-
-        for step in self(): 
-            pass
-
-    def post_process(self):
-
-        self.data["t_array"].append(self.t.Get())
-
-class MovingProblem(UnsteadyProblem):
-    
-    def __init__(self, mesh, dt, t, T, **kwargs):
-
-        super().__init__(mesh=mesh, dt=dt, t=t, T=T, **kwargs)
-
         if self.mesh.ne == 0:
-            fes = VectorH1(self.mesh, order = self.mesh.GetCurveOrder(), definedon = self.mesh.Boundaries('.*'))
+            fes = VectorH1(self.mesh, order = self.mesh.GetCurveOrder(), 
+                           definedon = self.mesh.Boundaries('.*'))
         else:
             fes = VectorH1(self.mesh, order = self.mesh.GetCurveOrder())
-        self.displ = GridFunction(fes)
-        self.displ_old = GridFunction(fes)
-        self.data["dX"] = self.displ
-        self.data["dX_old"] = self.displ_old
-        self.data["dX_array"] = [self.displ.vec.Copy()]
+        self.data["dX"] = GridFunction(fes)
+        self.data["dX_old"] = GridFunction(fes)
+        self.data["V"] = GridFunction(fes)
+        
+        self.motion_solvers = []
+        self.motions = []
 
-        self.displ_solvers = []
-        def f():
-            return CF((0,)*self.mesh.dim)
-        self.data["f_dX"] = f
+    def __initialize__(self):
 
-        self.mm_solvers = []
-
-    def initialize(self):
-
-        for solver in self.displ_solvers:
+        for solver in self.motion_solvers:
             solver.initialize()
-        for solver in self.mm_solvers:
-            solver.initialize()
+
         for solver in self.solvers:
             solver.initialize()
 
-    def _generator(self):
+    def __generator__(self):
 
-        max_steps = int(self.T/self.dt.Get())
+        max_steps = int(self.params['T']/self.params['dt'].Get())
 
-        self.initialize()
+        if self.data['verbosity']>0:
+            print('Initializing...')
+
+        self.__initialize__()
+
+        if self.data['verbosity']>0:
+            print('Initialization successful \n\
+                    N.', len(self.solvers) +  len(self.motion_solvers), ' solvers have been initialized correctly')
 
         yield
 
-        for step in tqdm(range(max_steps), desc="Running Simulation...", 
-               ascii=False, ncols=75):
+        if self.data['verbosity']>0:
+            print('-'*10, '\nStarting the simulation...')
 
-            self.t.Set(self.t.Get() + self.dt.Get())
+        if self.data['verbosity']>0:
 
-            self.displ_step()
-            self.mm_step()
-            self.solve_step()
+            for step in tqdm(range(max_steps), desc="Running Simulation...", 
+                ascii=False, ncols=75):
 
-            self.post_process()
+                self.params['t'].Set(self.params['t'].Get() + self.params['dt'].Get())
+                self.data['iter'] += 1
 
-            yield
+                self.__update_motion__()
+
+                self.__solve_step__()
+
+                self.__post_process__()
+
+                yield
+
+        else:
+
+            for step in range(max_steps):
+
+                self.params['t'].Set(self.params['t'].Get() + self.params['dt'].Get())
+                self.data['iter'] += 1
+
+                self.__update_motion__()
+
+                self.__solve_step__()
+
+                self.__post_process__()
+
+                yield
+
+
+        if self.data['verbosity']>0:
+            print('Simulation concluded successfully')
+            print('-'*10)
 
     def __call__(self):
-        return self._generator()
+        return self.__generator__()
     
     def run(self):
 
         for step in self(): 
             pass
 
-    def post_process(self):
+    def __post_process__(self):
 
-        self.data["t_array"].append(self.t.Get())
         self.data['dX_old'].vec.data = self.data['dX'].vec.data
-        self.data["dX_array"].append(self.data["dX"].vec.Copy())
 
     ## TOOLS TO PRESCRIBE THE DISPLACEMENT
 
-    def set_displacement(self, new_function):
-        """
-        Update the user-defined function.
-
-        Parameters:
-        new_function (callable): The new function to use.
-        """
-        if not callable(new_function):
-            raise ValueError("The provided new_function must be callable.")
-        self.data['f_dX'] = new_function
-
-    def displ_step(self):
-        """
-        Solve one time step for all solvers in sequence.
-        """
-        for solver in self.displ_solvers:
-            solver.solve_step()
-        
-        for solver in self.displ_solvers:
-            solver.update()
-
-        if self.mesh.ne == 0:
-            self.data['dX'].Set(self.data['f_dX'](), definedon = self.data["mesh"].Boundaries('.*'))
-        else:
-            self.data['dX'].Set(self.data['f_dX']())
-
-    def attach_displ_solver(self, solver):
+    def AddMotionSolver(self, solver):
         """
         Attach a new solver to the coupled problem.
         """
         if not isinstance(solver, BaseSolver):
             raise TypeError("Solver must inherit from BaseSolver")
+        
         solver.problem = self
-        self.displ_solvers.append(solver)
+        self.motion_solvers.append(solver)
 
         if self.data['verbosity'] > 0:
             solver.print_info()
 
-    ## TOOLS TO CORRECT OR IMPOSE THE MESH MOVEMENT
+    def AddMotion(self, **kwargs):
 
-    def mm_step(self):
+        params = kwargs
 
-        for solver in self.mm_solvers:
+        # Initialize the parameters
+        accepted_keys = ['function', 'domain', 'prescribed_everywhere']
+        defaults = [CF((0,)*self.mesh.dim), '.*', False]  
+        self.params_check(params, accepted_keys, defaults)
+
+        self.motions.append(params)
+
+    def __update_motion__(self):
+
+        for solver in self.motion_solvers:
             solver.solve_step()
 
-        for solver in self.mm_solvers:
+        if self.mesh.ne !=0:
+
+            for params in self.motions:
+
+                up_p = params_update(params)
+
+                if up_p['prescribed_everywhere']:
+
+                    self.data['dX'].Set(up_p['function'])
+
+                else:
+
+                    compute_displ(self.data, up_p['function'], self.data['dX'], bc = up_p['domain'])
+
+        else:
+
+            for params in self.motions:
+
+                up_p = params_update(params)
+
+                if up_p['prescribed_everywhere']:
+
+                    self.data['dX'].Set(up_p['function'],
+                            definedon = self.mesh.Boundaries(up_p['domain']))
+                    
+                else:
+
+                    compute_displ(self.data, up_p['function'], self.data['dX'], bc = up_p['domain'])
+
+                    
+        for solver in self.motion_solvers:
             solver.update()
 
-    def attach_mm_solver(self, solver):
 
-        if not isinstance(solver, BaseSolver):
-            raise TypeError("Solver must inherit from BaseSolver")
-        solver.problem = self
-        self.mm_solvers.append(solver)
 
-        if self.data['verbosity'] > 0:
-            solver.print_info()
+
+
+        
 
 

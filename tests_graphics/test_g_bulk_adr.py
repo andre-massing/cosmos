@@ -1,5 +1,5 @@
 from cosmos.solvers.bulk_adr import BulkADRSolver
-from cosmos.solvers.simulation import UnsteadyProblem
+from cosmos.solvers.simulation import Simulation
 from cosmos.utils.manufactured_solution_tools import gradient
 from ngsolve import *
 
@@ -13,7 +13,7 @@ def test_g_bulk_adr_2D_mixed():
     dt = Parameter(0.1)
     t = Parameter(0)
 
-    simulation = UnsteadyProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = Simulation(mesh=mesh, dt=dt, t=t, T=T)
 
     u_ex = cos(pi*x)*sin(pi*y)*cos(t)
     d = 1 + t
@@ -42,7 +42,7 @@ def test_g_bulk_adr_2D_mixed():
                                  flux_d_bc=flux_d_bc,
                                  dir_bc = dirichlet_bc)
     # Adding the solver to the simulation
-    simulation.attach_solver(bulk_adr_sol)
+    simulation.AddSolver(bulk_adr_sol)
 
     simulation.run()
 

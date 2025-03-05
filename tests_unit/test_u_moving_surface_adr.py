@@ -1,5 +1,5 @@
 from cosmos.solvers.moving_surface_adr import MovingSurfaceADRSolver
-from cosmos.solvers.simulation import MovingProblem
+from cosmos.solvers.simulation import MovingSimulation
 from ngsolve import *
 
 def test_u_surface_adr_solver_fes_order():
@@ -64,9 +64,9 @@ def test_u_surface_adr_solver_initialize():
     geo = unit_square
     mesh = Mesh(geo.GenerateMesh(maxh = dh))
     
-    simulation = MovingProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = MovingSimulation(mesh=mesh, dt=dt, t=t, T=T)
     adr_sol = MovingSurfaceADRSolver()
-    simulation.attach_solver(adr_sol)
+    simulation.AddSolver(adr_sol)
 
     test = True
     try:
@@ -86,10 +86,10 @@ def test_u_surface_adr_solver_solve_step():
     geo = unit_square
     mesh = Mesh(geo.GenerateMesh(maxh = dh))
     
-    simulation = MovingProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = MovingSimulation(mesh=mesh, dt=dt, t=t, T=T)
     
     adr_sol = MovingSurfaceADRSolver()
-    simulation.attach_solver(adr_sol)
+    simulation.AddSolver(adr_sol)
 
     test = True
     try:
@@ -111,10 +111,10 @@ def test_u_surface_adr_solver_update():
     geo = unit_square
     mesh = Mesh(geo.GenerateMesh(maxh = dh))
     
-    simulation = MovingProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = MovingSimulation(mesh=mesh, dt=dt, t=t, T=T)
     
     adr_sol = MovingSurfaceADRSolver()
-    simulation.attach_solver(adr_sol)
+    simulation.AddSolver(adr_sol)
 
     test = True
     try:
@@ -136,10 +136,10 @@ def test_u_surface_adr_solver_set_solution():
     geo = unit_square
     mesh = Mesh(geo.GenerateMesh(maxh = dh))
     
-    simulation = MovingProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = MovingSimulation(mesh=mesh, dt=dt, t=t, T=T)
     
     adr_sol = MovingSurfaceADRSolver()
-    simulation.attach_solver(adr_sol)
+    simulation.AddSolver(adr_sol)
 
     test = True
     try:
@@ -162,10 +162,10 @@ def test_u_surface_adr_solver_get_solution():
     geo = unit_square
     mesh = Mesh(geo.GenerateMesh(maxh = dh))
     
-    simulation = MovingProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = MovingSimulation(mesh=mesh, dt=dt, t=t, T=T)
     
     adr_sol = MovingSurfaceADRSolver()
-    simulation.attach_solver(adr_sol)
+    simulation.AddSolver(adr_sol)
 
     test = True
     try:
@@ -189,10 +189,10 @@ def test_u_surface_adr_solver_draw_solution():
     geo = unit_square
     mesh = Mesh(geo.GenerateMesh(maxh = dh))
     
-    simulation = MovingProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = MovingSimulation(mesh=mesh, dt=dt, t=t, T=T)
     
     adr_sol = MovingSurfaceADRSolver()
-    simulation.attach_solver(adr_sol)
+    simulation.AddSolver(adr_sol)
 
     test = True
     try:
@@ -216,10 +216,10 @@ def test_u_surface_adr_solver_save_solution():
     geo = unit_square
     mesh = Mesh(geo.GenerateMesh(maxh = dh))
     
-    simulation = MovingProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = MovingSimulation(mesh=mesh, dt=dt, t=t, T=T)
     
     adr_sol = MovingSurfaceADRSolver()
-    simulation.attach_solver(adr_sol)
+    simulation.AddSolver(adr_sol)
 
     test = True
     try:
@@ -241,10 +241,10 @@ def test_u_surface_adr_solver_error():
     geo = unit_square
     mesh = Mesh(geo.GenerateMesh(maxh = dh))
     
-    simulation = MovingProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = MovingSimulation(mesh=mesh, dt=dt, t=t, T=T)
     
     adr_sol = MovingSurfaceADRSolver()
-    simulation.attach_solver(adr_sol)
+    simulation.AddSolver(adr_sol)
 
     test = True
     try:

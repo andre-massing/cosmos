@@ -1,6 +1,5 @@
 from ngsolve import *
 from cosmos.solvers.base_solver import BaseSolver
-from cosmos.utils.manufactured_solution_tools import gradient
 
 from ngsolve.webgui import Draw
 

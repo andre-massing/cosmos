@@ -1,6 +1,6 @@
 from cosmos.solvers.willmore import StabWillmoreSolver
 from cosmos.utils.generate_surface_meshes import *
-from cosmos.solvers.simulation import MovingProblem
+from cosmos.solvers.simulation import MovingSimulation
 
 from ngsolve import *
 import numpy as np
@@ -13,12 +13,12 @@ def test_e_stab_willmore_solver_sphere():
     dt = Parameter(0.1)
     t = Parameter(0)
 
-    simulation = MovingProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = MovingSimulation(mesh=mesh, dt=dt, t=t, T=T)
 
     fes_order = 1
     willmore_sol = StabWillmoreSolver(fes_order=fes_order, sp_curv = -2)
 
-    simulation.attach_displ_solver(willmore_sol)
+    simulation.AddMotionSolver(willmore_sol)
     def displacement():
         cf = willmore_sol.get_solution()[0] + simulation.data['dX_old']
         return cf
@@ -44,12 +44,12 @@ def test_e_stab_willmore_solver_half_sphere():
     dt = Parameter(0.1)
     t = Parameter(0)
 
-    simulation = MovingProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = MovingSimulation(mesh=mesh, dt=dt, t=t, T=T)
 
     fes_order = 1
     willmore_sol = StabWillmoreSolver(fes_order=fes_order, clamped_bc='bottom')
 
-    simulation.attach_displ_solver(willmore_sol)
+    simulation.AddMotionSolver(willmore_sol)
     def displacement():
         cf = willmore_sol.get_solution()[0] + simulation.data['dX_old']
         return cf
@@ -78,12 +78,12 @@ def test_e_stab_willmore_solver_torus():
     dt = Parameter(0.1)
     t = Parameter(0)
 
-    simulation = MovingProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = MovingSimulation(mesh=mesh, dt=dt, t=t, T=T)
 
     fes_order = 1
     willmore_sol = StabWillmoreSolver(fes_order=fes_order)
 
-    simulation.attach_displ_solver(willmore_sol)
+    simulation.AddMotionSolver(willmore_sol)
     def displacement():
         cf = willmore_sol.get_solution()[0] + simulation.data['dX_old']
         return cf
@@ -119,12 +119,12 @@ def test_e_stab_willmore_solver_half_torus():
     dt = Parameter(0.1)
     t = Parameter(0)
 
-    simulation = MovingProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = MovingSimulation(mesh=mesh, dt=dt, t=t, T=T)
 
     fes_order = 1
     willmore_sol = StabWillmoreSolver(fes_order=fes_order, clamped_bc='bottom')
 
-    simulation.attach_displ_solver(willmore_sol)
+    simulation.AddMotionSolver(willmore_sol)
     def displacement():
         cf = willmore_sol.get_solution()[0] + simulation.data['dX_old']
         return cf

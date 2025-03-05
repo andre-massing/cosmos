@@ -1,7 +1,7 @@
 # %%
 
 from cosmos.solvers.moving_surface_adr import MovingSurfaceADRSolver
-from cosmos.solvers.simulation import MovingProblem
+from cosmos.solvers.simulation import MovingSimulation
 from cosmos.utils.manufactured_solution_tools import gradient, get_lin_trans_params
 from cosmos.utils.generate_surface_meshes import *
 from ngsolve import *
@@ -34,7 +34,7 @@ def solve_m_surface_adr_closed(dh, dt):
     '''
     Initialization of the time-dependent deformable simulation (that can contain multiple solvers)
     '''
-    simulation = MovingProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = MovingSimulation(mesh=mesh, dt=dt, t=t, T=T)
 
     '''
     Generation of the deformation properties
@@ -86,7 +86,7 @@ def solve_m_surface_adr_closed(dh, dt):
     '''
     Adding the solver to the simulation
     '''
-    simulation.attach_solver(adr_sol)
+    simulation.AddSolver(adr_sol)
 
     '''
     Run the simulation
@@ -113,7 +113,7 @@ solve_m_surface_adr_closed(0.05, 0.05)
 #%%
 
 from cosmos.solvers.moving_surface_adr import MovingSurfaceADRSolver
-from cosmos.solvers.simulation import MovingProblem
+from cosmos.solvers.simulation import MovingSimulation
 from cosmos.utils.manufactured_solution_tools import gradient, get_lin_trans_params
 from cosmos.utils.generate_surface_meshes import *
 from ngsolve import *
@@ -141,7 +141,7 @@ def solve_m_surface_adr_open(dh, dt, neu = False):
     '''
     Initialization of the time-dependent deformable simulation (that can contain multiple solvers)
     '''
-    simulation = MovingProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = MovingSimulation(mesh=mesh, dt=dt, t=t, T=T)
 
     '''
     Generation of the manufactured solution and relative coefficients
@@ -208,7 +208,7 @@ def solve_m_surface_adr_open(dh, dt, neu = False):
     '''
     Adding the solver to the simulation
     '''
-    simulation.attach_solver(adr_sol)
+    simulation.AddSolver(adr_sol)
 
     '''
     Run the simulation

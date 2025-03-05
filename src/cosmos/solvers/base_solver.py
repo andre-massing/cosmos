@@ -35,13 +35,25 @@ class BaseSolver(Base):
         
         raise NotImplementedError
     
-    def save_solution(self, **kwargs):
-        
-        raise NotImplementedError
-    
-    def compute_error(self, u_ex, norm):
-        
-        raise NotImplementedError
+    def ComputeError(self, **kwargs):
+
+        params = kwargs
+
+        # Initialize the parameters
+        accepted_keys = ['ex_sol', 'norm', 'filename', 'folderpath']
+        defaults = [None, 'L2', 'results.csv', '.']  
+        self.params_check(params, accepted_keys, defaults)
+
+        self.error_params = params
+
+    def SaveSolution(self, **kwargs):
+
+        params = kwargs
+        accepted_keys = ['filename', 'subdivision', 'n_steps', 'folderpath']
+        defaults = ['sol', 1, 100, './']  
+        self.params_check(params, accepted_keys, defaults)
+
+        self.save_params = params
 
     def print_info(self):
         

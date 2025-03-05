@@ -1,7 +1,7 @@
 # %%
 
 from cosmos.solvers.surface_adr import SurfaceADRSolver
-from cosmos.solvers.simulation import UnsteadyProblem
+from cosmos.solvers.simulation import Simulation
 from cosmos.utils.manufactured_solution_tools import gradient
 from ngsolve import *
 import numpy as np
@@ -36,7 +36,7 @@ def solve_surface_adr_closed(dh, dt):
     '''
     Initialization of the time-dependent simulation (that can contain multiple solvers)
     '''
-    simulation = UnsteadyProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = Simulation(mesh=mesh, dt=dt, t=t, T=T)
 
     '''
     Generation of the manufactured solution and relative coefficients
@@ -66,7 +66,7 @@ def solve_surface_adr_closed(dh, dt):
     '''
     Adding the solver to the simulation
     '''
-    simulation.attach_solver(adr_sol)
+    simulation.AddSolver(adr_sol)
 
     '''
     Run the simulation
@@ -122,7 +122,7 @@ def solve_surface_adr_open(dh, dt, neu = False):
     '''
     Initialization of the time-dependent simulation (that can contain multiple solvers)
     '''
-    simulation = UnsteadyProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = Simulation(mesh=mesh, dt=dt, t=t, T=T)
 
     '''
     Generation of the manufactured solution and relative coefficients
@@ -170,7 +170,7 @@ def solve_surface_adr_open(dh, dt, neu = False):
     '''
     Adding the solver to the simulation
     '''
-    simulation.attach_solver(adr_sol)
+    simulation.AddSolver(adr_sol)
 
     '''
     Run the simulation

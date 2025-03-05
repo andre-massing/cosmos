@@ -13,3 +13,4 @@ Advection-Diffusion-Reaction
    7-moving_surface_adr.ipynb
    8-subdomains.ipynb
    9-turing_patterns.ipynb
+   10-scalability.ipynb

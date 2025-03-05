@@ -1,5 +1,5 @@
 from cosmos.solvers.surface_adr import SurfaceADRSolver
-from cosmos.solvers.simulation import UnsteadyProblem
+from cosmos.solvers.simulation import Simulation
 from cosmos.utils.manufactured_solution_tools import gradient
 from ngsolve import *
 import netgen.occ as occ
@@ -18,7 +18,7 @@ def test_e_surface_adr_closed():
     dt = Parameter(0.1)
     t = Parameter(0)
 
-    simulation = UnsteadyProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = Simulation(mesh=mesh, dt=dt, t=t, T=T)
 
     u_ex = cos(pi*x)*sin(pi*y)*cos(t)
     d = 1 + t
@@ -39,7 +39,7 @@ def test_e_surface_adr_closed():
                                     reaction = c,
                                     u0 = u_ex)
     # Adding the solver to the simulation
-    simulation.attach_solver(surf_adr_sol)
+    simulation.AddSolver(surf_adr_sol)
 
     simulation.run()
 
@@ -64,7 +64,7 @@ def test_e_surface_adr_open_dirichlet():
     dt = Parameter(0.1)
     t = Parameter(0)
 
-    simulation = UnsteadyProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = Simulation(mesh=mesh, dt=dt, t=t, T=T)
 
     u_ex = cos(pi*x)*sin(pi*y)*cos(t)
     d = 1 + t
@@ -87,7 +87,7 @@ def test_e_surface_adr_open_dirichlet():
                                     u0 = u_ex,
                                     dir_bc=dirichlet_bc)
     # Adding the solver to the simulation
-    simulation.attach_solver(surf_adr_sol)
+    simulation.AddSolver(surf_adr_sol)
 
     simulation.run()
 
@@ -112,7 +112,7 @@ def test_e_surface_adr_open_neumann():
     dt = Parameter(0.1)
     t = Parameter(0)
 
-    simulation = UnsteadyProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = Simulation(mesh=mesh, dt=dt, t=t, T=T)
 
     normal = CF((x,y,z))/Norm(CF((x,y,z)))
     P = Id(3) - OuterProduct(normal, normal)
@@ -136,7 +136,7 @@ def test_e_surface_adr_open_neumann():
                                     u0 = u_ex,
                                     flux_c_bc=flux_c_bc, flux_d_bc=flux_d_bc)
     # Adding the solver to the simulation
-    simulation.attach_solver(surf_adr_sol)
+    simulation.AddSolver(surf_adr_sol)
 
     simulation.run()
 

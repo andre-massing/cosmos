@@ -1,5 +1,5 @@
 from cosmos.solvers.sb_adr import SurfaceBulkADRSolver
-from cosmos.solvers.simulation import UnsteadyProblem
+from cosmos.solvers.simulation import Simulation
 from ngsolve import *
 
 def test_u_sb_adr_solver_fes_order():
@@ -36,9 +36,9 @@ def test_u_sb_adr_solver_initialize():
     geo = unit_square
     mesh = Mesh(geo.GenerateMesh(maxh = dh))
     
-    simulation = UnsteadyProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = Simulation(mesh=mesh, dt=dt, t=t, T=T)
     sb_adr_sol = SurfaceBulkADRSolver()
-    simulation.attach_solver(sb_adr_sol)
+    simulation.AddSolver(sb_adr_sol)
 
     sb_adr_sol.attach_bulk_adr()
     sb_adr_sol.attach_surface_adr()
@@ -61,9 +61,9 @@ def test_u_sb_adr_solver_solve_step():
     geo = unit_square
     mesh = Mesh(geo.GenerateMesh(maxh = dh))
     
-    simulation = UnsteadyProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = Simulation(mesh=mesh, dt=dt, t=t, T=T)
     sb_adr_sol = SurfaceBulkADRSolver()
-    simulation.attach_solver(sb_adr_sol)
+    simulation.AddSolver(sb_adr_sol)
 
     sb_adr_sol.attach_bulk_adr()
     sb_adr_sol.attach_surface_adr()
@@ -88,9 +88,9 @@ def test_u_sb_adr_solver_update():
     geo = unit_square
     mesh = Mesh(geo.GenerateMesh(maxh = dh))
     
-    simulation = UnsteadyProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = Simulation(mesh=mesh, dt=dt, t=t, T=T)
     sb_adr_sol = SurfaceBulkADRSolver()
-    simulation.attach_solver(sb_adr_sol)
+    simulation.AddSolver(sb_adr_sol)
 
     sb_adr_sol.attach_bulk_adr()
     sb_adr_sol.attach_surface_adr()
@@ -115,9 +115,9 @@ def test_u_sb_adr_solver_set_solution():
     geo = unit_square
     mesh = Mesh(geo.GenerateMesh(maxh = dh))
     
-    simulation = UnsteadyProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = Simulation(mesh=mesh, dt=dt, t=t, T=T)
     sb_adr_sol = SurfaceBulkADRSolver()
-    simulation.attach_solver(sb_adr_sol)
+    simulation.AddSolver(sb_adr_sol)
 
     sb_adr_sol.attach_bulk_adr()
     sb_adr_sol.attach_surface_adr()
@@ -143,9 +143,9 @@ def test_u_sb_adr_solver_get_solution():
     geo = unit_square
     mesh = Mesh(geo.GenerateMesh(maxh = dh))
     
-    simulation = UnsteadyProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = Simulation(mesh=mesh, dt=dt, t=t, T=T)
     sb_adr_sol = SurfaceBulkADRSolver()
-    simulation.attach_solver(sb_adr_sol)
+    simulation.AddSolver(sb_adr_sol)
 
     sb_adr_sol.attach_bulk_adr()
     sb_adr_sol.attach_surface_adr()
@@ -172,9 +172,9 @@ def test_u_sb_adr_solver_draw_solution():
     geo = unit_square
     mesh = Mesh(geo.GenerateMesh(maxh = dh))
     
-    simulation = UnsteadyProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = Simulation(mesh=mesh, dt=dt, t=t, T=T)
     sb_adr_sol = SurfaceBulkADRSolver()
-    simulation.attach_solver(sb_adr_sol)
+    simulation.AddSolver(sb_adr_sol)
 
     sb_adr_sol.attach_bulk_adr()
     sb_adr_sol.attach_surface_adr()
@@ -201,9 +201,9 @@ def test_u_sb_adr_solver_save_solution():
     geo = unit_square
     mesh = Mesh(geo.GenerateMesh(maxh = dh))
     
-    simulation = UnsteadyProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = Simulation(mesh=mesh, dt=dt, t=t, T=T)
     sb_adr_sol = SurfaceBulkADRSolver()
-    simulation.attach_solver(sb_adr_sol)
+    simulation.AddSolver(sb_adr_sol)
 
     sb_adr_sol.attach_bulk_adr()
     sb_adr_sol.attach_surface_adr()
@@ -228,9 +228,9 @@ def test_u_sb_adr_solver_error():
     geo = unit_square
     mesh = Mesh(geo.GenerateMesh(maxh = dh))
     
-    simulation = UnsteadyProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = Simulation(mesh=mesh, dt=dt, t=t, T=T)
     sb_adr_sol = SurfaceBulkADRSolver()
-    simulation.attach_solver(sb_adr_sol)
+    simulation.AddSolver(sb_adr_sol)
 
     sb_adr_sol.attach_bulk_adr()
     sb_adr_sol.attach_surface_adr()

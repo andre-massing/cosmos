@@ -1,7 +1,7 @@
 # %%
 
 from cosmos.solvers.moving_sb_adr import MovingSurfaceBulkADRSolver
-from cosmos.solvers.simulation import MovingProblem
+from cosmos.solvers.simulation import MovingSimulation
 from cosmos.utils.manufactured_solution_tools import gradient
 from cosmos.utils.generate_surface_meshes import generate_circle
 from ngsolve import *
@@ -36,7 +36,7 @@ def solve_moving_sb_adr(dh, dt):
     '''
     Initialization of the time-dependent deformable simulation (that can contain multiple solvers)
     '''
-    simulation = MovingProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = MovingSimulation(mesh=mesh, dt=dt, t=t, T=T)
 
     '''
     Generation of the deformation properties
@@ -66,7 +66,7 @@ def solve_moving_sb_adr(dh, dt):
         return displ_ex
     simulation.set_displacement(displacement)
     sb_sol = MovingSurfaceBulkADRSolver(fes_order=1)
-    simulation.attach_solver(sb_sol)
+    simulation.AddSolver(sb_sol)
 
     '''
     Generation of the manufactured solution and relative coefficients for the volume part

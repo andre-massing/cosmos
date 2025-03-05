@@ -1,5 +1,5 @@
 from cosmos.solvers.moving_bulk_adr import MovingBulkADRSolver
-from cosmos.solvers.simulation import MovingProblem
+from cosmos.solvers.simulation import MovingSimulation
 from cosmos.utils.manufactured_solution_tools import gradient, get_lin_trans_params
 from cosmos.utils.generate_surface_meshes import generate_ball, generate_circle
 from ngsolve import *
@@ -12,7 +12,7 @@ def test_g_moving_bulk_adr_2D_neumann():
     dt = Parameter(0.1)
     t = Parameter(0)
 
-    simulation = MovingProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = MovingSimulation(mesh=mesh, dt=dt, t=t, T=T)
 
     # General affine transformation (sphere to ellipse)
     A = CF(((1+0.25*sin(t))*cos(t), -sin(t),\
@@ -53,7 +53,7 @@ def test_g_moving_bulk_adr_2D_neumann():
                                   flux_c_bc=flux_c_bc,
                                   flux_d_bc=flux_d_bc)
     # Adding the solver to the simulation
-    simulation.attach_solver(adr_sol)
+    simulation.AddSolver(adr_sol)
 
     simulation.run()
 

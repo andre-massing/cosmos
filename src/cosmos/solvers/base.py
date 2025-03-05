@@ -1,6 +1,4 @@
 from ngsolve import *
-import types
-import numbers
 
 class Base:
 
@@ -17,19 +15,3 @@ class Base:
         for i, key in enumerate(accepted_keys):
 
             params[key] = params.get(key, defaults[i])
-
-    def params_update(self, params = {}):
-
-        params_copy = params.copy()
-        
-        for key, value in params.items():
-
-            if isinstance(value, types.FunctionType):
-
-                params_copy[key] = value()
-
-            if isinstance(value, numbers.Number):
-
-                params_copy[key] = CF(value)
-
-        return params_copy

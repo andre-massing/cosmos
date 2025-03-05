@@ -1,7 +1,7 @@
 # %%
  
 from cosmos.solvers.moving_bulk_adr import MovingBulkADRSolver
-from cosmos.solvers.simulation import MovingProblem
+from cosmos.solvers.simulation import MovingSimulation
 from cosmos.utils.manufactured_solution_tools import gradient
 from cosmos.utils.generate_surface_meshes import *
 from ngsolve import *
@@ -32,7 +32,7 @@ def solve_m_bulk_adr(dh, dt, neu = False):
     '''
     Initialization of the time-dependent deformable simulation (that can contain multiple solvers)
     '''
-    simulation = MovingProblem(mesh=mesh, dt=dt, t=t, T=T)
+    simulation = MovingSimulation(mesh=mesh, dt=dt, t=t, T=T)
 
     '''
     Generation of the manufactured solution and relative coefficients
@@ -96,7 +96,7 @@ def solve_m_bulk_adr(dh, dt, neu = False):
     '''
     Adding the solver to the simulation
     '''
-    simulation.attach_solver(adr_sol)
+    simulation.AddSolver(adr_sol)
 
     '''
     Run the simulation

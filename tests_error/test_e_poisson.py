@@ -24,7 +24,7 @@ def test_e_poisson_2D_dirichlet():
 
     p_sol = PoissonSolver(fes_order=fes_order, rhs = rhs, dir_bc = dirichlet_bc)
     # Adding the solver to the simulation
-    simulation.attach_solver(p_sol)
+    simulation.AddSolver(p_sol)
 
     simulation.run()
 
@@ -51,7 +51,7 @@ def test_e_poisson_2D_neumann():
 
     p_sol = PoissonSolver(fes_order=fes_order, rhs = rhs, neu_bc=neumann_bc)
     # Adding the solver to the simulation
-    simulation.attach_solver(p_sol)
+    simulation.AddSolver(p_sol)
 
     simulation.run()
 
@@ -78,7 +78,7 @@ def test_e_poisson_2D_mixed():
 
     p_sol = PoissonSolver(fes_order=fes_order, rhs = rhs, dir_bc=dirichlet_bc , neu_bc=neumann_bc)
     # Adding the solver to the simulation
-    simulation.attach_solver(p_sol)
+    simulation.AddSolver(p_sol)
 
     simulation.run()
 
@@ -106,7 +106,7 @@ def test_e_poisson_3D_dirichlet():
 
     p_sol = PoissonSolver(fes_order=fes_order, rhs = rhs, dir_bc=dirichlet_bc)
     # Adding the solver to the simulation
-    simulation.attach_solver(p_sol)
+    simulation.AddSolver(p_sol)
 
     simulation.run()
 
@@ -135,7 +135,7 @@ def test_e_poisson_3D_neumann():
 
     p_sol = PoissonSolver(fes_order=fes_order, rhs = rhs, neu_bc=neumann_bc)
     # Adding the solver to the simulation
-    simulation.attach_solver(p_sol)
+    simulation.AddSolver(p_sol)
 
     simulation.run()
 
@@ -165,7 +165,7 @@ def test_e_poisson_3D_mixed():
 
     p_sol = PoissonSolver(fes_order=fes_order, rhs = rhs, neu_bc=neumann_bc, dir_bc = dirichlet_bc)
     # Adding the solver to the simulation
-    simulation.attach_solver(p_sol)
+    simulation.AddSolver(p_sol)
 
     simulation.run()
 

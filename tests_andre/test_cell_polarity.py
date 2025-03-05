@@ -1,8 +1,7 @@
 # %%
 
-from cosmos.solvers.moving_sb_adr import MovingSurfaceBulkADRSolver
-from cosmos.solvers.simulation import MovingProblem
-from cosmos.solvers.mesh_moving import HarmonicMMSolver
+from cosmos.solvers.adr import ADRSolver
+from cosmos.solvers.simulation import MovingSimulation
 from cosmos.utils.generate_surface_meshes import generate_circle
 from ngsolve import *
 import numpy as np
@@ -26,25 +25,24 @@ Area0 = Integrate(CF(1), mesh, VOL_or_BND=BND)
 '''
 Definition of the time parameters
 '''
-T = 10
+T = 40
 dt = Parameter(0.01)
 t =Parameter(0)
 
 '''
 Definition of the simulation
 '''
-simulation = MovingProblem(mesh=mesh, dt=dt, t=t, T=T)
+simulation = MovingSimulation(mesh=mesh, dt=dt, t=t, T=T)
 
 '''
 Defining the coupled solver
 '''
-fes_order = 1
-sb_sol = MovingSurfaceBulkADRSolver(fes_order=fes_order)
+sb_sol = ADRSolver()
 
 '''
 Adding the solver to the simulation
 '''
-simulation.attach_solver(sb_sol)
+simulation.AddSolver(sb_sol)
 
 
 '''
@@ -72,7 +70,7 @@ def velocity_n():
 # Maybe better to create a GridFunction?
 def velocity():
     mesh.SetDeformation(simulation.data['dX'])
-    V = velocity_n()*specialcf.normal(mesh.dim)
+    V = velocity_n()*specialcf.normal(mesh.dim)*simulation.data['dt']
     mesh.UnsetDeformation()
     return V
 # Reaction parameters
@@ -83,19 +81,22 @@ def reaction2():
     cf = -1+0.4*velocity_n() 
     return cf
 
+simulation.AddMotion(function = velocity, domain = '.*')
+
 '''
 Adding the species to the solver
 '''
-angle = 120
+angle = 30
 ## Species 1
-sb_sol.attach_surface_adr(diffusion = CF(1),
-                          reaction = CF(-1),
-                          u0 = CF(1))
+sb_sol.AddSpecie(VorB = BND,
+                 diffusion = CF(0.1),
+                reaction = reaction1,
+                u0 = CF(1))
 ## Species 2
-sb_sol.attach_surface_adr(diffusion = CF(1),
-                          reaction = CF(-1),
-                        #   u0 = CF(1))
-                         u0 = CF(1))
+sb_sol.AddSpecie(VorB = BND,
+                 diffusion = CF(0.1),
+                reaction = reaction2,
+                u0 = CF(1))
 
 '''
 Add the non-linear coupling between the species
@@ -103,17 +104,12 @@ Add the non-linear coupling between the species
 ## Non-linear coupling
 a12 = 1
 a21 = 1
-def f1(u1, u2):
-    return u1**2+a12*u1*u2
-def f2(u1, u2):
-    return u2**2+a21*u1*u2
-sb_sol.add_coupling(mrk1 = 0, mrk2 = 1, f1 = f1, f2 = f2)
-
-'''
-Prescribing the displacement and the mesh-motion
-'''
-harmonic_mm_sol = HarmonicMMSolver(velocity=velocity)
-simulation.attach_mm_solver(harmonic_mm_sol)
+def f1(trial):
+    return trial[0]**2+a12*trial[0]*trial[1]
+def f2(trial):
+    return trial[1]**2+a21*trial[0]*trial[1]
+sb_sol.AddNonlinearity(marker0 = 0, markers = [0, 1], f = f1, VorB = BND)
+sb_sol.AddNonlinearity(marker0 = 1, markers = [0, 1], f = f2, VorB = BND)
 
 '''
 Running the simulation
@@ -121,43 +117,40 @@ Running the simulation
 modified = False
 mass = []
 
-simulation.initialize()
-
-scene = Draw(mesh, deformation = simulation.data['dX'])
-
 sA = []
 sB = []
 
-for step in simulation():
+for i, step in enumerate(simulation()):
+
+    if i == 0:
+        _ = sb_sol.get_solution()
+        scene1 = Draw(sb_sol.gfu_save.components[0], deformation = simulation.data['dX'])
+        scene2 = Draw(sb_sol.gfu_save.components[1], deformation = simulation.data['dX'])
 
     mesh.SetDeformation(simulation.data['dX'])
     sA.append( Integrate(sb_sol.get_solution()[0], mesh, BND) )
     sB.append( Integrate(sb_sol.get_solution()[1], mesh, BND) )
     mesh.UnsetDeformation()
 
-    scene.Redraw()
-
-    if simulation.t.Get() > 5 and not modified:
-
-        print('Entered the loop')
+    if simulation.data['t'].Get() > 3 and not modified:
 
         A, B = sb_sol.get_solution()
 
-        sb_sol.set_solution([A, IfPos(x/Norm(CF((x,y))) - cos(angle/180*pi), 0.1*B, B)])
+        sb_sol.set_solution([A, IfPos(x/Norm(CF((x,y))) - cos(angle/180*pi), 0.01*B, B)])
 
         modified = True
 
-plt.plot(simulation.data['t_array'], np.array(sA), label = 'A')
-plt.plot(simulation.data['t_array'], np.array(sB), label = 'B')
-plt.plot(simulation.data['t_array'], np.array(sA)+np.array(sB), label = 'A+B')
+    _ = sb_sol.get_solution()
+    scene1.Redraw()
+    scene2.Redraw()
+
+plt.plot(np.array(sA), label = 'A')
+plt.plot(np.array(sB), label = 'B')
+plt.plot(np.array(sA)+np.array(sB), label = 'A+B')
 plt.legend()
 plt.show()
 # Drawing the final state
 # sb_sol.draw_solution()
 
-'''
-Saving the solution
-'''
-sb_sol.save_solution(filename = './cell_polarity/cell_polarity', n_steps = 200)
 
 # %%
