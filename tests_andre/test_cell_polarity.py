@@ -86,7 +86,7 @@ simulation.AddMotion(function = velocity, domain = '.*')
 '''
 Adding the species to the solver
 '''
-angle = 30
+angle = 150
 ## Species 1
 sb_sol.AddSpecie(VorB = BND,
                  diffusion = CF(0.1),

@@ -15,7 +15,7 @@ Geometrical Flows
 .. toctree::
    :maxdepth: 1
 
-   2-Geometrical_flows/index
+   2-Elasticity/index
 
 Coupled
 =======

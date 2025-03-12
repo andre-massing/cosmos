@@ -49,7 +49,7 @@ class BaseSolver(Base):
     def SaveSolution(self, **kwargs):
 
         params = kwargs
-        accepted_keys = ['filename', 'subdivision', 'n_steps', 'folderpath']
+        accepted_keys = ['filename', 'subdivision', 'n_samples', 'folderpath']
         defaults = ['sol', 1, 100, './']  
         self.params_check(params, accepted_keys, defaults)
 

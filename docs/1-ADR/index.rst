@@ -4,7 +4,8 @@ Advection-Diffusion-Reaction
 .. toctree::
    :maxdepth: 1
 
-   1-adr.ipynb
+   0-adr.ipynb
+   1-poisson.ipynb
    2-bulk_adr.ipynb
    3-surface_adr.ipynb
    4-surface_bulk_adr.ipynb

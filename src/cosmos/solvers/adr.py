@@ -37,10 +37,10 @@ class ADRSolver(BaseSolver):
         # Initialize the parameters
         accepted_keys = ['VorB', 'rhs', 'advection', 'diffusion', 'reaction',
                          'u0', 'neu_d', 'neu_b', 'dir_d', 'dir_b', 'Fneu_b',
-                         'MP', 'PP', 'domain', 'stationary', 'name']
+                         'MP', 'PP', 'domain', 'stationary', 'name', 'periodic']
         defaults = [VOL, CF(0.0), CF((0,)*data['mesh'].dim), CF(0.0), CF(0.0),
                     CF(0.0), {}, {}, {}, {}, {},
-                    False, False, '.*', False, 'specie']
+                    False, False, '.*', False, 'specie' + str(len(self.species)), False]
         self.params_check(params, accepted_keys, defaults)
 
         if data['mesh'].ne == 0 and params['VorB'] == VOL:
@@ -49,10 +49,20 @@ class ADRSolver(BaseSolver):
         params['marker'] = len(self.species)
 
         if params['VorB'] == BND:
-            params['fes'] = Compress(H1(data['mesh'], order = self.fes_order, dgjumps = True, 
-                 definedon=data['mesh'].Boundaries(params['domain'])))
+
+            if params['periodic']:
+                params['fes'] = Compress(Periodic(H1(data['mesh'], order = self.fes_order, dgjumps = True, 
+                    definedon=data['mesh'].Boundaries(params['domain']))))
+            else:
+                params['fes'] = Compress(H1(data['mesh'], order = self.fes_order, dgjumps = True, 
+                    definedon=data['mesh'].Boundaries(params['domain'])))
         elif params['VorB'] == VOL:
-            params['fes'] = Compress(H1(data['mesh'], order = self.fes_order, dgjumps = True,
+
+            if params['periodic']:
+                params['fes'] = Compress(Periodic(H1(data['mesh'], order = self.fes_order, dgjumps = True,
+                          definedon = params['domain'])))
+            else:
+                params['fes'] = Compress(H1(data['mesh'], order = self.fes_order, dgjumps = True,
                           definedon = params['domain']))
 
         self.species.append(params)
@@ -62,8 +72,8 @@ class ADRSolver(BaseSolver):
         params = kwargs
 
         # Initialize the parameters
-        accepted_keys = ['marker0', 'markers', 'f', 'VorB', 'domain']
-        defaults = [0, 0, {}, VOL, '.*']  
+        accepted_keys = ['marker0', 'markers', 'f', 'VorB', 'domain', 'grad']
+        defaults = [0, 0, {}, VOL, '.*', False]  
         self.params_check(params, accepted_keys, defaults)
 
         self.couplings.append(params)
@@ -95,8 +105,6 @@ class ADRSolver(BaseSolver):
         self.gfu_old = GridFunction(self.fes)
         self.gfu_save = GridFunction(self.fes_save)
 
-        t4 = time.time()
-
         for i, sp in enumerate(self.species):
 
             if sp['VorB'] == BND:
@@ -105,6 +113,8 @@ class ADRSolver(BaseSolver):
             elif sp['VorB'] == VOL:
                 self.gfu.components[i].Set(sp['u0'])
 
+            if sp['MP']:
+                sp['gfu0'] = self.gfu.components[i].vec.Copy()
 
         self.gfu_old.vec.data = self.gfu.vec.data
 
@@ -137,7 +147,7 @@ class ADRSolver(BaseSolver):
             file_path = os.path.join(self.save_params['folderpath'], self.save_params['filename'])
         
             tot_steps = int(data['T']/data['dt'].Get())
-            self.save_params['jump'] = max(int(tot_steps/self.save_params['n_steps']), 1)
+            self.save_params['jump'] = max(int(tot_steps/self.save_params['n_samples']), 1)
 
             self.save_params['vtk'] = VTKOutput(data['mesh'],
                         coefs= [self.gfu_save.components[i] for i in range(len(self.species))],
@@ -250,11 +260,20 @@ class ADRSolver(BaseSolver):
         lhs = sp_up['diffusion']*grad(self.u[i]).Trace()*grad(self.v[i]).Trace()\
             *ds(deformation = dX)
         lhs += sp_up['reaction']*self.u[i]*self.v[i]*ds(deformation = dX)
+        lhs += -sp_up['advection']*grad(self.v[i]).Trace() * self.u[i] *ds(deformation = dX)
+
         # CIP stabilization for convection part
         S_int = 0.5*Norm(sp_up['advection']*nE) # Parameter corresponding to upwind stabilization
         jump_u = nE*(grad(self.u[i]).Trace() - (grad(self.u[i])).Other().Trace())
         jump_v = nE*(grad(self.v[i]).Trace() - (grad(self.v[i])).Other().Trace())
-        lhs += -sp_up['advection']*grad(self.v[i]).Trace() * self.u[i] *ds(deformation = dX)\
+        if data['mesh'].dim == 2:
+            gfF = GridFunction(H1(data['mesh'], order = 1,\
+                                    definedon=data['mesh'].Boundaries('.*')))
+        else:
+            gfF = GridFunction(FacetSurface(data['mesh'], order = 0))
+        gfF.Set(1)
+        lhs += h**2*S_int*jump_u*jump_v*gfF*ds(deformation = dX, element_boundary=True)
+
 
         rhs =  sp_up['rhs']*self.v[i]*ds(deformation = dX)
         mass = 1/data['dt']*self.u[i]*self.v[i]*ds(deformation = dX)
@@ -434,11 +453,23 @@ class ADRSolver(BaseSolver):
 
         if cp['VorB'] == BND:
 
-            self.A += cp['f'](trial)*test*ds(definedon=cp['domain'])
+            if cp['grad']:
+
+                self.A += cp['f'](trial)*grad(test)*ds(definedon=cp['domain'])
+
+            else:
+
+                self.A += cp['f'](trial)*test*ds(definedon=cp['domain'])
 
         else:
 
-            self.A += cp['f'](trial)*test*dx(definedon=cp['domain'])
+            if cp['grad']:
+
+                self.A += cp['f'](trial)*grad(test)*dx(definedon=cp['domain'])
+
+            else:
+
+                self.A += cp['f'](trial)*test*dx(definedon=cp['domain'])
 
     def __mp__(self, sp):
 
@@ -450,19 +481,22 @@ class ADRSolver(BaseSolver):
 
         gfu = self.gfu.components[i].vec.FV().NumPy()[:]
 
+        if sp['PP']:
+            gfu0 = self.gfu.components[i].vec.FV().NumPy()[:]
+        elif sp['MP']:
+            gfu0 = sp['gfu0'].FV().NumPy()[:]
+
         if 'dX' in data and 'dX_old' in data:
 
             dX = data['dX']
 
             if sp['PP']:
-                gfu0 = self.gfu.components[i].vec.FV().NumPy()[:]
                 dX_old = dX
-            else:
-                gfu0 = self.sol[0][i].FV().NumPy()[:]
+            elif sp['MP']:
                 dX_old = GridFunction(VectorH1(data['mesh']))
 
         else:
-            gfu0 = gfu
+
             dX = GridFunction(VectorH1(data['mesh']))
             dX_old = dX
 

@@ -295,9 +295,37 @@ class MovingSimulation(Simulation):
         params = kwargs
 
         # Initialize the parameters
-        accepted_keys = ['function', 'domain', 'prescribed_everywhere']
-        defaults = [CF((0,)*self.mesh.dim), '.*', False]  
+        accepted_keys = ['function', 'domain']
+        defaults = [CF((0,)*self.mesh.dim), '.*']  
         self.params_check(params, accepted_keys, defaults)
+
+        params['type'] = 'everywhere'
+
+        self.motions.append(params)
+
+    def AddNormalMotion(self, **kwargs):
+
+        params = kwargs
+
+        # Initialize the parameters
+        accepted_keys = ['function', 'domain']
+        defaults = [CF(0), '.*']
+        self.params_check(params, accepted_keys, defaults)
+
+        params['type'] = 'normal'
+
+        self.motions.append(params)
+
+    def AddTangentialMotion(self, **kwargs):
+
+        params = kwargs
+
+        # Initialize the parameters
+        accepted_keys = ['function', 'domain']
+        defaults = [CF(0), '.*']
+        self.params_check(params, accepted_keys, defaults)
+
+        params['type'] = 'tangential'
 
         self.motions.append(params)
 
@@ -312,13 +340,13 @@ class MovingSimulation(Simulation):
 
                 up_p = params_update(params)
 
-                if up_p['prescribed_everywhere']:
+                match up_p['type']:
 
-                    self.data['dX'].Set(up_p['function'])
+                    case 'everywhere':
+                        self.data['dX'].Set(up_p['function'])
 
-                else:
-
-                    compute_displ(self.data, up_p['function'], self.data['dX'], bc = up_p['domain'])
+                    case 'normal':
+                        compute_displ(self.data, up_p['function'], self.data['dX'], bc = up_p['domain'])
 
         else:
 
@@ -326,14 +354,14 @@ class MovingSimulation(Simulation):
 
                 up_p = params_update(params)
 
-                if up_p['prescribed_everywhere']:
+                match up_p['type']:
 
-                    self.data['dX'].Set(up_p['function'],
+                    case 'everywhere':
+                        self.data['dX'].Set(up_p['function'],
                             definedon = self.mesh.Boundaries(up_p['domain']))
                     
-                else:
-
-                    compute_displ(self.data, up_p['function'], self.data['dX'], bc = up_p['domain'])
+                    case 'normal':
+                        compute_displ(self.data, up_p['function'], self.data['dX'], bc = up_p['domain'])
 
                     
         for solver in self.motion_solvers:
