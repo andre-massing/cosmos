@@ -1,23 +1,20 @@
 from ngsolve import *
 from ngsolve .solvers import *
-import types
-import numbers
+import numpy as np
 
-def params_update(params = {}):
+def params_check(params = {}, accepted_keys=[], defaults=[]):
+        
+    wrong = [key for key in params.keys() if key not in accepted_keys]
 
-    params_copy = params.copy()
+    if wrong:
+
+        print("The following key are unknown parameters:\n", wrong)
+
+        raise ValueError
     
-    for key, value in params.items():
+    for i, key in enumerate(accepted_keys):
 
-        if isinstance(value, types.FunctionType):
-
-            params_copy[key] = value()
-
-        if isinstance(value, numbers.Number) and not isinstance(value, bool):
-
-            params_copy[key] = CF(value)
-
-    return params_copy
+        params[key] = params.get(key, defaults[i])
 
 def compute_error(data, gfu, u_ex, norm, domain, VorB):
 
@@ -25,9 +22,6 @@ def compute_error(data, gfu, u_ex, norm, domain, VorB):
     Ps = Id(data['mesh'].dim) - OuterProduct(ns, ns)
 
     if norm == 'L2':
-
-        if 'dX' in data:
-            data['mesh'].SetDeformation(data['dX'])
 
         aux = InnerProduct(gfu-u_ex, gfu-u_ex)
 
@@ -41,8 +35,6 @@ def compute_error(data, gfu, u_ex, norm, domain, VorB):
 
             err = sqrt(Integrate(aux, mesh = data['mesh'], order = gfu.space.globalorder*2,
                             definedon = data['mesh'].Materials(domain)))
-
-        data['mesh'].UnsetDeformation()
 
     else:
 
@@ -210,6 +202,7 @@ def sphere_transformation(A, b, t):
     detJ = Det(A)
     invA = Cof(A).trans/detJ
     inv_phi = invA*(CF((x,y,z)) - b)
+
     w_phi = A.Diff(t)*inv_phi + b.Diff(t)
 
     e1 = A[:,0]

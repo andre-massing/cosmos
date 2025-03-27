@@ -68,10 +68,8 @@ def velocity_n():
 # Here I define the velocity as vector
 # TO DO: double check if this is actually what I want
 # Maybe better to create a GridFunction?
-def velocity():
-    mesh.SetDeformation(simulation.data['dX'])
-    V = velocity_n()*specialcf.normal(mesh.dim)*simulation.data['dt']
-    mesh.UnsetDeformation()
+def normal_displacement():
+    V = velocity_n()*simulation.data['dt']
     return V
 # Reaction parameters
 def reaction1():
@@ -81,20 +79,20 @@ def reaction2():
     cf = -1+0.4*velocity_n() 
     return cf
 
-simulation.AddMotion(function = velocity, domain = '.*')
+simulation.AddNormalMotion(function = normal_displacement, domain = '.*')
 
 '''
 Adding the species to the solver
 '''
-angle = 150
+angle = 30
 ## Species 1
 sb_sol.AddSpecie(VorB = BND,
-                 diffusion = CF(0.1),
+                 diffusion = CF(0.2),
                 reaction = reaction1,
                 u0 = CF(1))
 ## Species 2
 sb_sol.AddSpecie(VorB = BND,
-                 diffusion = CF(0.1),
+                 diffusion = CF(0.2),
                 reaction = reaction2,
                 u0 = CF(1))
 

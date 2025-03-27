@@ -1,13 +1,8 @@
 # Import necessary libraries
 from ngsolve import *
 from collections import Counter
-from cosmos.solvers.base import Base
 from cosmos.solvers.base_solver import BaseSolver
 from tqdm import tqdm
-from cosmos.solvers.tools import params_update, compute_displ
-
-import cProfile
-import pstats
 
 class Simulation(Base):
     
@@ -290,16 +285,33 @@ class MovingSimulation(Simulation):
         if self.data['verbosity'] > 0:
             solver.print_info()
 
-    def AddMotion(self, **kwargs):
+    def AddVolMotion(self, **kwargs):
+
+        params = kwargs
+
+        if self.mesh.ne ==0:
+
+            raise Exception('No volume elements! The motion is not added to the simulation')
+
+        # Initialize the parameters
+        accepted_keys = ['function', 'domain', 'total']
+        defaults = [CF((0,)*self.mesh.dim), '.*', False]  
+        self.params_check(params, accepted_keys, defaults)
+
+        params['type'] = VOL
+
+        self.motions.append(params)
+
+    def AddBndMotion(self, **kwargs):
 
         params = kwargs
 
         # Initialize the parameters
-        accepted_keys = ['function', 'domain']
-        defaults = [CF((0,)*self.mesh.dim), '.*']  
+        accepted_keys = ['function', 'domain', 'total']
+        defaults = [CF(0), '.*', False]
         self.params_check(params, accepted_keys, defaults)
 
-        params['type'] = 'everywhere'
+        params['type'] = BND
 
         self.motions.append(params)
 
@@ -308,24 +320,11 @@ class MovingSimulation(Simulation):
         params = kwargs
 
         # Initialize the parameters
-        accepted_keys = ['function', 'domain']
-        defaults = [CF(0), '.*']
+        accepted_keys = ['function', 'domain', 'total']
+        defaults = [CF(0), '.*', False]
         self.params_check(params, accepted_keys, defaults)
 
         params['type'] = 'normal'
-
-        self.motions.append(params)
-
-    def AddTangentialMotion(self, **kwargs):
-
-        params = kwargs
-
-        # Initialize the parameters
-        accepted_keys = ['function', 'domain']
-        defaults = [CF(0), '.*']
-        self.params_check(params, accepted_keys, defaults)
-
-        params['type'] = 'tangential'
 
         self.motions.append(params)
 
@@ -334,38 +333,90 @@ class MovingSimulation(Simulation):
         for solver in self.motion_solvers:
             solver.solve_step()
 
-        if self.mesh.ne !=0:
+        dX_vol = GridFunction(self.data['dX'].space)
+        dX_bnd = GridFunction(self.data['dX'].space)
 
-            for params in self.motions:
+        for params in self.motions:
 
-                up_p = params_update(params)
+            up_p = params_update(params)
 
-                match up_p['type']:
+            if up_p['type'] == BND or up_p['type'] == 'normal':
 
-                    case 'everywhere':
-                        self.data['dX'].Set(up_p['function'])
+                dX_bnd.vec.data += self.__add_bnd_motion__(up_p).vec.data
 
-                    case 'normal':
-                        compute_displ(self.data, up_p['function'], self.data['dX'], bc = up_p['domain'])
+            elif up_p['type'] ==  VOL:
+
+                dX_vol.vec.data += self.__add_vol_motion__(up_p).vec.data
+
+        self.data['dX'].vec.data += dX_vol.vec.data
+        self.data['dX'].vec.data += dX_bnd.vec.data
+               
+        for solver in self.motion_solvers:
+            solver.update()
+
+    def __add_vol_motion__(self, up_p):
+
+        dX = GridFunction(self.data['dX'].space)
+
+        if up_p['total']: 
+
+            dX.Set(up_p['function'] - self.data['dX_old'],
+                    definedon = self.mesh.Materials(up_p['domain']))
+            
+        else:
+
+            self.data['mesh'].SetDeformation(self.data['dX_old'])
+            dX.Set(up_p['function'],
+                    definedon = self.mesh.Materials(up_p['domain']))
+            self.data['mesh'].UnsetDeformation()
+        
+        return dX
+        
+    def __add_bnd_motion__(self, up_p):
+
+        dX = GridFunction(self.data['dX'].space)
+        n = specialcf.normal(self.data['mesh'].dim)
+
+        if up_p['total']:
+
+            if up_p['type'] == BND:
+                    
+                dX.Set(up_p['function'] - self.data['dX_old'],
+                        definedon = self.mesh.Boundaries(up_p['domain']))
+
+            else:
+
+                dX.Set(up_p['function']*n - self.data['dX_old'],
+                        definedon = self.mesh.Boundaries(up_p['domain']))
+                
+            if self.data['mesh'].ne != 0:
+
+                gfu = elastic_motion(self.data['mesh'], dX, up_p['domain'])
+                dX.vec.data = gfu.vec.data
 
         else:
 
-            for params in self.motions:
+            self.data['mesh'].SetDeformation(self.data['dX_old'])
 
-                up_p = params_update(params)
+            if up_p['type'] == BND:
 
-                match up_p['type']:
+                dX.Set(up_p['function'],
+                        definedon = self.mesh.Boundaries(up_p['domain']))
 
-                    case 'everywhere':
-                        self.data['dX'].Set(up_p['function'],
+            else:
+
+                dX.Set(up_p['function']*n,
                             definedon = self.mesh.Boundaries(up_p['domain']))
-                    
-                    case 'normal':
-                        compute_displ(self.data, up_p['function'], self.data['dX'], bc = up_p['domain'])
+                
+            if self.data['mesh'].ne != 0:
 
-                    
-        for solver in self.motion_solvers:
-            solver.update()
+                gfu = elastic_motion(self.data['mesh'], dX, up_p['domain'])
+                dX.vec.data = gfu.vec.data
+
+            self.data['mesh'].UnsetDeformation()
+
+        
+        return dX
 
 
 

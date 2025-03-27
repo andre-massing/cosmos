@@ -7,7 +7,7 @@ from ngsolve.webgui import Draw
 import numpy as np
 import scipy.sparse as scipy
 
-class MeanCurvature(BasePDE):
+class MeanCurvatureStab(BasePDE):
 
     def __init__(self, **kwargs):
 
@@ -15,11 +15,11 @@ class MeanCurvature(BasePDE):
 
         self.params = kwargs
 
-        self.fields = 2
+        self.fields = 3
 
         accepted_keys = ['rhs', 'stab', 'sp_curv', 'clamped_bnd', 'domain',
                          'name', 'stationary']
-        defaults = [CF(0), None, CF(0.0), {}, '.*',
+        defaults = [CF(0), CF(1e-3), CF(0.0), {}, '.*',
                     ['displacement', 'mean_curvature'], False]
         
         params_check(self.params, accepted_keys, defaults)
@@ -44,8 +44,17 @@ class MeanCurvature(BasePDE):
             
         V2 = Compress(VectorH1(mesh_data['mesh'], order=self.fes_order,
                     definedon=mesh_data['mesh'].Boundaries(self.params['domain'])))
+        
+        if mesh_data['mesh'].dim == 2:
             
-        self.fes = V1*V2
+            dV = Compress(H1(mesh_data['mesh'], order=1,\
+                     definedon = mesh_data['mesh'].Boundaries(self.params['domain'])))
+        elif mesh_data['mesh'].dim == 3:
+            
+            dV = Compress(VectorFacetSurface(mesh_data['mesh'], order=1,\
+                    definedon = mesh_data['mesh'].Boundaries(self.params['domain'])))
+            
+        self.fes = V1*V2*dV
 
         self.trial = self.fes.TrialFunction()
         self.test = self.fes.TestFunction()
@@ -53,9 +62,9 @@ class MeanCurvature(BasePDE):
         self.gfu = GridFunction(self.fes)
         self.gfu_old = GridFunction(self.fes)
 
-        self.dX_h, self.kappa_h = self.gfu.components
+        self.dX_h, self.kappa_h, _ = self.gfu.components
 
-        compute_mc(mesh_data, self.kappa_h, self.params)
+        compute_stab_mc(mesh_data, self.kappa_h, self.params)
             
         V_vol = VectorH1(mesh_data['mesh'], order = self.fes_order)
         self.gfu_save = GridFunction(CompressCompound(V_vol*V_vol))
@@ -103,9 +112,26 @@ class MeanCurvature(BasePDE):
             nE = Cross(ns, tE)
         Ps = Id(mesh_data['mesh'].dim) - OuterProduct(ns, ns)
 
+        if mesh_data['mesh'].dim == 2:
+
+            dkappa = trial[2]*tE
+            deta = test[2]*tE
+
+            jump_dkappadn = (trial[1].Trace().Deriv()*nE-dkappa)
+            jump_detadn = (test[1].Trace().Deriv()*nE-deta)
+
+        elif mesh_data['mesh'].dim == 3:
+
+            jump_dkappadn = (trial[1].Trace().Deriv()*nE-trial[2].Trace())
+            jump_detadn = (test[1].Trace().Deriv()*nE-test[2].Trace())
+
         lhs = -InnerProduct(trial[1], test[0])*ds_lumped
         lhs += InnerProduct(trial[1], test[1])*ds_lumped
         lhs += (InnerProduct(grad(trial[0]).Trace(), grad(test[1]).Trace()))*ds(deformation = dX)
+
+        gamma = self.params['stab']
+        lhs += gamma*h*InnerProduct(jump_dkappadn,jump_detadn)\
+            *ds(deformation = dX, element_boundary=True)
         
         return lhs
         
@@ -157,7 +183,7 @@ class MeanCurvature(BasePDE):
             factor = 1
 
         mass = factor*InnerProduct(trial[0], test[0])/mesh_data['dt']*ds_lumped
-        mass_gfu = InnerProduct(0*self.gfu.components[0], test[0])/mesh_data['dt']*ds_lumped
+        mass_gfu = InnerProduct(0*gfu.components[0], test[0])/mesh_data['dt']*ds_lumped
 
         return mass, mass_gfu
         

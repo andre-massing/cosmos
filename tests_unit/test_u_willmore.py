@@ -1,1 +1,0 @@
-from cosmos.solvers.willmore import StabWillmoreSolver

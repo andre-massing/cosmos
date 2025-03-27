@@ -1,38 +1,33 @@
 from ngsolve import *
 from ngsolve.solvers import *
-from cosmos.solvers.tools import params_update
 
-def elastic_motion(mesh, dX, dXold, dt, V, motions):
+def elastic_motion(mesh, dX, domain):
 
-    if mesh.ne != 0:
+    E, nu = 210, 0.2
+    # Lamé constants:
+    mu  = E / 2 / (1+nu)
+    lam = E * nu / ((1+nu)*(1-2*nu))
 
-        dirichlet = ''
-        for params in motions:
-            dirichlet = dirichlet + params['domain'] + '|'
+    fes = VectorH1(mesh, order=1, dirichlet='.*')
+    u  = fes.TrialFunction()
 
-        fes = VectorH1(mesh, order=1, dirichlet=dirichlet)
-        u  = fes.TrialFunction()
+    gfu = GridFunction(fes)
 
-        gfu = GridFunction(fes)
-        gfu_m = GridFunction(fes)
+    gfu.Set(dX, definedon = mesh.Boundaries(domain))
 
-        for params in motions:
-            up_p = params_update(params)
-            gfu_m.Set(up_p['function'], definedon = mesh.Boundaries(up_p['domain']))
-            gfu.vec.data += gfu_m.vec.data
+    def Pow(a, b):
+        return exp (log(a)*b)
 
-        def C(u):
-            F = Grad(u) + Grad(u).trans
-            return F.trans * F
+    def NeoHook (C):
+        return 0.5 * mu * (Trace(C-I) + 2*mu/lam * Pow(Det(C), -lam/2/mu) - 1)
 
-        def NeoHooke (C):
-            return Trace(C)
+    I = Id(mesh.dim)
+    F = I + Grad(u)
+    C = F.trans * F
 
-        a = BilinearForm(fes)
-        a += Variation(NeoHooke(C(u)).Compile()*dx)
+    a = BilinearForm(fes, symmetric=True)
+    a += Variation(  NeoHook (C).Compile() * dx)
 
-        Newton(a, gfu, maxit = 20)
+    Newton(a, gfu, maxit = 20, printing = False)
 
-        dX.Set(gfu)
-
-        V.Set((dX - dXold)/dt)
+    return gfu

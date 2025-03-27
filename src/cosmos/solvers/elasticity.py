@@ -9,85 +9,27 @@ import time
 import numpy as np
 import scipy.sparse as scipy
 
-class ADRSolver(BaseSolver):
+class NeoHook(BaseSolver):
 
     def __init__(self, **kwargs):
 
         super().__init__(fes_order=1, **kwargs)
-
-        if len(kwargs)>1:
-            raise Exception('Base Advection-Diffusion-Reaction simulations do \
-                            not accept additional keywords as contructor')
         
-        accepted_keys = ['linear']
-        defaults = [False]
+        accepted_keys = ['lambda', 'mu', 'rhs', 'domain', 'dX', 'dir']
+        defaults = [CF(1), CF(1), CF(0), '.*', None, None]
         self.params_check(self.params, accepted_keys, defaults)
 
-        self.species = []
-        self.nonlinearities = []
         self.error_params = None
         self.save_params = None
-
-    def AddSpecie(self, **kwargs):
-
-        data = self.problem.data
-
-        params = kwargs
-
-        # Initialize the parameters
-        accepted_keys = ['VorB', 'rhs', 'advection', 'diffusion', 'reaction',
-                         'u0', 'neu_d', 'neu_b', 'dir_d', 'dir_b', 'Fneu_b',
-                         'MP', 'PP', 'domain', 'stationary', 'name', 'periodic']
-        defaults = [VOL, CF(0.0), CF((0,)*data['mesh'].dim), CF(0.0), CF(0.0),
-                    CF(0.0), {}, {}, {}, {}, {},
-                    False, False, '.*', False, 'specie' + str(len(self.species)), False]
-        self.params_check(params, accepted_keys, defaults)
-
-        if data['mesh'].ne == 0 and params['VorB'] == VOL:
-            raise Exception('The mesh has no volume elements! The specie is not added')
-
-        params['marker'] = len(self.species)
-
-        if params['VorB'] == BND:
-
-            if params['periodic']:
-                params['fes'] = Compress(Periodic(H1(data['mesh'], order = self.fes_order, dgjumps = True, 
-                    definedon=data['mesh'].Boundaries(params['domain']))))
-            else:
-                params['fes'] = Compress(H1(data['mesh'], order = self.fes_order, dgjumps = True, 
-                    definedon=data['mesh'].Boundaries(params['domain'])))
-                
-        elif params['VorB'] == VOL:
-
-            if params['periodic']:
-                params['fes'] = Compress(Periodic(H1(data['mesh'], order = self.fes_order, dgjumps = True,
-                          definedon = params['domain'])))
-            else:
-                params['fes'] = Compress(H1(data['mesh'], order = self.fes_order, dgjumps = True,
-                          definedon = params['domain']))
-
-        self.species.append(params)
-
-    def AddNonlinearity(self, **kwargs):
-
-        params = kwargs
-
-        # Initialize the parameters
-        accepted_keys = ['marker0', 'markers', 'f', 'VorB', 'domain', 'grad']
-        defaults = [0, 0, {}, VOL, '.*', False]  
-        self.params_check(params, accepted_keys, defaults)
-
-        self.nonlinearities.append(params)
 
     def initialize(self):
 
         data = self.problem.data
 
         if data['mesh'].ne == 0:
-            V = H1(data['mesh'], order = self.fes_order,
-                               definedon=data['mesh'].Boundaries('.*'))
-        else:
-            V = H1(data['mesh'], order = self.fes_order)
+            raise Exception('The mesh has no volume elements!')
+
+        V = VectorH1(data['mesh'], order = self.fes_order)
        
         for i, sp in enumerate(self.species):
 
@@ -212,7 +154,7 @@ class ADRSolver(BaseSolver):
         if len(self.species)<2:
             self.A += self.u[-1]*self.v[-1]*ds
 
-        for cp in self.nonlinearities:
+        for cp in self.couplings:
 
             self.__add_nonlinear_forms__(cp)
 
