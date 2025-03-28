@@ -1,13 +1,13 @@
 from ngsolve import *
-from cosmos.solvers.base_pde import BasePDE
-from cosmos.solvers.tools import params_check, compute_error, compute_mc, compute_stab_mc
+from cosmos.pdes.base_pde import BasePDE
+from cosmos.utils.tools import params_check, compute_error, compute_mc, compute_stab_mc
 import os
 import csv
 from ngsolve.webgui import Draw
 import numpy as np
 import scipy.sparse as scipy
 
-class WillmoreStab(BasePDE):
+class MeanCurvatureStab(BasePDE):
 
     def __init__(self, **kwargs):
 
@@ -62,12 +62,9 @@ class WillmoreStab(BasePDE):
         self.gfu = GridFunction(self.fes)
         self.gfu_old = GridFunction(self.fes)
 
-        self.dX_h, self.Y_h, _ = self.gfu.components
-        self.kappa_h = GridFunction(V2)
+        self.dX_h, self.kappa_h, _ = self.gfu.components
+
         compute_stab_mc(mesh_data, self.kappa_h, self.params)
-        ns = specialcf.normal(mesh_data['mesh'].dim)
-        self.Y_h.Set(self.kappa_h - self.params['sp_curv']*ns,
-                        definedon = mesh_data['mesh'].Boundaries('.*'))  
             
         V_vol = VectorH1(mesh_data['mesh'], order = self.fes_order)
         self.gfu_save = GridFunction(CompressCompound(V_vol*V_vol))
@@ -128,7 +125,7 @@ class WillmoreStab(BasePDE):
             jump_dkappadn = (trial[1].Trace().Deriv()*nE-trial[2].Trace())
             jump_detadn = (test[1].Trace().Deriv()*nE-test[2].Trace())
 
-        lhs = -InnerProduct(grad(trial[1]).Trace(), grad(test[0]).Trace())*ds(deformation = dX)
+        lhs = -InnerProduct(trial[1], test[0])*ds_lumped
         lhs += InnerProduct(trial[1], test[1])*ds_lumped
         lhs += (InnerProduct(grad(trial[0]).Trace(), grad(test[1]).Trace()))*ds(deformation = dX)
 
@@ -140,22 +137,8 @@ class WillmoreStab(BasePDE):
         
     def GetRHS(self, mesh_data, test, dX):
 
-        mesh_data['mesh'].SetDeformation(dX)
-
-        compute_stab_mc(mesh_data, self.kappa_h, self.params)
+        # Compute mesh size, normal and tangential vectors 
         ns = specialcf.normal(mesh_data['mesh'].dim)
-        self.Y_h.Set(self.kappa_h - self.params['sp_curv']*ns,
-                        definedon = mesh_data['mesh'].Boundaries('.*')) 
-        
-        mesh_data['mesh'].UnsetDeformation()
-
-        if mesh_data['mesh'].dim == 2:
-            ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
-            ds_lumped = ds(intrules = { SEGM : ir }, deformation = dX)
-        elif mesh_data['mesh'].dim == 3:
-            ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-            ds_lumped = ds(intrules = { TRIG : ir }, deformation = dX)
-
         tE = specialcf.tangential(mesh_data['mesh'].dim)
         if mesh_data['mesh'].dim == 2:
             nE = tE
@@ -164,20 +147,7 @@ class WillmoreStab(BasePDE):
         Ps = Id(mesh_data['mesh'].dim) - OuterProduct(ns, ns)
 
         rhs = -InnerProduct(Ps, grad(test[1]).Trace())*ds(deformation = dX)
-        rhs += -self.params['sp_curv']*InnerProduct(ns, test[1])*ds(deformation = dX)
         rhs += InnerProduct(self.params['rhs'], test[1])*ds(deformation = dX)
-
-        def D_s(chi, Ps):
-            sym = 0.5*Ps*(grad(chi).Trace()+grad(chi).Trace().trans)*Ps
-            return sym
-        if mesh_data['mesh'].dim == 3:
-            rhs += InnerProduct(Trace(grad(self.Y_h).Trace()),Trace(grad(test[0]).Trace()))*ds(deformation = dX)
-            rhs += -2*InnerProduct(grad(self.Y_h).Trace().trans, D_s(test[0], Ps)*Ps.trans)*ds(deformation = dX)
-            rhs += -self.params['sp_curv']*InnerProduct(self.kappa_h, grad(test[0]).Trace().trans*ns)*ds_lumped
-            rhs += -0.5*InnerProduct((Norm(self.kappa_h - self.params['sp_curv']*ns)**2)*Ps,grad(test[0]).Trace())*ds_lumped
-            rhs += InnerProduct(InnerProduct(self.Y_h, self.kappa_h)*Ps,grad(test[0]).Trace())*ds_lumped
-        elif mesh_data['mesh'].dim == 2 :
-            rhs += InnerProduct((Norm(self.Y_h)**2)*Ps,grad(test[0]).Trace())*ds_lumped
 
         ## Addition for the open boundary
         if self.params['clamped_bnd']:
@@ -219,13 +189,7 @@ class WillmoreStab(BasePDE):
         
     def Update(self, mesh_data, dX):
 
-        mesh_data['mesh'].SetDeformation(dX)
-        self.kappa_h.Set(self.Y_h + self.params['sp_curv']*specialcf.normal(mesh_data['mesh'].dim),
-                         definedon=mesh_data['mesh'].Boundaries('.*'))
-        mesh_data['mesh'].UnsetDeformation()
-
         self.gfu_old.vec.data = self.gfu.vec.data
-
         self.dX_save.Set(self.dX_h, definedon = mesh_data['mesh'].Boundaries(self.params['domain']))
         self.kappa_save.Set(self.kappa_h, definedon = mesh_data['mesh'].Boundaries(self.params['domain']))
 
@@ -265,7 +229,7 @@ class WillmoreStab(BasePDE):
 
         print(60*'-')
 
-        print('This is a solver for the Willmore flow')
+        print('This is a solver for the Mean Curvature flow')
         print('It computes one step of it given the mesh')
         print('The algorithm is described in the article:')
         print('Stabilization for the mean curvature is implemented as in the article:')

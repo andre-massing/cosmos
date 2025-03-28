@@ -8,39 +8,15 @@ def params_check(params = {}, accepted_keys=[], defaults=[]):
 
     if wrong:
 
-        print("The following key are unknown parameters:\n", wrong)
+        print("The following keys are unknown parameters:\n", wrong)
+
+        print("The accepted keys are:\n", accepted_keys)
 
         raise ValueError
     
     for i, key in enumerate(accepted_keys):
 
         params[key] = params.get(key, defaults[i])
-
-def compute_error(data, gfu, u_ex, norm, domain, VorB):
-
-    ns = specialcf.normal(data['mesh'].dim)
-    Ps = Id(data['mesh'].dim) - OuterProduct(ns, ns)
-
-    if norm == 'L2':
-
-        aux = InnerProduct(gfu-u_ex, gfu-u_ex)
-
-        if VorB == BND:
-
-            err = sqrt(Integrate(aux, mesh = data['mesh'], order = gfu.space.globalorder*2, 
-                            VOL_or_BND=BND, 
-                            definedon = data['mesh'].Boundaries(domain)))
-
-        else:
-
-            err = sqrt(Integrate(aux, mesh = data['mesh'], order = gfu.space.globalorder*2,
-                            definedon = data['mesh'].Materials(domain)))
-
-    else:
-
-        raise ValueError('The norm given is not implemented')
-    
-    return err
 
 def compute_stab_mc(data, gfu, params):
 
@@ -195,57 +171,3 @@ def compute_displ(data, function, dX, bc = '.*'):
         Newton(a, gfu, maxit = 20, printing=False)
 
         dX.vec.data += gfu.vec.data
-
-def sphere_transformation(A, b, t):
-
-    phi = A*CF((x,y,z)) + b
-    detJ = Det(A)
-    invA = Cof(A).trans/detJ
-    inv_phi = invA*(CF((x,y,z)) - b)
-
-    w_phi = A.Diff(t)*inv_phi + b.Diff(t)
-
-    e1 = A[:,0]
-    e2 = A[:,1]
-    e3 = A[:,2]
-
-    n_ex = Cross(e2, e3)*inv_phi[0]+Cross(e3, e1)*inv_phi[1] + Cross(e1, e2)*inv_phi[2]
-    n_ex = n_ex/Norm(n_ex)
-
-    return phi, inv_phi, w_phi, detJ, n_ex
-
-def gradient(f,P):
-
-    m, _ = P.dims
-    l = len(f.dims)
-
-    if l == 0:
-        # scalar gradient is deifed traditionally
-
-        if m == 2:
-            output = P*CoefficientFunction((f.Diff(x), f.Diff(y)))
-        elif m == 3:
-            output = P*CoefficientFunction((f.Diff(x), f.Diff(y), f.Diff(z))) 
-            
-    elif l == 1:
-        # vector gradient is defined component by component
-        # and disposed along columns
-
-        if m == 2:
-            aux1 = gradient(f[0], P)
-            aux2 = gradient(f[1], P)
-            output = CoefficientFunction((aux1[0], aux2[0], \
-                aux1[1], aux2[1]), dims = (m,m))
-        elif m == 3:
-            aux1 = gradient(f[0], P)
-            aux2 = gradient(f[1], P)
-            aux3 = gradient(f[2], P)
-            output = CoefficientFunction((aux1[0], aux2[0], aux3[0], \
-                aux1[1], aux2[1], aux3[1],\
-                    aux1[2], aux2[2], aux3[2]), dims = (m,m))
-            
-    else:
-
-        raise RuntimeError("Don't know how to take the gradient. Only scalars and vectors are accepted.")
-    
-    return output

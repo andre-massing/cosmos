@@ -2,7 +2,7 @@
 
 from cosmos.utils.generate_surface_meshes import generate_circle
 from ngsolve import *
-from cosmos.solvers.tools import gradient
+from cosmos.utils.tools import gradient
 from ngsolve.webgui import Draw
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -11,7 +11,7 @@ bc = 'dir'
 
 mesh, _ = generate_circle(maxh = 0.1)
 
-from cosmos.solvers.tools import gradient
+from cosmos.utils.tools import gradient
 
 n_ex = CF((x,y))/Norm(CF((x,y)))
 P = Id(2) - OuterProduct(n_ex, n_ex) 

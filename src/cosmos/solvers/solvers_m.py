@@ -3,9 +3,9 @@ from ngsolve import *
 from ngsolve.solvers import Newton
 from ngsolve.webgui import Draw
 from cosmos.solvers.solvers import BackwardEuler
-from cosmos.solvers.base_pde import BasePDE
-from cosmos.solvers.tools import params_check
-from cosmos.solvers.container import Container
+from cosmos.pdes.base_pde import BasePDE
+from cosmos.utils.tools import params_check
+from cosmos.pdes.container import Container
 from tqdm import tqdm
 import csv
 

@@ -1,6 +1,6 @@
 from ngsolve import *
 from cosmos.solvers.base_solver import BaseSolver
-from cosmos.solvers.tools import params_check, compute_error, compute_mc, compute_stab_mc
+from cosmos.utils.tools import params_check, compute_error, compute_mc, compute_stab_mc
 from ngsolve.webgui import Draw
 import csv
 

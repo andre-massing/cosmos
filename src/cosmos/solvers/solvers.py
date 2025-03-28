@@ -2,9 +2,9 @@
 from ngsolve import *
 from ngsolve.solvers import Newton
 from collections import Counter
-from cosmos.solvers.base_pde import BasePDE
-from cosmos.solvers.tools import params_check
-from cosmos.solvers.container import Container
+from cosmos.pdes.pde_base import BasePDE
+from cosmos.utils.tools import params_check
+from cosmos.pdes.container import Container
 from tqdm import tqdm
 import csv
 

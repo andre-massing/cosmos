@@ -2,14 +2,14 @@
 
 from cosmos.utils.generate_surface_meshes import generate_half_sphere
 from ngsolve import *
-from cosmos.solvers.tools import gradient
+from cosmos.utils.tools import gradient
 from ngsolve.webgui import Draw
 import pandas as pd
 import matplotlib.pyplot as plt
 
 mesh, _ = generate_half_sphere(maxh = 0.1)
 
-from cosmos.solvers.tools import gradient
+from cosmos.utils.tools import gradient
 
 n_ex = CF((x,y,z))/Norm(CF((x,y,z)))
 P = Id(3) - OuterProduct(n_ex, n_ex) 

@@ -42,3 +42,5 @@ K = 2
 M = 3
 S = [11, 6, 14]
 getMaxAdditionalDinersCount(N, K, M, S)
+
+#%%

@@ -2,8 +2,8 @@
 
 from ngsolve import*
 from cosmos.solvers.solvers import BackwardEuler
-from cosmos.solvers.container import Container
-from cosmos.solvers.adr_vol import VolADR
+from cosmos.pdes.container import Container
+from cosmos.pdes.pde_adr_vol import VolADR
 from netgen.occ import *
 import numpy as np
 
