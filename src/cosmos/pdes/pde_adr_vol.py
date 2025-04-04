@@ -1,8 +1,9 @@
 from ngsolve import *
 from cosmos.pdes.pde_base import BasePDE
 from cosmos.utils.tools import params_check
-from cosmos.pdes.pde_tools import compute_error
+from cosmos.pdes.pde_tools import compute_error, MandBP
 import numpy as np
+import scipy.sparse as sp
 
 class VolADR(BasePDE):
 
@@ -22,8 +23,7 @@ class VolADR(BasePDE):
         defaults = [None, None, None, None, None, 
                     {}, {}, {}, {}, {},
                     '.*', "volume_adr", False,
-                    False, [-np.inf, np.inf],
-                    None, None]
+                    False, None]
 
         if kwargs:
             params_check(kwargs, accepted_keys, defaults)
@@ -32,7 +32,8 @@ class VolADR(BasePDE):
                 if i<5 and isinstance(self.params[key], (int, float)):
                     self.params[key] = CF(self.params[key])
         else:
-            params_check({}, accepted_keys, defaults)
+            self.params = {}
+            params_check(self.params, accepted_keys, defaults) 
 
         self.gfu = self.params['u0']
 
@@ -63,10 +64,9 @@ class VolADR(BasePDE):
             self.gfu.Set(self.params['u0'])
         self.gfu_old.vec.data = self.gfu.vec.data
 
+        self.gfu_comp = self.gfu
+        self.gfu_old_comp = self.gfu_old
         self.gfu_save = [self.gfu]
-
-        if self.params['MP']:
-            self.params['gfu0'] = self.gfu.vec.Copy()
 
         for save in self.save_error:
             save.Initialize(data, self)
@@ -119,7 +119,10 @@ class VolADR(BasePDE):
         n = specialcf.normal(data.mesh.dim)
         h = specialcf.mesh_size
 
-        rhs = self.params['rhs']*test*dx
+        if self.params['rhs']:
+            rhs = self.params['rhs']*test*dx
+        else:
+            rhs = CF(0)*test*dx
         
         if self.params['dir_d']:
             alpha = 5 * self.fes_order * (self.fes_order+1)
@@ -143,11 +146,55 @@ class VolADR(BasePDE):
             
         return rhs
 
-    def GetMass(self, mesh_data, trial, test):
-        
-        mass = 1/mesh_data['dt']*trial*test*dx
-            
+    def GetMass(self, data, trial, test):
+        mass = 1/data.dt*trial*test*dx
         return mass
+    
+    def GetMassOld(self, data, trial, test):
+        return self.GetMass(data, trial, test)
+    
+    def PreProcess(self, data):
+
+        pass
+    
+    def PostProcess(self, data):
+
+        if self.params['BP'] and not self.params['MP']:
+
+            gfu_vec = self.gfu.vec.Copy().FV().NumPy()
+            gfu_new = MandBP(gfu_vec, BP = self.params['BP'])
+            self.gfu.vec.data = gfu_new
+
+        elif self.params['MP']:
+
+            if hasattr(data, 'dt'):
+                dt = data.dt.Get()
+            else:
+                raise Exception('A time-dependent simulation is needed to impose conservative mass!')
+
+            if data.mesh.dim == 2:
+                ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
+                dx_lumped = dx(intrules = { TRIG : ir })
+            elif data.mesh.dim == 3:
+                ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
+                dx_lumped = dx(intrules = { TRIG : ir })
+            A = BilinearForm(self.gfu.space, symmetric = True)
+            u, v = self.gfu.space.TnT()
+            A += u*v*dx_lumped
+            A.Assemble()
+            rows,cols,vals = A.mat.COO()
+            weights = sp.csr_matrix((vals,(rows,cols))).diagonal()
+            gfu_vec = self.gfu.vec.Copy().FV().NumPy()
+
+            if self.params['BP']:
+                BP = self.params['BP']
+            else:
+                BP = [-np.inf, np.inf]
+
+            gfu_new = MandBP(gfu_vec, weights=weights, BP=BP,
+                                MP=self.params['MP'], mass0 =self.mass0, dt = dt)
+
+            self.gfu.vec.data = gfu_new
 
     def Update(self, data):
 

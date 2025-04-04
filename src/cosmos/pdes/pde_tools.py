@@ -106,7 +106,7 @@ class SaveError():
         err = pde.get_error(data, self.ex_sol, self.norm)
 
         if hasattr(data, 't'):
-            towrite = [data['t'].Get()] + err
+            towrite = [data.t.Get()] + err
         else:
             towrite = err
 
@@ -145,11 +145,12 @@ class SaveSolution():
     def Save(self, data, pde):
 
         if hasattr(data, 't'):
-            self.vtk.Do(time = data.t.Get(), vb = self.v_or_b)
+            if data.iter%self.sample_rate == 0:
+                self.vtk.Do(time = data.t.Get(), vb = self.v_or_b)
         else:
             self.vtk.Do(vb = self.v_or_b)
 
-def MandBP(dt, gfu_vec, weights, BP, MP=False, mass0=None):
+def MandBP(gfu_vec, dt = None, weights=None, BP=None, MP=False, mass0=None):
 
     tol = 1e-10
 

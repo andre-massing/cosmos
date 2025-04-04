@@ -34,3 +34,26 @@ class SolData():
             self.t = kwargs['t']
             self.dt = kwargs['dt']
             self.T = kwargs['T']
+            self.iter = 0
+
+class BaseSolver():
+
+    def __init__(self, **kwargs):
+
+        pass
+
+    def AddPDE(self, *args):
+
+        pass
+
+    def Solve(self):
+
+        pass
+                    
+    def PreProcess(self):
+
+        pass
+
+    def PostProcess(self):
+
+        pass

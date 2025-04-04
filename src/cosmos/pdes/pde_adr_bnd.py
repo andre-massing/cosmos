@@ -1,8 +1,9 @@
 from ngsolve import *
 from cosmos.pdes.pde_base import BasePDE
 from cosmos.utils.tools import params_check
-from cosmos.pdes.pde_tools import compute_error
+from cosmos.pdes.pde_tools import compute_error, MandBP
 import numpy as np
+import scipy.sparse as sp
 
 class BndADR(BasePDE):
 
@@ -30,7 +31,8 @@ class BndADR(BasePDE):
                 if i<5 and isinstance(self.params[key], (int, float)):
                     self.params[key] = CF(self.params[key])
         else:
-            params_check({}, accepted_keys, defaults)
+            self.params = {}
+            params_check(self.params, accepted_keys, defaults) 
 
         self.gfu = self.params['u0']
 
@@ -41,10 +43,10 @@ class BndADR(BasePDE):
         self.name = [self.params['name']]
         
         if self.params['periodic']:
-            self.fes = Compress(Periodic(H1(data.mesh, order = self.fes_order, dgjumps = True, 
+            self.fes = Compress(Periodic(H1(data.mesh, order = self.fes_order, 
                 definedon=self.domain)))
         else:
-            self.fes = Compress(H1(data.mesh, order = self.fes_order, dgjumps = True, 
+            self.fes = Compress(H1(data.mesh, order = self.fes_order,
                 definedon=self.domain))
         
         self.gfu = GridFunction(self.fes)
@@ -63,6 +65,25 @@ class BndADR(BasePDE):
 
         self.gfu_save = [GridFunction(Compress(H1(data.mesh, order = self.fes_order)))]
         self.gfu_save[0].Set(self.gfu, definedon = self.domain)
+
+        self.gfu_comp = self.gfu
+        self.gfu_old_comp = self.gfu_old
+
+        if self.params['MP']:
+            if data.mesh.dim == 2:
+                ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
+                ds_lumped = ds(intrules = { SEGM : ir })
+            elif data.mesh.dim == 3:
+                ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
+                ds_lumped = ds(intrules = { TRIG : ir })
+            A = BilinearForm(self.gfu.space, symmetric = True)
+            u, v = self.gfu.space.TnT()
+            A += u*v*ds_lumped
+            A.Assemble()
+            rows,cols,vals = A.mat.COO()
+            weights = sp.csr_matrix((vals,(rows,cols))).diagonal()
+            gfu0_vec = self.gfu.vec.Copy().FV().NumPy()
+            self.mass0 = np.sum(weights*gfu0_vec)
 
         for save in self.save_error:
             save.Initialize(data, self)
@@ -97,7 +118,6 @@ class BndADR(BasePDE):
             if self.params['dir_d']:
 
                 dir_d = {}
-
                 alpha = 5 * self.fes_order * (self.fes_order+1)
                 for i, (key, value) in enumerate(self.params['dir_d'].items()):
 
@@ -218,10 +238,54 @@ class BndADR(BasePDE):
         return rhs
 
     def GetMass(self, data, trial, test):
-
-        mass = 1/data['dt']*trial*test*ds
-                
+        mass = 1/data.dt*trial*test*ds
         return mass
+    
+    def GetMassOld(self, data, trial, test):
+        return self.GetMass(data, trial, test)
+    
+    def PreProcess(self, data):
+
+        pass
+    
+    def PostProcess(self, data):
+
+        if self.params['BP'] and not self.params['MP']:
+
+            gfu_vec = self.gfu.vec.Copy().FV().NumPy()
+            gfu_new = MandBP(gfu_vec, BP = self.params['BP'])
+            self.gfu.vec.data = gfu_new
+
+        elif self.params['MP']:
+
+            if hasattr(data, 'dt'):
+                dt = data.dt.Get()
+            else:
+                raise Exception('A time-dependent simulation is needed to impose conservative mass!')
+
+            if data.mesh.dim == 2:
+                ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
+                ds_lumped = ds(intrules = { SEGM : ir })
+            elif data.mesh.dim == 3:
+                ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
+                ds_lumped = ds(intrules = { TRIG : ir })
+            A = BilinearForm(self.gfu.space, symmetric = True)
+            u, v = self.gfu.space.TnT()
+            A += u*v*ds_lumped
+            A.Assemble()
+            rows,cols,vals = A.mat.COO()
+            weights = sp.csr_matrix((vals,(rows,cols))).diagonal()
+            gfu_vec = self.gfu.vec.Copy().FV().NumPy()
+
+            if self.params['BP']:
+                BP = self.params['BP']
+            else:
+                BP = [-np.inf, np.inf]
+
+            gfu_new = MandBP(gfu_vec, weights=weights, BP=BP,
+                                MP=self.params['MP'], mass0 =self.mass0, dt = dt)
+
+            self.gfu.vec.data = gfu_new
     
     def Update(self, data):
 

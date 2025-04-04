@@ -1,8 +1,8 @@
 from ngsolve import *
 from cosmos.pdes.pde_adr_vol import VolADR
-from cosmos.utils.tools import params_check
-from cosmos.pdes.pde_tools import compute_error
+from cosmos.pdes.pde_tools import MandBP
 import numpy as np
+import scipy.sparse as sp
 
 class AdVolADR(VolADR):
 
@@ -18,7 +18,7 @@ class AdVolADR(VolADR):
 
         if data.mesh.ne == 0:
             raise Exception('The mesh has no volume elements! The PDE ' 
-                            + self.name + ' cannot be initialized')
+                            + str(self.name) + ' cannot be initialized')
         
         if self.params['periodic']:
             self.fes = Compress(Periodic(H1(data.mesh, order = self.fes_order, 
@@ -37,10 +37,25 @@ class AdVolADR(VolADR):
             self.gfu.Set(self.params['u0'])
         self.gfu_old.vec.data = self.gfu.vec.data
 
+        self.gfu_comp = self.gfu
+        self.gfu_old_comp = self.gfu_old
         self.gfu_save = [self.gfu]
 
         if self.params['MP']:
-            self.params['gfu0'] = self.gfu.vec.Copy()
+            if data.mesh.dim == 2:
+                ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
+                dx_lumped = dx(intrules = { TRIG : ir })
+            elif data.mesh.dim == 3:
+                ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
+                dx_lumped = dx(intrules = { TRIG : ir })
+            A = BilinearForm(self.gfu.space, symmetric = True)
+            u, v = self.gfu.space.TnT()
+            A += u*v*dx_lumped
+            A.Assemble()
+            rows,cols,vals = A.mat.COO()
+            weights = sp.csr_matrix((vals,(rows,cols))).diagonal()
+            gfu0_vec = self.gfu.vec.Copy().FV().NumPy()
+            self.mass0 = np.sum(weights*gfu0_vec)
 
         for save in self.save_error:
             save.Initialize(data, self)

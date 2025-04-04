@@ -34,6 +34,14 @@ class BasePDE():
         
         raise NotImplementedError
     
+    def PreProcess(self, *args, **kwargs):
+        
+        raise NotImplementedError
+    
+    def PostProcess(self, *args, **kwargs):
+        
+        raise NotImplementedError
+    
     def Update(self, *args, **kwargs):
         
         raise NotImplementedError

@@ -5,18 +5,14 @@ from cosmos.solvers.schemes import Scheme
 from cosmos.utils.tools import params_check
 from cosmos.solvers.solver_steady import SteadySolver
 from cosmos.solvers.solver_tools import print_mesh_info
-import tqdm
+from tqdm import tqdm
 
 class UnsteadySolver(SteadySolver):
 
-    def __init__(self, mesh, dt, t, T, scheme, **kwargs):
-
-        if not isinstance(scheme, Scheme):
-            raise TypeError("The added scheme must inherit from Scheme")
-        self.scheme = scheme
+    def __init__(self, mesh, dt, t, T, **kwargs):
 
         accepted_keys = ['verbose']
-        defaults = [0, False]
+        defaults = [0]
         params_check(params = kwargs, 
                     accepted_keys = accepted_keys, 
                     defaults = defaults)
@@ -24,18 +20,17 @@ class UnsteadySolver(SteadySolver):
         self.verbose = kwargs['verbose']
         
         self.data = SolData(mesh, dt=dt, t=t, T=T)
+        self.t0 = self.data.t.Get()
         if self.verbose > 0:
             print_mesh_info(self.data.mesh)
         
         self.PDEs = []
 
-        self.iter = 0
-
     def SolveStep(self):
 
-        for pde in self.PDEs:
+        for pde, scheme in self.PDEs:
 
-            self.scheme.Solve(self.data, pde)
+            scheme.Solve(self.data, pde)
 
     def __generator__(self):
 
@@ -57,36 +52,19 @@ class UnsteadySolver(SteadySolver):
             if self.verbose>0:
                 print('-'*10, '\nStarting the simulation...')
 
-            if self.verbose>0:
+            for step in tqdm(range(max_steps), desc="\t Running Simulation...", 
+                ascii=False, ncols=75):
 
-                for step in tqdm(range(max_steps), desc="\t Running Simulation...", 
-                    ascii=False, ncols=75):
+                self.data.iter += 1
 
-                    self.iter += 1
+                self.PreProcess()
+                self.SolveStep()
 
-                    self.PreProcess()
-                    self.SolveStep()
+                self.data.t.Set(self.data.t.Get() + self.data.dt.Get())
 
-                    self.data.t.Set(self.data.t.Get() + self.data.dt.Get())
+                self.PostProcess()
 
-                    self.PostProcess()
-
-                    yield
-
-            else:
-
-                for step in range(max_steps):
-
-                    self.iter += 1
-
-                    self.PreProcess()
-                    self.SolveStep()
-
-                    self.data.t.Set(self.data.t.Get() + self.data.dt.Get())
-                    
-                    self.PostProcess()
-
-                    yield
+                yield
 
             if self.verbose>0:
                 print('Simulation concluded successfully')
@@ -97,17 +75,19 @@ class UnsteadySolver(SteadySolver):
 
     def Initialize(self):
 
-        for pde in self.PDEs:
+        for pde, _ in self.PDEs:
 
             pde.Initialize(self.data)
+            pde.Update(self.data)
 
     def Solve(self):
 
+        self.data.t.Set(self.t0)
         for step in self(): 
                 pass
         
     def PostProcess(self):
         
-        for pde in self.PDEs:
+        for pde, _ in self.PDEs:
 
             pde.Update(self.data)

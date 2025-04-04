@@ -22,31 +22,31 @@ def compute_stab_mc(data, gfu, params):
 
     V2 = gfu.space
         
-    if data['mesh'].dim == 2:
+    if data.mesh.dim == 2:
         
-        dV = H1(data['mesh'], order=1,\
-                    definedon = data['mesh'].Boundaries('.*'))
+        dV = H1(data.mesh, order=1,\
+                    definedon = data.mesh.Boundaries('.*'))
         
-    elif data['mesh'].dim == 3:
+    elif data.mesh.dim == 3:
         
-        dV = VectorFacetSurface(data['mesh'], order=1,\
-                definedon = data['mesh'].Boundaries('.*'))
+        dV = VectorFacetSurface(data.mesh, order=1,\
+                definedon = data.mesh.Boundaries('.*'))
 
     h = specialcf.mesh_size
-    ns = specialcf.normal(data['mesh'].dim)
-    tE = specialcf.tangential(data['mesh'].dim)
-    if data['mesh'].dim == 2:
+    ns = specialcf.normal(data.mesh.dim)
+    tE = specialcf.tangential(data.mesh.dim)
+    if data.mesh.dim == 2:
         nE = tE
     else:
         nE = Cross(ns, tE)
-    Ps = Id(data['mesh'].dim) - OuterProduct(ns, ns)
+    Ps = Id(data.mesh.dim) - OuterProduct(ns, ns)
 
     fes0 = V2*dV
     gfu0 = GridFunction(fes0)
     
     (kappa0, dkappa0), (eta0, deta0) = fes0.TnT()
 
-    if data['mesh'].dim == 2:
+    if data.mesh.dim == 2:
 
         dkappa0 = dkappa0*tE
         deta0 = deta0*tE
@@ -54,7 +54,7 @@ def compute_stab_mc(data, gfu, params):
         jump_dkappadn0 = (kappa0.Trace().Deriv()*nE-dkappa0)
         jump_detadn0 = (eta0.Trace().Deriv()*nE-deta0)
 
-    elif data['mesh'].dim == 3:
+    elif data.mesh.dim == 3:
 
         jump_dkappadn0 = (kappa0.Trace().Deriv()*nE-dkappa0.Trace())
         jump_detadn0 = (eta0.Trace().Deriv()*nE-deta0.Trace())
@@ -69,22 +69,23 @@ def compute_stab_mc(data, gfu, params):
 
     F0 += -InnerProduct(Ps, Grad(eta0).Trace())*ds
 
-    if params['clamped_bnd']:
+    if 'clamped_bnd' in params.keys():
+        if params['clamped_bnd']:
 
-        if data['mesh'].dim == 3:
-            gfF = GridFunction(FacetSurface(data['mesh'], order=0))
-            gfF.Set(1, definedon=data['mesh'].BBoundaries(params['clamped_bnd']))
+            if data.mesh.dim == 3:
+                gfF = GridFunction(FacetSurface(data.mesh, order=0))
+                gfF.Set(1, definedon=data.mesh.BBoundaries(params['clamped_bnd']))
 
-            F0 += InnerProduct(nE, eta0) * gfF * ds(element_boundary=True)
+                F0 += InnerProduct(nE, eta0) * gfF * ds(element_boundary=True)
 
-        elif data['mesh'].dim == 2:
+            elif data.mesh.dim == 2:
 
-            gfF = GridFunction(H1(data['mesh'], order =1,\
-                    definedon=data['mesh'].Boundaries('.*')))
-            gfF.Set(1, definedon=data['mesh'].BBoundaries(params['clamped_bnd']))
+                gfF = GridFunction(H1(data.mesh, order =1,\
+                        definedon=data.mesh.Boundaries('.*')))
+                gfF.Set(1, definedon=data.mesh.BBoundaries(params['clamped_bnd']))
 
-            F0 += InnerProduct(gfF*nE, eta0) \
-                * ds(element_boundary=True)
+                F0 += InnerProduct(gfF*nE, eta0) \
+                    * ds(element_boundary=True)
 
     F0.Assemble()
     gfu0.vec.data = A0.mat.Inverse(fes0.FreeDofs())*F0.vec
@@ -96,13 +97,13 @@ def compute_mc(data, gfu, params):
     V2 = gfu.space
 
     h = specialcf.mesh_size
-    ns = specialcf.normal(data['mesh'].dim)
-    tE = specialcf.tangential(data['mesh'].dim)
-    if data['mesh'].dim == 2:
+    ns = specialcf.normal(data.mesh.dim)
+    tE = specialcf.tangential(data.mesh.dim)
+    if data.mesh.dim == 2:
         nE = tE
     else:
         nE = Cross(ns, tE)
-    Ps = Id(data['mesh'].dim) - OuterProduct(ns, ns)
+    Ps = Id(data.mesh.dim) - OuterProduct(ns, ns)
 
     fes0 = V2
     gfu0 = GridFunction(fes0)
@@ -117,22 +118,23 @@ def compute_mc(data, gfu, params):
 
     F0 += -InnerProduct(Ps, Grad(eta0).Trace())*ds
 
-    if params['clamped_bnd']:
+    if 'clamped_bnd' in params.keys():
+        if params['clamped_bnd']:
 
-        if data['mesh'].dim == 3:
-            gfF = GridFunction(FacetSurface(data['mesh'], order=0))
-            gfF.Set(1, definedon=data['mesh'].BBoundaries(params['clamped_bnd']))
+            if data.mesh.dim == 3:
+                gfF = GridFunction(FacetSurface(data.mesh, order=0))
+                gfF.Set(1, definedon=data.mesh.BBoundaries(params['clamped_bnd']))
 
-            F0 += InnerProduct(nE, eta0) * gfF * ds(element_boundary=True)
+                F0 += InnerProduct(nE, eta0) * gfF * ds(element_boundary=True)
 
-        elif data['mesh'].dim == 2:
+            elif data.mesh.dim == 2:
 
-            gfF = GridFunction(H1(data['mesh'], order =1,\
-                    definedon=data['mesh'].Boundaries('.*')))
-            gfF.Set(1, definedon=data['mesh'].BBoundaries(params['clamped_bnd']))
+                gfF = GridFunction(H1(data.mesh, order =1,\
+                        definedon=data.mesh.Boundaries('.*')))
+                gfF.Set(1, definedon=data.mesh.BBoundaries(params['clamped_bnd']))
 
-            F0 += InnerProduct(gfF*nE, eta0) \
-                * ds(element_boundary=True)
+                F0 += InnerProduct(gfF*nE, eta0) \
+                    * ds(element_boundary=True)
 
     F0.Assemble()
     gfu0.vec.data = A0.mat.Inverse(fes0.FreeDofs())*F0.vec
@@ -141,12 +143,12 @@ def compute_mc(data, gfu, params):
 
 def compute_displ(data, function, dX, bc = '.*'):
 
-    if data['mesh'].ne == 0:
+    if data.mesh.ne == 0:
 
-        fes = VectorH1(data['mesh'], order=dX.space.globalorder)
+        fes = VectorH1(data.mesh, order=dX.space.globalorder)
 
         gfu = GridFunction(fes)
-        gfu.Set(function, definedon = data['mesh'].Boundaries(bc))
+        gfu.Set(function, definedon = data.mesh.Boundaries(bc))
 
         dX.vec.data += gfu.vec.data
     
@@ -159,14 +161,14 @@ def compute_displ(data, function, dX, bc = '.*'):
         def NeoHooke (C):
             return Trace(C)
 
-        fes = VectorH1(data['mesh'], order=dX.space.globalorder, dirichlet='.*')
+        fes = VectorH1(data.mesh, order=dX.space.globalorder, dirichlet='.*')
         u  = fes.TrialFunction()
 
         a = BilinearForm(fes)
         a += Variation(NeoHooke(C(u)).Compile()*dx)
 
         gfu = GridFunction(fes)
-        gfu.Set(function, definedon = data['mesh'].Boundaries(bc))
+        gfu.Set(function, definedon = data.mesh.Boundaries(bc))
 
         Newton(a, gfu, maxit = 20, printing=False)
 

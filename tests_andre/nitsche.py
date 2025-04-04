@@ -11,12 +11,9 @@ mesh = Mesh(unit_square.GenerateMesh(maxh=0.05))
 order = 1
 
 V = H1(mesh, order=order)
-u = V.TrialFunction()
-v = V.TestFunction()
-
+u, v  = V.TnT()
 dX = GridFunction(VectorH1(mesh))
 dX.Set(CF((x, y)))
-
 n = specialcf.normal(2)
 h = specialcf.mesh_size
 penalty = 10
@@ -30,17 +27,17 @@ a = BilinearForm(V, symmetric=True)
 a += grad(u)*grad(v)*dx(deformation=dX)
 a += (-n*grad(u)*v )*ds(deformation=dX, skeleton=True)
 a += (-n*grad(v)*u)*ds(deformation=dX, skeleton=True)
-a += (penalty/h*u*v)*ds(deformation=dX)
+a += (penalty/h*u*v)*ds(deformation=dX, skeleton=True)
 a.Assemble()
 
 l = LinearForm(V)
 l +=  f* v * dx(deformation=dX)
 l += ( -n*grad(v)*u_ex)*ds(deformation=dX, skeleton=True)
-l += ( penalty/h*u_ex*v)*ds(deformation=dX)
+l += ( penalty/h*u_ex*v)*ds(deformation=dX, skeleton=True)
 l.Assemble()
 
 u = GridFunction(V)
-u.vec.data = a.mat.Inverse() * l.vec
+u.vec.data = a.mat.Inverse(freedofs = V.FreeDofs()) * l.vec
 
 Draw(u)
 

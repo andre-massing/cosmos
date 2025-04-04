@@ -1,10 +1,10 @@
 from ngsolve import *
 from cosmos.pdes.pde_adr_bnd import BndADR
-from cosmos.pdes.pde_tools import compute_error
+from cosmos.pdes.pde_tools import compute_error, MandBP
 import os
 from ngsolve.webgui import Draw
 import numpy as np
-import scipy.sparse as scipy
+import scipy.sparse as sp
 
 class AdBndADR(BndADR):
 
@@ -44,14 +44,30 @@ class AdBndADR(BndADR):
                         definedon=self.domain)
         self.gfu_old.vec.data = self.gfu.vec.data
 
-        if self.params['MP']:
-            self.params['gfu0'] = self.gfu.components[0].vec.Copy()
-
         self.trial = self.fes.TrialFunction()
         self.test = self.fes.TestFunction()
 
         self.gfu_save = [GridFunction(Compress(H1(data.mesh, order = self.fes_order)))]
         self.gfu_save[0].Set(self.gfu.components[0], definedon = self.domain)
+
+        self.gfu_comp = self.gfu.components
+        self.gfu_old_comp = self.gfu_old.components
+
+        if self.params['MP']:
+            if data.mesh.dim == 2:
+                ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
+                ds_lumped = ds(intrules = { SEGM : ir })
+            elif data.mesh.dim == 3:
+                ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
+                ds_lumped = ds(intrules = { TRIG : ir })
+            A = BilinearForm(self.gfu_comp[0].space, symmetric = True)
+            u, v = self.gfu_comp[0].space.TnT()
+            A += u*v*ds_lumped
+            A.Assemble()
+            rows,cols,vals = A.mat.COO()
+            weights = sp.csr_matrix((vals,(rows,cols))).diagonal()
+            gfu0_vec = self.gfu_comp[0].vec.Copy().FV().NumPy()
+            self.mass0 = np.sum(weights*gfu0_vec)
 
         for save in self.save_error:
             save.Initialize(data, self)
@@ -123,7 +139,6 @@ class AdBndADR(BndADR):
             if self.params['dir_b']:
 
                 dir_b = {}
-
                 for i, (key, value) in enumerate(self.params['dir_b'].items()):
                     dir_b[str(i)] = GridFunction(facet_space)
                     dir_b[str(i)].Set(1, definedon=data.mesh.BBoundaries(key))
@@ -131,7 +146,7 @@ class AdBndADR(BndADR):
                                     InnerProduct(nE, b)*trial[0], 0)\
                                         *dir_b[str(i)]*test[0]*ds(element_boundary=True)
                     
-            stab = Norm(self.params['b'])*h
+            stab = Norm(b)*h
             if self.params['d']:
                 stab += Norm(self.params['d'])
             if self.params['c']:
@@ -183,7 +198,6 @@ class AdBndADR(BndADR):
         if self.params['neu_d']:
 
             neu_d = {}
-
             for i, (key, value) in enumerate(self.params['neu_d'].items()):                
                 neu_d[str(i)] = GridFunction(facet_space)
                 neu_d[str(i)].Set(1, definedon=data.mesh.BBoundaries(key))
@@ -192,9 +206,7 @@ class AdBndADR(BndADR):
         if self.params['neu_b']:
 
             b = Ps*self.params['b']
-
             neu_b = {}
-
             for i, (key, value) in enumerate(self.params['neu_b'].items()):
                 neu_b[str(i)] = GridFunction(facet_space)
                 neu_b[str(i)].Set(1, definedon=data.mesh.BBoundaries(key))
@@ -205,7 +217,6 @@ class AdBndADR(BndADR):
         if self.params['Fneu_b']:
 
             Fneu_b = {}
-
             for i, (key, value) in enumerate(self.params['Fneu_b'].items()):
                 Fneu_b[str(i)] = GridFunction(facet_space)
                 Fneu_b[str(i)].Set(1, definedon=data.mesh.BBoundaries(key))
@@ -215,7 +226,6 @@ class AdBndADR(BndADR):
         if self.params['dir_d']:
 
             alpha = 5 * self.fes_order * (self.fes_order+1)
-
             dir_d = {}
             for i, (key, value) in enumerate(self.params['dir_d'].items()):
                 dir_d[str(i)] = GridFunction(facet_space)
@@ -227,7 +237,6 @@ class AdBndADR(BndADR):
         if self.params['dir_b']:
 
             b = Ps*self.params['b']
-
             dir_b = {}
             for i, (key, value) in enumerate(self.params['dir_b'].items()):
                 dir_b[str(i)] = GridFunction(facet_space)
@@ -239,10 +248,54 @@ class AdBndADR(BndADR):
         return rhs
 
     def GetMass(self, data, trial, test):
-
-        mass = 1/data['dt']*trial[0]*test[0]*ds
-                
+        mass = 1/data.dt*trial[0]*test[0]*ds 
         return mass
+    
+    def GetMassOld(self, data, trial, test):
+        return self.GetMass(data, trial, test)
+    
+    def PreProcess(self, data):
+
+        pass
+    
+    def PostProcess(self, data):
+
+        if self.params['BP'] and not self.params['MP']:
+
+            gfu_vec = self.gfu_comp[0].vec.Copy().FV().NumPy()
+            gfu_new = MandBP(gfu_vec, BP = self.params['BP'])
+            self.gfu_comp[0].vec.data = gfu_new
+
+        elif self.params['MP']:
+
+            if hasattr(data, 'dt'):
+                dt = data.dt.Get()
+            else:
+                raise Exception('A time-dependent simulation is needed to impose conservative mass!')
+
+            if data.mesh.dim == 2:
+                ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
+                ds_lumped = ds(intrules = { SEGM : ir })
+            elif data.mesh.dim == 3:
+                ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
+                ds_lumped = ds(intrules = { TRIG : ir })
+            A = BilinearForm(self.gfu_comp[0].space, symmetric = True)
+            u, v = self.gfu_comp[0].space.TnT()
+            A += u*v*ds_lumped
+            A.Assemble()
+            rows,cols,vals = A.mat.COO()
+            weights = sp.csr_matrix((vals,(rows,cols))).diagonal()
+            gfu_vec = self.gfu_comp[0].vec.Copy().FV().NumPy()
+
+            if self.params['BP']:
+                BP = self.params['BP']
+            else:
+                BP = [-np.inf, np.inf]
+
+            gfu_new = MandBP(gfu_vec, weights=weights, BP=BP,
+                                MP=self.params['MP'], mass0 =self.mass0, dt = dt)
+
+            self.gfu_comp[0].vec.data = gfu_new
 
     def Update(self, data):
 
