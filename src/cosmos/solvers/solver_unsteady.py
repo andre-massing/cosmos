@@ -1,5 +1,5 @@
 from ngsolve import *
-from cosmos.solvers.solver_base import SolData
+from cosmos.solvers.solver_base import SolverData
 from cosmos.pdes.pde_base import BasePDE
 from cosmos.solvers.schemes import Scheme
 from cosmos.utils.tools import params_check
@@ -19,7 +19,7 @@ class UnsteadySolver(SteadySolver):
         
         self.verbose = kwargs['verbose']
         
-        self.data = SolData(mesh, dt=dt, t=t, T=T)
+        self.data = SolverData(mesh, dt=dt, t=t, T=T)
         self.t0 = self.data.t.Get()
         if self.verbose > 0:
             print_mesh_info(self.data.mesh)
@@ -29,8 +29,10 @@ class UnsteadySolver(SteadySolver):
     def SolveStep(self):
 
         for pde, scheme in self.PDEs:
-
+            pde.PreProcess(self.data)
             scheme.Solve(self.data, pde)
+            pde.PostProcess(self.data)
+            self.data.UpdateALE()
 
     def __generator__(self):
 
@@ -72,12 +74,19 @@ class UnsteadySolver(SteadySolver):
 
     def __call__(self):
         return self.__generator__()
+    
+    def PreProcess(self):
+
+        self.data.prev_dt.append(self.data.dt.Get())    
+        if len(self.data.prev_dt)>6:
+            self.data.prev_dt.pop(0)
+        self.data.UpdateALE()
 
     def Initialize(self):
 
+        self.data.prev_dX.append(self.data.dX.vec.Copy())
+        self.data.prev_V.append(self.data.V.vec.Copy())
         for pde, _ in self.PDEs:
-
-            pde.Initialize(self.data)
             pde.Update(self.data)
 
     def Solve(self):
@@ -87,7 +96,11 @@ class UnsteadySolver(SteadySolver):
                 pass
         
     def PostProcess(self):
-        
-        for pde, _ in self.PDEs:
 
+        self.data.prev_dX.append(self.data.dX.vec.Copy())
+        self.data.prev_V.append(self.data.V.vec.Copy())    
+        if len(self.data.prev_dX)>6:
+            self.data.prev_dX.pop(0)
+            self.data.prev_V.pop(0)
+        for pde, _ in self.PDEs:
             pde.Update(self.data)

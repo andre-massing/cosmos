@@ -13,18 +13,18 @@ class CahnHilliardVol(BasePDE):
         super().__init__()
 
         self.params = kwargs
-
-        self.fields = 1
+        self.fields = 2
+        self.nonlinear = True
 
         # Initialize the parameters
-        accepted_keys = ['D', 'gamma', 'u0', 'rhs',
+        accepted_keys = ['D', 'gamma', 'epsilon', 'u0', 'rhs',
                          'neu_c', 'neu_mu', 'dir_c', 'dir_mu',
                          'domain', 'name', 'periodic',
-                         'MP', 'BP']
-        defaults = [None, None, None, None, 
+                         'MP', 'BP', 'ALE']
+        defaults = [None, None, None, None, None, 
                     {}, {}, {}, {},
                     '.*', ['c', 'mu'], False,
-                    False, None]
+                    False, None, None]
 
         if kwargs:
             params_check(kwargs, accepted_keys, defaults)
@@ -34,16 +34,24 @@ class CahnHilliardVol(BasePDE):
                     self.params[key] = CF(self.params[key])
         else:
             self.params = {}
-            params_check(self.params, accepted_keys, defaults) 
-
-        self.gfu = [self.params['u0'][0], self.params['u0'][1]]
-        self.nl = []
+            params_check(self.params, accepted_keys, defaults)
 
     def Initialize(self, data):
+
+        if self.initialized:
+            return
+        else:
+            self.initialized = True
 
         self.dim = data.mesh.dim
         self.domain = data.mesh.Materials(self.params['domain'])
         self.name = self.params['name']
+        if self.params['ALE']:
+            self.X = self.params['ALE'].X
+            self.X_old = self.params['ALE'].X_old
+        else:
+            self.X = GridFunction(VectorH1(data.mesh))
+            self.X_old = GridFunction(VectorH1(data.mesh))
 
         if data.mesh.ne == 0:
             raise Exception('The mesh has no volume elements! The PDE ' 
@@ -101,28 +109,28 @@ class CahnHilliardVol(BasePDE):
         h = specialcf.mesh_size
 
         if self.params['D']:
-            lhs = self.params['D']*grad(trial[1])*grad(test[0])*dx
+            lhs = self.params['D']*grad(trial[1])*grad(test[0])*dx(deformation=self.X)
                     
             if self.params['dir_mu']:
                 alpha = 5 * self.fes_order * (self.fes_order+1)
                 for key, value in self.params['dir_mu'].items():
-                   lhs +=  - self.params['gamma']*InnerProduct(n, grad(trial[1]))*test[0]*ds(definedon = key, skeleton=True) \
-                        - self.params['gamma']*InnerProduct(n, grad(test[0]))*trial[1]*ds(definedon = key, skeleton=True)\
-                        + self.params['gamma']*alpha/h*trial[1]*test[1]*ds(definedon = key, skeleton = True)
+                   lhs +=  - self.params['gamma']*InnerProduct(n, grad(trial[1]))*test[0]*ds(definedon = key, skeleton=True, deformation=self.X) \
+                        - self.params['gamma']*InnerProduct(n, grad(test[0]))*trial[1]*ds(definedon = key, skeleton=True, deformation=self.X)\
+                        + self.params['gamma']*alpha/h*trial[1]*test[1]*ds(definedon = key, skeleton = True, deformation=self.X)
         else:
-            lhs =  CF(0)*grad(trial[1])*grad(test[0])*dx
+            lhs =  CF(0)*grad(trial[1])*grad(test[0])*dx(deformation=self.X)
 
-        lhs += trial[1]*test[1]*dx
+        lhs += trial[1]*test[1]*dx(deformation=self.X)
 
         if self.params['gamma']:
-            lhs += -1*self.params['gamma']*grad(trial[0])*grad(test[1])*dx
+            lhs += -1*self.params['gamma']*grad(trial[0])*grad(test[1])*dx(deformation=self.X)
 
             if self.params['dir_c']:
                 alpha = 5 * self.fes_order * (self.fes_order+1)
                 for key, value in self.params['dir_c'].items():
-                    lhs +=  self.params['D']*InnerProduct(n, grad(trial[0]))*test[1]*ds(definedon = key, skeleton=True) \
-                        + self.params['D']*InnerProduct(n, grad(test[1]))*trial[0]*ds(definedon = key, skeleton=True)\
-                        + self.params['D']*alpha/h*trial[0]*test[0]*ds(definedon = key, skeleton = True)
+                    lhs +=  self.params['D']*InnerProduct(n, grad(trial[0]))*test[1]*ds(definedon = key, skeleton=True, deformation=self.X) \
+                        + self.params['D']*InnerProduct(n, grad(test[1]))*trial[0]*ds(definedon = key, skeleton=True, deformation=self.X)\
+                        + self.params['D']*alpha/h*trial[0]*test[0]*ds(definedon = key, skeleton = True, deformation=self.X)
             
         return lhs
 
@@ -132,81 +140,44 @@ class CahnHilliardVol(BasePDE):
         h = specialcf.mesh_size
 
         if self.params['rhs']:
-            rhs = self.params['rhs'][0]*test[0]*dx
-            rhs += self.params['rhs'][1]*test[1]*dx
+            rhs = self.params['rhs'][0]*test[0]*dx(deformation=self.X)
+            rhs += self.params['rhs'][1]*test[1]*dx(deformation=self.X)
         else:
-            rhs = CF(0)*test[0]*dx
-            rhs += CF(0)*test[1]*dx
+            rhs = CF(0)*test[0]*dx(deformation=self.X)
+            rhs += CF(0)*test[1]*dx(deformation=self.X)
         
         if self.params['dir_c']:
             alpha = 5 * self.fes_order * (self.fes_order+1)
             for key, value in self.params['dir_c'].items():
-                rhs +=  self.params['D']*InnerProduct(n, grad(test[1]))*value*ds(definedon = key, skeleton=True)\
-                    + self.params['D']*alpha/h*value*test[0]*ds(definedon = key, skeleton = True)
+                rhs +=  self.params['D']*InnerProduct(n, grad(test[1]))*value*ds(definedon = key, skeleton=True, deformation=self.X)\
+                    + self.params['D']*alpha/h*value*test[0]*ds(definedon = key, skeleton = True, deformation=self.X)
         if self.params['neu_c']:
             for key, value in self.params['neu_c'].items():
-                rhs += value*n*test[1]*ds(definedon = key)
+                rhs += value*n*test[1]*ds(definedon = key, deformation=self.X)
 
         if self.params['dir_mu']:
             alpha = 5 * self.fes_order * (self.fes_order+1)
             for key, value in self.params['dir_mu'].items():
-                rhs +=  - self.params['gamma']*InnerProduct(n, grad(test[0]))*value*ds(definedon = key, skeleton=True)\
-                    + self.params['gamma']*alpha/h*value*test[1]*ds(definedon = key, skeleton = True)
+                rhs +=  - self.params['gamma']*InnerProduct(n, grad(test[0]))*value*ds(definedon = key, skeleton=True, deformation=self.X)\
+                    + self.params['gamma']*alpha/h*value*test[1]*ds(definedon = key, skeleton = True, deformation=self.X)
         if self.params['neu_mu']:
             for key, value in self.params['neu_mu'].items():
-                rhs += -value*n*test[0]*ds(definedon = key)
+                rhs += -value*n*test[0]*ds(definedon = key, deformation=self.X)
             
             
         return rhs
 
     def GetMass(self, data, trial, test):
-        mass = 1/data.dt*trial[0]*test[0]*dx
+        mass = 1/data.dt*trial[0]*test[0]*dx(deformation=self.X)
         return mass
     
     def GetMassOld(self, data, trial, test):
-        return self.GetMass(data, trial, test)
-    
-    def AddNonlinearity(self, **kwargs):
-
-        params = kwargs
-        # Initialize the parameters
-        accepted_keys = ['marker0', 'markers', 'f', 'VorB', 'domain', 'grad']
-        defaults = [0, 0, {}, VOL, '.*', False]  
-        params_check(params, accepted_keys, defaults)
-        self.nl.append(params)
+        mass = 1/data.dt*trial[0]*test[0]*dx(deformation=self.X_old)
+        return mass
 
     def GetNL(self, data, trial, test):
 
-        nl_i = self.nl[0]
-        trials_i = [trial[i] for i in nl_i['markers']]
-        test_i = test[nl_i['marker0']]
-
-        if nl_i['VorB'] == BND:
-            if nl_i['grad']:
-                nonlin = nl_i['f'](trials_i)*grad(test_i)*ds(definedon=nl_i['domain'])
-            else:
-                nonlin = nl_i['f'](trials_i)*test_i*ds(definedon=nl_i['domain'])
-        else:
-            if nl_i['grad']:
-                nonlin = nl_i['f'](trials_i)*grad(test_i)*dx(definedon=nl_i['domain'])
-            else:
-                nonlin = nl_i['f'](trials_i)*test_i*dx(definedon=nl_i['domain']) 
-
-        for nl_i in self.nl[1:]:
-
-            trials_i = [trial[i] for i in nl_i['markers']]
-            test_i = test[nl_i['marker0']]
-
-            if nl_i['VorB'] == BND:
-                if nl_i['grad']:
-                    nonlin += nl_i['f'](trials_i)*grad(test_i)*ds(definedon=nl_i['domain'])
-                else:
-                    nonlin += nl_i['f'](trials_i)*test_i*ds(definedon=nl_i['domain'])
-            else:
-                if nl_i['grad']:
-                    nonlin += nl_i['f'](trials_i)*grad(test_i)*dx(definedon=nl_i['domain'])
-                else:
-                    nonlin += nl_i['f'](trials_i)*test_i*dx(definedon=nl_i['domain'])
+        nonlin = -1*self.params['epsilon']*(trial[0]**3 - trial[0])*test[1]*dx(deformation=self.X)
                     
         return nonlin
     
@@ -231,8 +202,9 @@ class CahnHilliardVol(BasePDE):
 
             if data.mesh.dim == 2:
                 ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-                dx_lumped = dx(intrules = { TRIG : ir })
+                dx_lumped = dx(intrules = { TRIG : ir }, deformation=self.X)
             elif data.mesh.dim == 3:
+                raise Exception('Not yet implemented!')
                 ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
                 dx_lumped = dx(intrules = { TRIG : ir })
             A = BilinearForm(self.gfu_comp[0].space, symmetric = True)
@@ -255,6 +227,8 @@ class CahnHilliardVol(BasePDE):
 
     def Update(self, data):
 
+        data.mesh.SetDeformation(self.X)
+
         self.gfu_old.vec.data = self.gfu.vec.data
 
         for save in self.save_error:
@@ -262,6 +236,8 @@ class CahnHilliardVol(BasePDE):
 
         for save in self.save_solution:
             save.Save(data, self)
+
+        data.mesh.UnsetDeformation()
 
     def get_error(self, data, ex_sol, norm):
 

@@ -1,5 +1,5 @@
 from ngsolve import *
-from cosmos.solvers.solver_base import SolData, BaseSolver
+from cosmos.solvers.solver_base import SolverData, BaseSolver
 from cosmos.pdes.pde_base import BasePDE
 from cosmos.solvers.schemes import Scheme
 from cosmos.utils.tools import params_check
@@ -17,7 +17,7 @@ class SteadySolver(BaseSolver):
         
         self.verbose = kwargs['verbose']
         
-        self.data = SolData(mesh)
+        self.data = SolverData(mesh)
         if self.verbose > 0:
             print_mesh_info(self.data.mesh)
         
@@ -29,6 +29,7 @@ class SteadySolver(BaseSolver):
             raise TypeError("The added PDE must inherit from BasePDE")
         if not isinstance(scheme, Scheme):
             raise TypeError("The added scheme must inherit from Scheme")
+        pde.Initialize(self.data)
         self.PDEs.append([pde, scheme])
 
         if self.verbose > 0:
@@ -45,10 +46,9 @@ class SteadySolver(BaseSolver):
     def SolveStep(self):
 
         for pde, scheme in self.PDEs:
-
-                pde.Initialize(self.data)
-
-                scheme.Solve(self.data, pde)
+            pde.PreProcess(self.data)
+            scheme.Solve(self.data, pde)
+            pde.PostProcess(self.data)
                     
     def PreProcess(self):
 
@@ -57,5 +57,4 @@ class SteadySolver(BaseSolver):
     def PostProcess(self):
 
         for pde, _ in self.PDEs:
-
             pde.Update(self.data)

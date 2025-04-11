@@ -9,31 +9,35 @@ class WillmoreStab(BasePDE):
 
         super().__init__()
 
+        raise Exception('MUST BE UPDATED!')
+
         self.params = kwargs
 
         self.fields = 3
 
         accepted_keys = ['rhs', 'clamped_bnd', 'clamped_f',
                          'domain', 'name', 'sp_curv',
-                         'stab', 'mc0']
+                         'stab', 'mc0', 'ALE']
         defaults = [None, None, None,
                     '.*', ['displacement', 'mean_curvature'], CF(0),
-                    CF(1e-3), None]
+                    CF(1e-3), None, None]
         
         if kwargs:
             params_check(kwargs, accepted_keys, defaults)
             self.params = kwargs
         else:
             self.params = {}
-            params_check(self.params, accepted_keys, defaults)    
-
-        self.gfu = [CF((0, 0)), CF((0, 0))]
+            params_check(self.params, accepted_keys, defaults)
 
     def Initialize(self, data):
 
         self.dim = data.mesh.dim
         self.domain = data.mesh.Boundaries(self.params['domain'])
         self.name = self.params['name']
+        if self.ale:
+            self.ale = self.params['ALE']
+        else:
+            self.ale = GridFunction(VectorH1(data.mesh))
         
         if self.params['clamped_bnd']:
             if not set([self.params['clamped_bnd']]) <= set(data.boundary_markers + ['.*']):

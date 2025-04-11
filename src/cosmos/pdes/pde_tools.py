@@ -7,13 +7,25 @@ def compute_error(data, gfu, u_ex, norm, domain, VorB):
     ns = specialcf.normal(data.mesh.dim)
     Ps = Id(data.mesh.dim) - OuterProduct(ns, ns)
 
-    if norm == 'L2':
-        aux = InnerProduct(gfu-u_ex, gfu-u_ex)
+    if norm[:2] == 'L2':
         if VorB == BND:
-            err = sqrt(Integrate(aux, mesh = data.mesh, order = gfu.space.globalorder*2, 
-                            VOL_or_BND=BND, 
-                            definedon = domain))
+            if norm == 'L2norm':
+                aux = InnerProduct(ns*(gfu-u_ex), ns*(gfu-u_ex))
+                err = sqrt(Integrate(aux, mesh = data.mesh, order = gfu.space.globalorder*2, 
+                                VOL_or_BND=BND, 
+                                definedon = domain))
+            elif norm == 'L2tang':
+                aux = InnerProduct(Ps*(gfu-u_ex), Ps*(gfu-u_ex))
+                err = sqrt(Integrate(aux, mesh = data.mesh, order = gfu.space.globalorder*2, 
+                                VOL_or_BND=BND, 
+                                definedon = domain))
+            else:
+                aux = InnerProduct(gfu-u_ex, gfu-u_ex)
+                err = sqrt(Integrate(aux, mesh = data.mesh, order = gfu.space.globalorder*2, 
+                                VOL_or_BND=BND, 
+                                definedon = domain))
         else:
+            aux = InnerProduct(gfu-u_ex, gfu-u_ex)
             err = sqrt(Integrate(aux, mesh = data.mesh, order = gfu.space.globalorder*2,
                             definedon = domain))
     else:

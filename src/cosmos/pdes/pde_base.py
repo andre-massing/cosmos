@@ -8,43 +8,48 @@ class BasePDE():
 
         self.name = None
         self.fes_order = 1
-        self.dim = None
-        self.fields = None
+        self.nfields = None
         self.fes = None
+        self.trial = None
+        self.test = None
         self.gfu = None
-        self.gfu_old = None
+        self.prev_gfu = []
         self.gfu_save = None
         self.params = None
         self.save_error = []
         self.save_solution = []
+        self.nonlinear = False
+        self.initialized = False
 
-    def Initialize(self, *args, **kwargs):
+    def Initialize(self, data):
         
         raise NotImplementedError
     
-    def GetLHS(self, *args, **kwargs):
+    def GetLHS(self, data, trial, test, dX = None):
         
         raise NotImplementedError
     
-    def GetRHS(self, *args, **kwargs):
+    def GetRHS(self, data, test, dX = None):
         
         raise NotImplementedError
     
-    def GetMass(self, *args, **kwargs):
+    def GetMass(self, data, trial, test, dX = None):
         
         raise NotImplementedError
     
-    def PreProcess(self, *args, **kwargs):
+    def PreProcess(self, data):
         
-        raise NotImplementedError
+        self.prev_gfu.append(self.gfu.vec.Copy())    
+        if len(self.prev_gfu)>6:
+            self.prev_gfu.pop(0)
     
-    def PostProcess(self, *args, **kwargs):
+    def PostProcess(self, data):
         
-        raise NotImplementedError
+        pass
     
-    def Update(self, *args, **kwargs):
+    def Update(self, data):
         
-        raise NotImplementedError
+        pass
     
     def SaveSol(self, save):
 
@@ -60,19 +65,33 @@ class BasePDE():
         
         self.save_error.append(err)
     
-    def get_error(self, *args, **kwargs):
+    def get_trial(self):
+
+        if isinstance(self.trial, list):
+            return self.trial
+        else:
+            return [self.trial]
+        
+    def get_test(self):
+
+        if isinstance(self.test, list):
+            return self.test
+        else:
+            return [self.test]
+    
+    def get_error(self, data, ex_sol, norm):
 
         raise NotImplementedError
     
-    def get_solution(self, *args, **kwargs):
+    def set_solution(self, value):
         
         raise NotImplementedError
     
-    def set_solution(self, *args, **kwargs):
+    def get_solution(self):
         
         raise NotImplementedError
 
-    def print_info(self, *args, **kwargs):
+    def print_info(self):
         
         raise NotImplementedError
 

@@ -1,9 +1,11 @@
 from ngsolve import *
 from cosmos.pdes.pde_base import BasePDE
+from cosmos.pdes.ale import ALE
 from cosmos.utils.tools import params_check
 from cosmos.pdes.pde_tools import compute_error, MandBP
 import numpy as np
 import scipy.sparse as sp
+from ngsolve.webgui import Draw
 
 class VolADR(BasePDE):
 
@@ -13,7 +15,7 @@ class VolADR(BasePDE):
 
         self.params = kwargs
 
-        self.fields = 1
+        self.nfields = 1
 
         # Initialize the parameters
         accepted_keys = ['b', 'c', 'd', 'u0', 'rhs',
@@ -33,13 +35,15 @@ class VolADR(BasePDE):
                     self.params[key] = CF(self.params[key])
         else:
             self.params = {}
-            params_check(self.params, accepted_keys, defaults) 
-
-        self.gfu = self.params['u0']
+            params_check(self.params, accepted_keys, defaults)
 
     def Initialize(self, data):
 
-        self.dim = data.mesh.dim
+        if self.initialized:
+            return
+        else:
+            self.initialized = True
+
         self.domain = data.mesh.Materials(self.params['domain'])
         self.name = [self.params['name']]
 
@@ -58,15 +62,28 @@ class VolADR(BasePDE):
         self.test = self.fes.TestFunction()
         
         self.gfu = GridFunction(self.fes)
-        self.gfu_old = GridFunction(self.fes)
 
         if self.params['u0']:
             self.gfu.Set(self.params['u0'])
-        self.gfu_old.vec.data = self.gfu.vec.data
 
-        self.gfu_comp = self.gfu
-        self.gfu_old_comp = self.gfu_old
         self.gfu_save = [self.gfu]
+
+        if self.params['MP']:
+            if data.mesh.dim == 2:
+                ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
+                dx_lumped = dx(intrules = { TRIG : ir })
+            elif data.mesh.dim == 3:
+                raise Exception('Note implemented yet!')
+                ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
+                dx_lumped = dx(intrules = { TRIG : ir })
+            A = BilinearForm(self.gfu.space, symmetric = True)
+            u, v = self.gfu.space.TnT()
+            A += u*v*dx_lumped
+            A.Assemble()
+            rows,cols,vals = A.mat.COO()
+            weights = sp.csr_matrix((vals,(rows,cols))).diagonal()
+            gfu0_vec = self.gfu.vec.Copy().FV().NumPy()
+            self.mass0 = np.sum(weights*gfu0_vec)
 
         for save in self.save_error:
             save.Initialize(data, self)
@@ -74,90 +91,86 @@ class VolADR(BasePDE):
         for save in self.save_solution:
             save.Initialize(data, self)
 
-    def GetLHS(self, data, trial, test):
+    def GetLHS(self, data, trial, test, dX = None):
 
         n = specialcf.normal(data.mesh.dim)
         h = specialcf.mesh_size
 
         if self.params['c']:
-            lhs = self.params['c']*trial*test*dx
+            lhs = self.params['c']*trial[0]*test[0]*dx(deformation=dX)
         else:
-            lhs =  CF(0)*trial*test*dx
+            lhs =  CF(0)*trial[0]*test[0]*dx(deformation=dX)
 
         if self.params['d']:
-            lhs += self.params['d']*grad(trial)*grad(test)*dx
+            lhs += self.params['d']*grad(trial[0])*grad(test[0])*dx(deformation=dX)
                     
             if self.params['dir_d']:
                 alpha = 5 * self.fes_order * (self.fes_order+1)
                 for key, value in self.params['dir_d'].items():
-                    lhs += - self.params['d']*InnerProduct(n, grad(trial))*test*ds(definedon = key, skeleton=True) \
-                        - self.params['d']*InnerProduct(n, grad(test))*trial*ds(definedon = key, skeleton=True)\
-                        + self.params['d']*alpha/h*trial*test*ds(definedon = key, skeleton = True)\
+                    lhs += - self.params['d']*InnerProduct(n, grad(trial[0]))*test[0]*ds(definedon = key, skeleton=True, deformation=dX) \
+                        - self.params['d']*InnerProduct(n, grad(test[0]))*trial[0]*ds(definedon = key, skeleton=True, deformation=dX)\
+                        + self.params['d']*alpha/h*trial[0]*test[0]*ds(definedon = key, skeleton = True, deformation=dX)\
             
         if self.params['b']:
-            lhs += -self.params['b']*grad(test) * trial*dx
+            lhs += -self.params['b']*grad(test[0]) * trial[0]*dx(deformation=dX)
 
             if self.params['neu_b']:
                 for key, value in self.params['neu_b'].items():
-                    lhs += IfPos(self.params['b']*n, self.params['b']*n*trial, CF(0))*test\
-                        *ds(definedon = key)
+                    lhs += IfPos(self.params['b']*n, self.params['b']*n*trial[0], CF(0))*test[0]\
+                        *ds(definedon = key, deformation=dX)
 
             if self.params['dir_b']:
                 for key, value in self.params['dir_b'].items():
-                    lhs += IfPos(self.params['b']*n, self.params['b']*n*trial, CF(0))*test\
-                        *ds(definedon = key)
+                    lhs += IfPos(self.params['b']*n, self.params['b']*n*trial[0], CF(0))*test[0]\
+                        *ds(definedon = key, deformation=dX)
                     
             if self.params['Fneu_b']:
                 for key, value in self.params['Fneu_b'].items():
-                    lhs += IfPos(self.params['b']*n, self.params['b']*n*trial, CF(0))*test\
-                        *ds(definedon = data.mesh.Boundaries('.*') - data.mesh.Boundaries(key))
+                    lhs += IfPos(self.params['b']*n, self.params['b']*n*trial[0], CF(0))*test[0]\
+                        *ds(definedon = data.mesh.Boundaries('.*') - data.mesh.Boundaries(key), deformation=dX)
             
         return lhs
 
-    def GetRHS(self, data, test):
+    def GetRHS(self, data, test, dX = None):
 
         n = specialcf.normal(data.mesh.dim)
         h = specialcf.mesh_size
 
         if self.params['rhs']:
-            rhs = self.params['rhs']*test*dx
+            rhs = self.params['rhs']*test[0]*dx(deformation=dX)
         else:
-            rhs = CF(0)*test*dx
+            rhs = CF(0)*test[0]*dx(deformation=dX)
         
         if self.params['dir_d']:
             alpha = 5 * self.fes_order * (self.fes_order+1)
             for key, value in self.params['dir_d'].items():
-                rhs += self.params['d']*alpha/h*value*test*ds(definedon = key, skeleton = True)\
-                    - self.params['d']*InnerProduct(n, grad(test))*value*ds(definedon = key, skeleton=True)
+                rhs += self.params['d']*alpha/h*value*test[0]*ds(definedon = key, skeleton = True, deformation=dX)\
+                    - self.params['d']*InnerProduct(n, grad(test[0]))*value*ds(definedon = key, skeleton=True, deformation=dX)
         if self.params['neu_d']:
             for key, value in self.params['neu_d'].items():
-                rhs += -value*n*test*ds(definedon = key)
+                rhs += -value*n*test[0]*ds(definedon = key, deformation=dX)
 
         if self.params['dir_b']:
             for key, value in self.params['dir_b'].items():
-                rhs += -IfPos(self.params['b']*n, CF(0), self.params['b']*n*value)*test*ds(definedon = key)
+                rhs += -IfPos(self.params['b']*n, CF(0), self.params['b']*n*value)*test[0]*ds(definedon = key, deformation=dX)
         if self.params['neu_b']:
             for key, value in self.params['neu_b'].items():
-                rhs += -IfPos(self.params['b']*n, CF(0), value*n)*test*ds(definedon = key)
+                rhs += -IfPos(self.params['b']*n, CF(0), value*n)*test[0]*ds(definedon = key, deformation=dX)
 
         if self.params['Fneu_b']:
             for key, value in self.params['Fneu_b'].items():
-                rhs += -value*n*test*ds(definedon = data.mesh.Boundaries(key))
+                rhs += -value*n*test[0]*ds(definedon = data.mesh.Boundaries(key), deformation=dX)
             
         return rhs
 
-    def GetMass(self, data, trial, test):
-        mass = 1/data.dt*trial*test*dx
+    def GetMass(self, data, trial, test, dX = None):
+
+        mass = 1/data.dt*trial[0]*test[0]*dx(deformation=dX)
         return mass
     
-    def GetMassOld(self, data, trial, test):
-        return self.GetMass(data, trial, test)
-    
-    def PreProcess(self, data):
-
-        pass
-    
     def PostProcess(self, data):
+
+        super().PostProcess(data)
 
         if self.params['BP'] and not self.params['MP']:
 
@@ -174,10 +187,11 @@ class VolADR(BasePDE):
 
             if data.mesh.dim == 2:
                 ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-                dx_lumped = dx(intrules = { TRIG : ir })
+                dx_lumped = dx(intrules = { TRIG : ir }, deformation=data.dX)
             elif data.mesh.dim == 3:
+                raise Exception('Not yet implemented!')
                 ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-                dx_lumped = dx(intrules = { TRIG : ir })
+                dx_lumped = dx(intrules = { TRIG : ir }, deformation=data.dX)
             A = BilinearForm(self.gfu.space, symmetric = True)
             u, v = self.gfu.space.TnT()
             A += u*v*dx_lumped
@@ -198,13 +212,15 @@ class VolADR(BasePDE):
 
     def Update(self, data):
 
-        self.gfu_old.vec.data = self.gfu.vec.data
+        data.mesh.SetDeformation(data.dX)
 
         for save in self.save_error:
             save.Save(data, self)
 
         for save in self.save_solution:
             save.Save(data, self)
+
+        data.mesh.UnsetDeformation()
 
     def get_error(self, data, ex_sol, norm):
 
@@ -217,7 +233,6 @@ class VolADR(BasePDE):
     def set_solution(self, value):
 
         self.gfu.Set(value, definedon=self.domain)
-        self.gfu_old.Set(value, definedon=self.domain)
 
     def get_solution(self):
 

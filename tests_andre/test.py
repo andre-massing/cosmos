@@ -102,3 +102,25 @@ ax.tick_params(axis='y', which='both', left=True, right=False, labelleft=True)
 
 # Show the plot
 plt.show()
+
+# %%
+
+from ngsolve import *
+from cosmos.utils.generate_surface_meshes import generate_circle
+from ngsolve.webgui import Draw
+
+mesh, _ = generate_circle()
+fes = VectorH1(mesh, definedon = mesh.Boundaries('.*'))
+fes1 = fes*fes
+fes2 = fes*fes1
+
+gfu = GridFunction(fes)
+gfu1 = GridFunction(fes1)
+gfu2 = GridFunction(fes2)
+
+print(gfu2.components[1:])
+print(gfu1.components)
+print(gfu.components)
+gfu2.components[1:].vec.data = gfu1.vec.data
+# Draw(grad(gfu), mesh)
+# isinstance(gfu.components, tuple)

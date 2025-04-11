@@ -12,7 +12,11 @@ class AdVolADR(VolADR):
 
     def Initialize(self, data):
 
-        self.dim = data.mesh.dim
+        if self.initialized:
+            return
+        else:
+            self.initialized = True
+
         self.domain = data.mesh.Materials(self.params['domain'])
         self.name = [self.params['name']]
 
@@ -31,14 +35,10 @@ class AdVolADR(VolADR):
         self.test = self.fes.TestFunction()
         
         self.gfu = GridFunction(self.fes)
-        self.gfu_old = GridFunction(self.fes)
 
         if self.params['u0']:
             self.gfu.Set(self.params['u0'])
-        self.gfu_old.vec.data = self.gfu.vec.data
 
-        self.gfu_comp = self.gfu
-        self.gfu_old_comp = self.gfu_old
         self.gfu_save = [self.gfu]
 
         if self.params['MP']:
@@ -63,25 +63,25 @@ class AdVolADR(VolADR):
         for save in self.save_solution:
             save.Initialize(data, self)
 
-    def GetLHS(self, data, trial, test):
+    def GetLHS(self, data, trial, test, dX = None):
 
         n = specialcf.normal(data.mesh.dim)
         h = specialcf.mesh_size
 
         if self.params['c']:
-            lhs = self.params['c']*trial*test*dx
+            lhs = self.params['c']*trial[0]*test[0]*dx(deformation = dX)
         else:
-            lhs =  CF(0)*trial*test*dx
+            lhs =  CF(0)*trial[0]*test[0]*dx(deformation = dX)
 
         if self.params['d']:
-            lhs += self.params['d']*grad(trial)*grad(test)*dx
+            lhs += self.params['d']*grad(trial[0])*grad(test[0])*dx(deformation = dX)
                     
             if self.params['dir_d']:
                 alpha = 5 * self.fes_order * (self.fes_order+1)
                 for key, value in self.params['dir_d'].items():
-                    lhs += - self.params['d']*InnerProduct(n, grad(trial))*test*ds(definedon = key, skeleton=True) \
-                        - self.params['d']*InnerProduct(n, grad(test))*trial*ds(definedon = key, skeleton=True)\
-                        + self.params['d']*alpha/h*trial*test*ds(definedon = key, skeleton = True)\
+                    lhs += - self.params['d']*InnerProduct(n, grad(trial[0]))*test[0]*ds(definedon = key, skeleton=True, deformation = dX) \
+                        - self.params['d']*InnerProduct(n, grad(test[0]))*trial[0]*ds(definedon = key, skeleton=True, deformation = dX)\
+                        + self.params['d']*alpha/h*trial[0]*test[0]*ds(definedon = key, skeleton = True, deformation = dX)\
             
         if self.params['b']:
             stab = Norm(self.params['b'])*h
@@ -89,25 +89,25 @@ class AdVolADR(VolADR):
                 stab += Norm(self.params['d'])
             if self.params['c']:
                 stab += Norm(self.params['c'])*h**2
-            jump_u = n*(grad(trial) - (grad(trial)).Other())
-            jump_v = n*(grad(test) - (grad(test)).Other())
-            lhs += -self.params['b']*grad(test) * trial*dx\
-                    + h**3/stab*jump_u*jump_v*dx(skeleton=True)
+            jump_u = n*(grad(trial[0]) - (grad(trial[0])).Other())
+            jump_v = n*(grad(test[0]) - (grad(test[0])).Other())
+            lhs += -self.params['b']*grad(test[0]) * trial[0]*dx(deformation = dX)\
+                    + h**3/stab*jump_u*jump_v*dx(skeleton=True, deformation = dX)
 
             if self.params['neu_b']:
                 for key, value in self.params['neu_b'].items():
-                    lhs += IfPos(self.params['b']*n, self.params['b']*n*trial, CF(0))*test\
-                        *ds(definedon = key)
+                    lhs += IfPos(self.params['b']*n, self.params['b']*n*trial[0], CF(0))*test[0]\
+                        *ds(definedon = key, deformation = dX)
 
             if self.params['dir_b']:
                 for key, value in self.params['dir_b'].items():
-                    lhs += IfPos(self.params['b']*n, self.params['b']*n*trial, CF(0))*test\
-                        *ds(definedon = key)
+                    lhs += IfPos(self.params['b']*n, self.params['b']*n*trial[0], CF(0))*test[0]\
+                        *ds(definedon = key, deformation = dX)
                     
             if self.params['Fneu_b']:
                 for key, value in self.params['Fneu_b'].items():
-                    lhs += IfPos(self.params['b']*n, self.params['b']*n*trial, CF(0))*test\
-                        *ds(definedon = data.mesh.Boundaries('.*') - data.mesh.Boundaries(key))
+                    lhs += IfPos(self.params['b']*n, self.params['b']*n*trial[0], CF(0))*test[0]\
+                        *ds(definedon = data.mesh.Boundaries('.*') - data.mesh.Boundaries(key), deformation = dX)
             
         return lhs
 
