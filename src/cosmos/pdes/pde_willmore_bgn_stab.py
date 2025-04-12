@@ -3,8 +3,9 @@ from cosmos.pdes.pde_base import BasePDE
 from cosmos.utils.tools import params_check
 from cosmos.pdes.pde_tools import compute_error
 import numpy as np
+from ngsolve.webgui import Draw
 
-class Willmore(BasePDE):
+class WillmoreBGNStab(BasePDE):
 
     def __init__(self, **kwargs):
 
@@ -12,13 +13,14 @@ class Willmore(BasePDE):
 
         self.params = kwargs
 
-        self.nfields = 2
+        self.nfields = 3
 
         accepted_keys = ['rhs', 'clamped_bnd', 'clamped_f',
-                         'domain', 'name', 'sp_curv', 'postprocess']
+                         'domain', 'name', 'sp_curv', 'postprocess',
+                         'stab']
         defaults = [None, None, None,
                     '.*', ['displacement', 'mean_curvature'], CF(0),
-                    False]
+                    False, CF(1e-3)]
         
         if kwargs:
             params_check(kwargs, accepted_keys, defaults)
@@ -40,34 +42,33 @@ class Willmore(BasePDE):
         
         if self.params['clamped_bnd']:
             if not set([self.params['clamped_bnd']]) <= set(data.boundary_markers + ['.*']):
-                raise ValueError('Dirichlet boundary conditions are imposed on boundary regions which name is not in the mesh boundary list')
+                raise ValueError('Clamped boundary conditions are imposed on non-existing boundary!')
         
         if self.params['clamped_bnd']:
-            V1 = Compress(VectorH1(data.mesh, order=self.fes_order,
+            self.V1 = Compress(VectorH1(data.mesh, order=self.fes_order,
                         definedon=self.domain,
                         dirichlet_bbnd = data.mesh.BBoundaries(self.params['clamped_bnd'])))
         else:
-            V1 = Compress(VectorH1(data.mesh, order=self.fes_order,
+            self.V1 = Compress(VectorH1(data.mesh, order=self.fes_order,
                         definedon=self.domain))
-            
         V2 = Compress(VectorH1(data.mesh, order=self.fes_order,
                     definedon=self.domain))
+        if data.mesh.dim == 2:
+            dV = Compress(H1(data.mesh, order=1,\
+                     definedon = self.domain))
+        elif data.mesh.dim == 3:
+            dV = Compress(VectorFacetSurface(data.mesh, order=1,\
+                    definedon = self.domain))
             
-        self.fes = V1*V2
+        self.fes = self.V1*V2*dV
 
         self.trial = self.fes.TrialFunction()
         self.test = self.fes.TestFunction()
 
         self.gfu = GridFunction(self.fes)
 
-        self.dX_h, self.Y_h = self.gfu.components
-        self.kappa_h = GridFunction(V2)
-
-        ComputeMC(data, self.kappa_h, self.params)
-        ns = specialcf.normal(data.mesh.dim)
-        self.n_h = GridFunction(data.dX.space)
-        self.Y_h.Set(self.kappa_h - self.params['sp_curv']*ns,
-                        definedon = self.domain)  
+        self.dX_h, self.kappa_h, _ = self.gfu.components 
+        ComputeStabMC(data, self.kappa_h, self.params)
             
         V_vol = VectorH1(data.mesh, order = self.fes_order)
         self.gfu_save = list(GridFunction(CompressCompound(V_vol*V_vol)).components)
@@ -75,7 +76,7 @@ class Willmore(BasePDE):
         self.dX_save.Set(self.dX_h, definedon = self.domain)
         self.kappa_save.Set(self.kappa_h, definedon = self.domain)
 
-        self.X0 = GridFunction(V1)
+        self.X0 = GridFunction(self.V1)
         if data.mesh.dim == 2:
             self.X0.Set(CF((x,y)), definedon=self.domain)
         elif data.mesh.dim == 3:
@@ -89,6 +90,22 @@ class Willmore(BasePDE):
             
     def GetLHS(self, data, trial, test, dX = None):
 
+        h = specialcf.mesh_size
+        ns = specialcf.normal(data.mesh.dim)
+        tE = specialcf.tangential(data.mesh.dim)
+        if data.mesh.dim == 2:
+            nE = tE
+        else:
+            nE = Cross(ns, tE)
+        if data.mesh.dim == 2:
+            dkappa = trial[2]*tE
+            deta = test[2]*tE
+            jump_dkappadn = (trial[1].Trace().Deriv()*nE-dkappa)
+            jump_detadn = (test[1].Trace().Deriv()*nE-deta)
+        elif data.mesh.dim == 3:
+            jump_dkappadn = (trial[1].Trace().Deriv()*nE-trial[2].Trace())
+            jump_detadn = (test[1].Trace().Deriv()*nE-test[2].Trace())
+
         if data.mesh.dim == 2:
             ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
             ds_lumped = ds(intrules = { SEGM : ir }, deformation = dX)
@@ -99,18 +116,20 @@ class Willmore(BasePDE):
         lhs = -InnerProduct(grad(trial[1]).Trace(), grad(test[0]).Trace())*ds(deformation = dX)
         lhs += InnerProduct(trial[1], test[1])*ds_lumped
         lhs += (InnerProduct(grad(trial[0]).Trace(), grad(test[1]).Trace()))*ds(deformation = dX)
+
+        lhs += self.params['stab']*h*InnerProduct(jump_dkappadn,jump_detadn)\
+            *ds(element_boundary=True, deformation = dX)
         
         return lhs
         
     def GetRHS(self, data, test, dX = None):
 
-        data.mesh.SetDeformation(dX)
         ns = specialcf.normal(data.mesh.dim)
-        ComputeMC(data, self.kappa_h, self.params)
-        self.Y_h.Set(self.kappa_h - self.params['sp_curv']*ns)
-        data.mesh.UnsetDeformation()
-
         Ps = Id(data.mesh.dim) - OuterProduct(ns, ns)
+
+        data.mesh.SetDeformation(dX)
+        ComputeStabMC(data, self.kappa_h, self.params)
+        data.mesh.UnsetDeformation()
 
         if data.mesh.dim == 2:
             ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
@@ -119,15 +138,7 @@ class Willmore(BasePDE):
             ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
             ds_lumped = ds(intrules = { TRIG : ir }, deformation = dX)
 
-        tE = specialcf.tangential(data.mesh.dim)
-        if data.mesh.dim == 2:
-            nE = tE
-        else:
-            nE = Cross(ns, tE)
-        Ps = Id(data.mesh.dim) - OuterProduct(ns, ns)
-
         rhs = -InnerProduct(grad(self.X0).Trace(), grad(test[1]).Trace())*ds(deformation = dX)
-        rhs += -self.params['sp_curv']*InnerProduct(ns, test[1])*ds_lumped
         if self.params['rhs']:
             rhs += InnerProduct(self.params['rhs'], test[0])*ds(deformation = dX)
 
@@ -135,30 +146,30 @@ class Willmore(BasePDE):
             sym = 0.5*Ps*(grad(chi).Trace()+grad(chi).Trace().trans)*Ps
             return sym
         if data.mesh.dim == 3:
-            rhs += InnerProduct(Trace(grad(self.Y_h).Trace()),Trace(grad(test[0]).Trace()))*ds(deformation = dX)
-            rhs += -2*InnerProduct(grad(self.Y_h).Trace().trans, D_s(test[0], Ps)*Ps.trans)*ds(deformation = dX)
-            rhs += -self.params['sp_curv']*InnerProduct(self.kappa_h, grad(test[0]).Trace().trans*ns)*ds_lumped
+            rhs += InnerProduct(Trace(grad(self.kappa_h).Trace()),Trace(grad(test[0]).Trace()))*ds(deformation = dX)
+            rhs += -2*InnerProduct(grad(self.kappa_h).Trace().trans, D_s(test[0], Ps)*Ps.trans)*ds(deformation = dX)
             rhs += -0.5*InnerProduct((Norm(self.kappa_h - self.params['sp_curv']*ns)**2)*Ps,grad(test[0]).Trace())*ds_lumped
-            rhs += InnerProduct(InnerProduct(self.Y_h, self.kappa_h)*Ps,grad(test[0]).Trace())*ds_lumped
+            rhs += InnerProduct(Norm(self.kappa_h)**2*Ps,grad(test[0]).Trace())*ds_lumped
         elif data.mesh.dim == 2 :
-            rhs += InnerProduct((Norm(self.Y_h)**2)*Ps,grad(test[0]).Trace())*ds_lumped
+            rhs += InnerProduct((Norm(self.kappa_h)**2)*Ps,grad(test[0]).Trace())*ds_lumped
 
-        ## Addition for the open boundary
+        tE = specialcf.tangential(data.mesh.dim)
+        if data.mesh.dim == 2:
+            nE = tE
+        else:
+            nE = Cross(ns, tE)
         if self.params['clamped_bnd']:
             if data.mesh.dim == 3:
                 gfF = GridFunction(FacetSurface(data.mesh, order=0))
                 gfF.Set(1, definedon=data.mesh.BBoundaries(self.params['clamped_bnd']))
-                if self.params['clamped_f']:
-                    rhs += InnerProduct(self.params['clamped_f'], test[1]) * gfF * ds(element_boundary=True, intrules = { TRIG : ir })
-                else:
-                    rhs += InnerProduct(nE, test[1]) * gfF * ds(element_boundary=True, intrules = { TRIG : ir })
             elif data.mesh.dim == 2:
                 gfF = GridFunction(H1(data.mesh, order =1, definedon=data.mesh.Boundaries('.*')))
                 gfF.Set(1, definedon=data.mesh.BBoundaries(self.params['clamped_bnd']))
-                if self.params['clamped_f']:
-                    rhs += InnerProduct(self.params['clamped_f'], test[1]) * gfF * ds(element_boundary=True, intrules = { SEGM : ir })
-                else:
-                    rhs += InnerProduct(nE, test[1]) * gfF * ds(element_boundary=True, intrules = { SEGM : ir })
+            
+            if self.params['clamped_f']:
+                rhs += InnerProduct(self.params['clamped_f'], test[1]) * gfF * ds(element_boundary=True)
+            else:
+                rhs += InnerProduct(nE, test[1]) * gfF * ds(element_boundary=True)
 
         return rhs
 
@@ -184,40 +195,33 @@ class Willmore(BasePDE):
     
     def PostProcess(self, data):
 
-        data.mesh.SetDeformation(data.dX)
-        ns = specialcf.normal(data.mesh.dim)
-        self.kappa_h.Set(self.Y_h + self.params['sp_curv']*ns)
-        data.mesh.UnsetDeformation()
+        super().PostProcess(data)
 
         if self.postprocess:
 
-            data.mesh.SetDeformation(self.gfu.components[0])
             ns = specialcf.normal(data.mesh.dim)
-            J = grad(self.X0).Trace()*grad(self.X0).Trace().trans + OuterProduct(ns, ns)
-            invJ = Inv(J)
-            dJ = sqrt(Det(J))
+            n_h = GridFunction(data.dX.space)
+            data.mesh.SetDeformation(self.gfu.components[0])
+            n_h.Set(ns, definedon=self.domain)
+            data.mesh.UnsetDeformation()
 
-            V1 = VectorH1(data.mesh, order=self.fes_order,
-                        definedon=self.domain)
             V2 = H1(data.mesh, order=self.fes_order,
                         definedon=self.domain)
             
-            fes = V1*V2
+            fes = self.V1*V2
             w_h = GridFunction(fes)
             A = BilinearForm(fes)
             (w, kappa), (eta, mu) = fes.TnT()
-            A += InnerProduct(grad(w).Trace()*invJ, grad(eta).Trace())*dJ*ds
-            A += -1*InnerProduct(kappa*self.n_h, eta)*dJ*ds
-            A += -1*InnerProduct(w, mu*self.n_h)*dJ*ds
+            A += InnerProduct(grad(w).Trace(), grad(eta).Trace())*ds
+            A += -1*InnerProduct(kappa*n_h, eta)*ds
+            A += 1*InnerProduct(w, mu*n_h)*ds
             F = LinearForm(fes)
-            Ps = Id(data.mesh.dim) - OuterProduct(ns, ns)
-            F += -1*InnerProduct(Ps*invJ, grad(eta).Trace())*dJ*ds
+            F += -1*InnerProduct(grad(self.X0).Trace(), grad(eta).Trace())*ds
+            F += -1*InnerProduct(grad(self.gfu.components[0]).Trace(), grad(eta).Trace())*ds
             A.Assemble()
             F.Assemble()
             w_h.vec.data = A.mat.Inverse(freedofs = fes.FreeDofs())*F.vec
             self.gfu.components[0].vec.data += w_h.components[0].vec.data
-
-            data.mesh.UnsetDeformation()
         
     def Update(self, data):
 
@@ -272,17 +276,25 @@ class Willmore(BasePDE):
 
         # print(60*'-', '\n')
 
-def ComputeMC(data, gfu, params):
-
-    V2 = gfu.space
+def ComputeStabMC(data, gfu, params):
 
     if data.mesh.dim == 2:
         ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
         ds_lumped = ds(intrules = { SEGM : ir })
+        ds_el_lumped = ds(element_boundary=True, intrules = { SEGM : ir })
     elif data.mesh.dim == 3:
         ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
         ds_lumped = ds(intrules = { TRIG : ir })
+        ds_el_lumped = ds(element_boundary=True, intrules = { TRIG : ir })
 
+    if data.mesh.dim == 2:
+        dV = H1(data.mesh, order=1,\
+                    definedon = data.mesh.Boundaries('.*'))
+    elif data.mesh.dim == 3:
+        dV = VectorFacetSurface(data.mesh, order=1,\
+                definedon = data.mesh.Boundaries('.*'))
+        
+    h = specialcf.mesh_size
     ns = specialcf.normal(data.mesh.dim)
     tE = specialcf.tangential(data.mesh.dim)
     if data.mesh.dim == 2:
@@ -291,37 +303,101 @@ def ComputeMC(data, gfu, params):
         nE = Cross(ns, tE)
     Ps = Id(data.mesh.dim) - OuterProduct(ns, ns)
 
-    fes0 = V2
+    fes0 = gfu.space*dV
     gfu0 = GridFunction(fes0)
-    
-    kappa0, eta0 = fes0.TnT()
-
-
+    (kappa0, dkappa0), (eta0, deta0) = fes0.TnT()
+    if data.mesh.dim == 2:
+        dkappa0 = dkappa0*tE
+        deta0 = deta0*tE
+        jump_dkappadn0 = (kappa0.Trace().Deriv()*nE-dkappa0)
+        jump_detadn0 = (eta0.Trace().Deriv()*nE-deta0)
+    elif data.mesh.dim == 3:
+        jump_dkappadn0 = (kappa0.Trace().Deriv()*nE-dkappa0.Trace())
+        jump_detadn0 = (eta0.Trace().Deriv()*nE-deta0.Trace())
     A0 = BilinearForm(fes0)
     F0 = LinearForm(fes0)
     A0 += kappa0*eta0*ds_lumped
+    A0 += params['stab']*h*InnerProduct(jump_dkappadn0,jump_detadn0)\
+        *ds(element_boundary=True)
     A0.Assemble()
-
-    F0 += -InnerProduct(Ps, Grad(eta0).Trace())*ds
+    F0 += -InnerProduct(Ps, grad(eta0).Trace())*ds
 
     if params['clamped_bnd']:
 
         if data.mesh.dim == 3:
             gfF = GridFunction(FacetSurface(data.mesh, order=0))
             gfF.Set(1, definedon=data.mesh.BBoundaries(params['clamped_bnd']))
-
-            F0 += InnerProduct(nE, eta0) * gfF * ds(element_boundary=True, intrules = { TRIG : ir })
+            F0 += InnerProduct(nE, eta0) * gfF * ds_el_lumped
 
         elif data.mesh.dim == 2:
-
             gfF = GridFunction(H1(data.mesh, order =1,\
                     definedon=data.mesh.Boundaries('.*')))
             gfF.Set(1, definedon=data.mesh.BBoundaries(params['clamped_bnd']))
-
-            F0 += InnerProduct(gfF*nE, eta0) \
-                * ds(element_boundary=True, intrules = { SEGM : ir })
+            F0 += InnerProduct(gfF*nE, eta0) * ds_el_lumped
 
     F0.Assemble()
     gfu0.vec.data = A0.mat.Inverse(fes0.FreeDofs())*F0.vec
+    gfu.vec.data = gfu0.components[0].vec.data
 
-    gfu.vec.data = gfu0.vec.data
+def ComputeStabMC1(data, gfu, params):
+
+    if data.mesh.dim == 2:
+        ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
+        ds_lumped = ds(intrules = { SEGM : ir })
+        ds_el_lumped = ds(element_boundary=True, intrules = { SEGM : ir })
+    elif data.mesh.dim == 3:
+        ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
+        ds_lumped = ds(intrules = { TRIG : ir })
+        ds_el_lumped = ds(element_boundary=True, intrules = { TRIG : ir })
+
+    if data.mesh.dim == 2:
+        dV = H1(data.mesh, order=1,\
+                    definedon = data.mesh.Boundaries('.*'))
+    elif data.mesh.dim == 3:
+        dV = VectorFacetSurface(data.mesh, order=1,\
+                definedon = data.mesh.Boundaries('.*'))
+        
+    h = specialcf.mesh_size
+    ns = specialcf.normal(data.mesh.dim)
+    tE = specialcf.tangential(data.mesh.dim)
+    if data.mesh.dim == 2:
+        nE = tE
+    else:
+        nE = Cross(ns, tE)
+    Ps = Id(data.mesh.dim) - OuterProduct(ns, ns)
+
+    fes0 = gfu.space*dV
+    gfu0 = GridFunction(fes0)
+    (kappa0, dkappa0), (eta0, deta0) = fes0.TnT()
+    if data.mesh.dim == 2:
+        dkappa0 = dkappa0*tE
+        deta0 = deta0*tE
+        jump_dkappadn0 = (kappa0.Trace().Deriv()*nE-dkappa0)
+        jump_detadn0 = (eta0.Trace().Deriv()*nE-deta0)
+    elif data.mesh.dim == 3:
+        jump_dkappadn0 = (kappa0.Trace().Deriv()*nE-dkappa0.Trace())
+        jump_detadn0 = (eta0.Trace().Deriv()*nE-deta0.Trace())
+    A0 = BilinearForm(fes0)
+    F0 = LinearForm(fes0)
+    A0 += kappa0.Trace()*eta0.Trace()*ds
+    A0 += params['stab']*h*InnerProduct(jump_dkappadn0,jump_detadn0)\
+        *ds(element_boundary=True)
+    A0.Assemble()
+    F0 += -InnerProduct(Ps, grad(eta0).Trace())*ds
+
+    if params['clamped_bnd']:
+
+        if data.mesh.dim == 3:
+            gfF = GridFunction(FacetSurface(data.mesh, order=0))
+            gfF.Set(1, definedon=data.mesh.BBoundaries(params['clamped_bnd']))
+            F0 += InnerProduct(nE, eta0) * gfF * ds_el_lumped
+
+        elif data.mesh.dim == 2:
+            gfF = GridFunction(H1(data.mesh, order =1,\
+                    definedon=data.mesh.Boundaries('.*')))
+            gfF.Set(1, definedon=data.mesh.BBoundaries(params['clamped_bnd']))
+            F0 += InnerProduct(gfF*nE, eta0) * ds_el_lumped
+
+    F0.Assemble()
+    gfu0.vec.data = A0.mat.Inverse(fes0.FreeDofs())*F0.vec
+    gfu.vec.data = gfu0.components[0].vec.data
