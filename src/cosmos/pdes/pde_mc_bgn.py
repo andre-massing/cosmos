@@ -122,18 +122,7 @@ class MCBGN(BasePDE):
             n_h = GridFunction(data.dX.space)
             data.mesh.SetDeformation(self.gfu.components[0])
             n_h.Set(ns, definedon=self.domain)
-            vec = n_h.vec.FV().NumPy()
-            size = int(len(n_h.vec.data)/data.mesh.dim)
-            if data.mesh.dim == 2:
-                norm = np.sqrt(vec[0:size]**2 + vec[size:2*size]**2)
-            else:
-                norm = np.sqrt(vec[0:size]**2 + vec[size:2*size]**2 +vec[2*size:3*size]**2)
-            norm = np.tile(norm, data.mesh.dim)
-            n_h.vec.data = vec/norm
-
-            J = grad(self.X0).Trace()*grad(self.X0).Trace().trans + OuterProduct(n_h, n_h)
-            invJ = Inv(J)
-            dJ = sqrt(Det(J))
+            data.mesh.UnsetDeformation()
 
             V1 = VectorH1(data.mesh, order=self.fes_order,
                         definedon=self.domain)
@@ -144,18 +133,16 @@ class MCBGN(BasePDE):
             w_h = GridFunction(fes)
             A = BilinearForm(fes)
             (w, kappa), (eta, mu) = fes.TnT()
-            A += InnerProduct(grad(w).Trace()*invJ, grad(eta).Trace())*dJ*ds
-            A += -1*InnerProduct(kappa*n_h, eta)*dJ*ds
-            A += 1*InnerProduct(w, mu*n_h)*dJ*ds
+            A += InnerProduct(grad(w).Trace(), grad(eta).Trace())*ds
+            A += -1*InnerProduct(kappa*n_h, eta)*ds
+            A += 1*InnerProduct(w, mu*n_h)*ds
             F = LinearForm(fes)
-            Ps = Id(data.mesh.dim) - OuterProduct(ns, ns)
-            F += -1*InnerProduct(Ps*invJ, grad(eta).Trace())*dJ*ds
+            F += -1*InnerProduct(grad(self.X0).Trace(), grad(eta).Trace())*ds
+            F += -1*InnerProduct(grad(self.gfu.components[0]).Trace(), grad(eta).Trace())*ds
             A.Assemble()
             F.Assemble()
             w_h.vec.data = A.mat.Inverse(freedofs = fes.FreeDofs())*F.vec
             self.gfu.components[0].vec.data += w_h.components[0].vec.data
-
-            data.mesh.UnsetDeformation()
         
     def Update(self, data):
 

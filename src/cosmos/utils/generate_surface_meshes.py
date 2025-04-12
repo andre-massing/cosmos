@@ -210,25 +210,44 @@ Torus
 # TODO: Other possibilities to generate
 def generate_torus(maxh = 0.1, order_g = 1, center=occ.Pnt(0,0,0), R = 1.0, r = 0.4, vol_or_bnd = 'VOL', geo_only = False):
 
-    spline = csg.SplineCurve2d() # create a 2d spline
-    eps = r*1e-2
+    # spline = csg.SplineCurve2d() # create a 2d spline
+    # eps = r*1e-2
 
-    # define the control points
-    pnts = [ (0,R-r), (-r+eps,R-r+eps), (-r,R),
-            (-r+eps,R+r-eps), (0,R+r), (r-eps,R+r-eps), (r,R), (r-eps,R-r+eps) ]
-    # define the splines using the control points
-    segs = [ (0,1,2), (2,3,4), (4,5,6), (6,7,0) ]
+    # # define the control points
+    # pnts = [ (0,R-r), (-r+eps,R-r+eps), (-r,R),
+    #         (-r+eps,R+r-eps), (0,R+r), (r-eps,R+r-eps), (r,R), (r-eps,R-r+eps) ]
+    # # define the splines using the control points
+    # segs = [ (0,1,2), (2,3,4), (4,5,6), (6,7,0) ]
 
-    # add the points and segments to the spline
-    for pnt in pnts:
-        spline.AddPoint (*pnt)
+    # # add the points and segments to the spline
+    # for pnt in pnts:
+    #     spline.AddPoint (*pnt)
 
-    for seg in segs:
-        spline.AddSegment (*seg)
+    # for seg in segs:
+    #     spline.AddSegment (*seg)
 
-    rev = csg.Revolution ( csg.Pnt(0,0,-1), csg.Pnt(0,0,1), spline)
-    geo = csg.CSGeometry()
-    geo.Add (rev.col([0,0,1]))
+    # rev = csg.Revolution ( csg.Pnt(0,0,-1), csg.Pnt(0,0,1), spline)
+    # geo = csg.CSGeometry()
+    # geo.Add (rev.col([0,0,1]))
+
+    # if geo_only:
+    #     return geo
+    # else:
+    #     mesh = Meshing(geo, maxh, order_g, vol_or_bnd)
+    #     return mesh, geo
+    pnt1 = occ.Pnt(R-r, 0, 0 )
+    pnt2 = occ.Pnt(R, 0, r )
+    pnt3 = occ.Pnt(R+r , 0, 0 )
+    pnt4 = occ.Pnt(R , 0 , -r)
+
+    arc1 = occ.ArcOfCircle(pnt1, pnt2, pnt3)
+    arc2 = occ.ArcOfCircle(pnt3, pnt4, pnt1)
+
+    w = occ.Wire([arc1, arc2])
+    w.edges.name = "membrane"
+    body = w.Revolve(occ.Axis((0,0,0),occ.Z), 360).Rotate(occ.Axis((0,0,0),occ.X), 90)
+
+    geo = occ.OCCGeometry(body)
 
     if geo_only:
         return geo

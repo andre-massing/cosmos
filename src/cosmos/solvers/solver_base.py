@@ -16,8 +16,8 @@ class SolverData():
             self.domain_markers = list(Counter(self.mesh.GetMaterials()).keys())
             self.boundary_markers = list(Counter(self.mesh.GetBoundaries()).keys())
 
-        self.dX = GridFunction(VectorH1(mesh))
-        self.V = GridFunction(VectorH1(mesh))
+        self.dX = GridFunction(Compress(VectorH1(mesh)))
+        self.V = GridFunction(Compress(VectorH1(mesh)))
         self.prev_dX = []
         self.prev_V = []
         self.dX_f = None
