@@ -17,10 +17,10 @@ class WillmoreBGNStab(BasePDE):
 
         accepted_keys = ['rhs', 'clamped_bnd', 'clamped_f',
                          'domain', 'name', 'sp_curv', 'postprocess',
-                         'stab']
+                         'stab', 'mc_autoupdate', 'mc0']
         defaults = [None, None, None,
-                    '.*', ['displacement', 'mean_curvature'], CF(0),
-                    False, CF(1e-3)]
+                    '.*', ['displacement', 'mean_curvature'], CF(0), False, 
+                    CF(1e-3), True, None]
         
         if kwargs:
             params_check(kwargs, accepted_keys, defaults)
@@ -57,7 +57,7 @@ class WillmoreBGNStab(BasePDE):
             dV = Compress(H1(data.mesh, order=1,\
                      definedon = self.domain))
         elif data.mesh.dim == 3:
-            dV = Compress(VectorFacetSurface(data.mesh, order=1,\
+            dV = Compress(NormalFacetSurface(data.mesh, order=0,\
                     definedon = self.domain))
             
         self.fes = self.V1*V2*dV
@@ -67,8 +67,14 @@ class WillmoreBGNStab(BasePDE):
 
         self.gfu = GridFunction(self.fes)
 
-        self.dX_h, self.kappa_h, _ = self.gfu.components 
-        ComputeStabMC(data, self.kappa_h, self.params)
+        self.dX_h, self.Y_h, _ = self.gfu.components
+        self.kappa_h = GridFunction(V2)
+        if not self.params['mc0']:
+            ComputeStabMC(data, self.kappa_h, self.params)
+        else:
+            self.kappa_h.Set(self.params['mc0'], definedon = self.domain)
+        ns = specialcf.normal(data.mesh.dim)
+        self.Y_h.Set(self.kappa_h - self.params['sp_curv']*ns, definedon = self.domain)
             
         V_vol = VectorH1(data.mesh, order = self.fes_order)
         self.gfu_save = list(GridFunction(CompressCompound(V_vol*V_vol)).components)
@@ -95,11 +101,12 @@ class WillmoreBGNStab(BasePDE):
         tE = specialcf.tangential(data.mesh.dim)
         if data.mesh.dim == 2:
             nE = tE
+            tEc = CF((-ns[1], ns[0]))
         else:
             nE = Cross(ns, tE)
         if data.mesh.dim == 2:
-            dkappa = trial[2]*tE
-            deta = test[2]*tE
+            dkappa = trial[2]*tEc
+            deta = test[2]*tEc
             jump_dkappadn = (trial[1].Trace().Deriv()*nE-dkappa)
             jump_detadn = (test[1].Trace().Deriv()*nE-deta)
         elif data.mesh.dim == 3:
@@ -114,7 +121,7 @@ class WillmoreBGNStab(BasePDE):
             ds_lumped = ds(intrules = { TRIG : ir }, deformation = dX)
 
         lhs = -InnerProduct(grad(trial[1]).Trace(), grad(test[0]).Trace())*ds(deformation = dX)
-        lhs += InnerProduct(trial[1], test[1])*ds_lumped
+        lhs += InnerProduct(trial[1], test[1])*ds(deformation=dX)
         lhs += (InnerProduct(grad(trial[0]).Trace(), grad(test[1]).Trace()))*ds(deformation = dX)
 
         lhs += self.params['stab']*h*InnerProduct(jump_dkappadn,jump_detadn)\
@@ -127,10 +134,6 @@ class WillmoreBGNStab(BasePDE):
         ns = specialcf.normal(data.mesh.dim)
         Ps = Id(data.mesh.dim) - OuterProduct(ns, ns)
 
-        data.mesh.SetDeformation(dX)
-        ComputeStabMC(data, self.kappa_h, self.params)
-        data.mesh.UnsetDeformation()
-
         if data.mesh.dim == 2:
             ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
             ds_lumped = ds(intrules = { SEGM : ir }, deformation = dX)
@@ -139,6 +142,7 @@ class WillmoreBGNStab(BasePDE):
             ds_lumped = ds(intrules = { TRIG : ir }, deformation = dX)
 
         rhs = -InnerProduct(grad(self.X0).Trace(), grad(test[1]).Trace())*ds(deformation = dX)
+        rhs += -self.params['sp_curv']*InnerProduct(ns, test[1])*ds_lumped
         if self.params['rhs']:
             rhs += InnerProduct(self.params['rhs'], test[0])*ds(deformation = dX)
 
@@ -146,12 +150,13 @@ class WillmoreBGNStab(BasePDE):
             sym = 0.5*Ps*(grad(chi).Trace()+grad(chi).Trace().trans)*Ps
             return sym
         if data.mesh.dim == 3:
-            rhs += InnerProduct(Trace(grad(self.kappa_h).Trace()),Trace(grad(test[0]).Trace()))*ds(deformation = dX)
-            rhs += -2*InnerProduct(grad(self.kappa_h).Trace().trans, D_s(test[0], Ps)*Ps.trans)*ds(deformation = dX)
+            rhs += InnerProduct(Trace(grad(self.Y_h).Trace()),Trace(grad(test[0]).Trace()))*ds(deformation = dX)
+            rhs += -2*InnerProduct(grad(self.Y_h).Trace().trans, D_s(test[0], Ps)*Ps.trans)*ds(deformation = dX)
+            rhs += -1*InnerProduct(self.params['sp_curv']*self.kappa_h, grad(test[0]).Trace().trans*ns)*ds_lumped
             rhs += -0.5*InnerProduct((Norm(self.kappa_h - self.params['sp_curv']*ns)**2)*Ps,grad(test[0]).Trace())*ds_lumped
-            rhs += InnerProduct(Norm(self.kappa_h)**2*Ps,grad(test[0]).Trace())*ds_lumped
+            rhs += InnerProduct(InnerProduct(self.Y_h, self.kappa_h)*Ps,grad(test[0]).Trace())*ds_lumped
         elif data.mesh.dim == 2 :
-            rhs += InnerProduct((Norm(self.kappa_h)**2)*Ps,grad(test[0]).Trace())*ds_lumped
+            rhs += InnerProduct(InnerProduct(self.Y_h, self.kappa_h)*Ps,grad(test[0]).Trace())*ds_lumped
 
         tE = specialcf.tangential(data.mesh.dim)
         if data.mesh.dim == 2:
@@ -186,14 +191,21 @@ class WillmoreBGNStab(BasePDE):
 
         return mass
     
-    def PreProcess(self, data):
+    def PreProcess(self, data, dX = None):
 
         self.gfu.components[0].vec.data = data.dX.vec.data
         self.prev_gfu.append(self.gfu.vec.Copy())      
         if len(self.prev_gfu)>6:
             self.prev_gfu.pop(0)
+
+        if self.params['mc_autoupdate']:
+            data.mesh.SetDeformation(dX)
+            ns = specialcf.normal(data.mesh.dim)
+            ComputeStabMC(data, self.kappa_h, self.params)
+            self.Y_h.Set(self.kappa_h - self.params['sp_curv']*ns, definedon = self.domain)
+            data.mesh.UnsetDeformation()
     
-    def PostProcess(self, data):
+    def PostProcess(self, data, dX = None):
 
         super().PostProcess(data)
 
@@ -291,7 +303,7 @@ def ComputeStabMC(data, gfu, params):
         dV = H1(data.mesh, order=1,\
                     definedon = data.mesh.Boundaries('.*'))
     elif data.mesh.dim == 3:
-        dV = VectorFacetSurface(data.mesh, order=1,\
+        dV = NormalFacetSurface(data.mesh, order=0,\
                 definedon = data.mesh.Boundaries('.*'))
         
     h = specialcf.mesh_size
@@ -299,6 +311,7 @@ def ComputeStabMC(data, gfu, params):
     tE = specialcf.tangential(data.mesh.dim)
     if data.mesh.dim == 2:
         nE = tE
+        tEc = CF((-ns[1], ns[0]))
     else:
         nE = Cross(ns, tE)
     Ps = Id(data.mesh.dim) - OuterProduct(ns, ns)
@@ -309,77 +322,14 @@ def ComputeStabMC(data, gfu, params):
     if data.mesh.dim == 2:
         dkappa0 = dkappa0*tE
         deta0 = deta0*tE
-        jump_dkappadn0 = (kappa0.Trace().Deriv()*nE-dkappa0)
-        jump_detadn0 = (eta0.Trace().Deriv()*nE-deta0)
+        jump_dkappadn0 = (kappa0.Trace().Deriv()*nE-dkappa0*tEc)
+        jump_detadn0 = (eta0.Trace().Deriv()*nE-deta0*tEc)
     elif data.mesh.dim == 3:
         jump_dkappadn0 = (kappa0.Trace().Deriv()*nE-dkappa0.Trace())
         jump_detadn0 = (eta0.Trace().Deriv()*nE-deta0.Trace())
     A0 = BilinearForm(fes0)
     F0 = LinearForm(fes0)
-    A0 += kappa0*eta0*ds_lumped
-    A0 += params['stab']*h*InnerProduct(jump_dkappadn0,jump_detadn0)\
-        *ds(element_boundary=True)
-    A0.Assemble()
-    F0 += -InnerProduct(Ps, grad(eta0).Trace())*ds
-
-    if params['clamped_bnd']:
-
-        if data.mesh.dim == 3:
-            gfF = GridFunction(FacetSurface(data.mesh, order=0))
-            gfF.Set(1, definedon=data.mesh.BBoundaries(params['clamped_bnd']))
-            F0 += InnerProduct(nE, eta0) * gfF * ds_el_lumped
-
-        elif data.mesh.dim == 2:
-            gfF = GridFunction(H1(data.mesh, order =1,\
-                    definedon=data.mesh.Boundaries('.*')))
-            gfF.Set(1, definedon=data.mesh.BBoundaries(params['clamped_bnd']))
-            F0 += InnerProduct(gfF*nE, eta0) * ds_el_lumped
-
-    F0.Assemble()
-    gfu0.vec.data = A0.mat.Inverse(fes0.FreeDofs())*F0.vec
-    gfu.vec.data = gfu0.components[0].vec.data
-
-def ComputeStabMC1(data, gfu, params):
-
-    if data.mesh.dim == 2:
-        ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
-        ds_lumped = ds(intrules = { SEGM : ir })
-        ds_el_lumped = ds(element_boundary=True, intrules = { SEGM : ir })
-    elif data.mesh.dim == 3:
-        ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-        ds_lumped = ds(intrules = { TRIG : ir })
-        ds_el_lumped = ds(element_boundary=True, intrules = { TRIG : ir })
-
-    if data.mesh.dim == 2:
-        dV = H1(data.mesh, order=1,\
-                    definedon = data.mesh.Boundaries('.*'))
-    elif data.mesh.dim == 3:
-        dV = VectorFacetSurface(data.mesh, order=1,\
-                definedon = data.mesh.Boundaries('.*'))
-        
-    h = specialcf.mesh_size
-    ns = specialcf.normal(data.mesh.dim)
-    tE = specialcf.tangential(data.mesh.dim)
-    if data.mesh.dim == 2:
-        nE = tE
-    else:
-        nE = Cross(ns, tE)
-    Ps = Id(data.mesh.dim) - OuterProduct(ns, ns)
-
-    fes0 = gfu.space*dV
-    gfu0 = GridFunction(fes0)
-    (kappa0, dkappa0), (eta0, deta0) = fes0.TnT()
-    if data.mesh.dim == 2:
-        dkappa0 = dkappa0*tE
-        deta0 = deta0*tE
-        jump_dkappadn0 = (kappa0.Trace().Deriv()*nE-dkappa0)
-        jump_detadn0 = (eta0.Trace().Deriv()*nE-deta0)
-    elif data.mesh.dim == 3:
-        jump_dkappadn0 = (kappa0.Trace().Deriv()*nE-dkappa0.Trace())
-        jump_detadn0 = (eta0.Trace().Deriv()*nE-deta0.Trace())
-    A0 = BilinearForm(fes0)
-    F0 = LinearForm(fes0)
-    A0 += kappa0.Trace()*eta0.Trace()*ds
+    A0 += kappa0*eta0*ds
     A0 += params['stab']*h*InnerProduct(jump_dkappadn0,jump_detadn0)\
         *ds(element_boundary=True)
     A0.Assemble()

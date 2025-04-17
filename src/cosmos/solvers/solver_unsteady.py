@@ -29,9 +29,7 @@ class UnsteadySolver(SteadySolver):
     def SolveStep(self):
 
         for pde, scheme in self.PDEs:
-            pde.PreProcess(self.data)
             scheme.Solve(self.data, pde)
-            pde.PostProcess(self.data)
             self.data.UpdateALE()
 
     def __generator__(self):

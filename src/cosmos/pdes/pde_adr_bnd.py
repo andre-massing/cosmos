@@ -237,9 +237,9 @@ class BndADR(BasePDE):
         mass = 1/data.dt*trial[0]*test[0]*ds(deformation=dX)
         return mass
     
-    def PostProcess(self, data):
+    def PostProcess(self, data, dX = None):
 
-        super().PostProcess(data)
+        super().PostProcess(data, dX)
 
         if self.params['BP'] and not self.params['MP']:
 

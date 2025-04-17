@@ -54,36 +54,36 @@ class ALE(BasePDE):
         for save in self.save_solution:
             save.Initialize(data, self)
             
-    def GetLHS(self, data, trial, test):
+    def GetLHS(self, data, trial, test, dX = None):
 
         if self.lhs:
             lhs_i = self.lhs[0]
-            lhs = lhs_i['f'](data, trial, test)
+            lhs = lhs_i['f'](data, trial, test, dX)
             for lhs_i in self.rhs[1:]:
-                lhs += lhs_i['f'](data, trial, test)
+                lhs += lhs_i['f'](data, trial, test, dX)
         else:
             lhs = CF(0)*trial[0]*test[0]*ds
 
         return lhs 
         
-    def GetRHS(self, data, test):
+    def GetRHS(self, data, test, dX = None):
 
         if self.rhs:
             rhs_i = self.rhs[0]
-            rhs = rhs_i['f'](data, test)
+            rhs = rhs_i['f'](data, test, dX)
             for rhs_i in self.rhs[1:]:
-                rhs += rhs_i['f'](data, test)
+                rhs += rhs_i['f'](data, test, dX)
         else:
             rhs = CF(0)*test[0]*ds
 
         return rhs
     
-    def GetNL(self, data, trial, test):
+    def GetNL(self, data, trial, test, dX = None):
 
         nl_i = self.nl[0]
-        nonlin = nl_i['f'](data, trial, test)
+        nonlin = nl_i['f'](data, trial, test, dX)
         for nl_i in self.nl[1:]:
-            nonlin += nl_i['f'](data, trial, test)
+            nonlin += nl_i['f'](data, trial, test, dX)
 
         return nonlin
     
@@ -116,11 +116,11 @@ class ALE(BasePDE):
         params_check(params, accepted_keys, defaults)
         self.lhs.append(params)
     
-    def PreProcess(self, data):
+    def PreProcess(self, data, dX = None):
 
         pass
     
-    def PostProcess(self, data):
+    def PostProcess(self, data, dX = None):
 
         pass
         
@@ -134,7 +134,7 @@ class ALE(BasePDE):
 
     def get_error(self, data, ex_sol, norm):
 
-        err0 = compute_error(data=data, gfu = self.dX, u_ex=ex_sol[0],
+        err0 = compute_error(data=data, gfu = self.dX, u_ex=ex_sol,
                             norm = norm, domain = self.domain, 
                             VorB = BND)
         
@@ -142,7 +142,7 @@ class ALE(BasePDE):
     
     def set_solution(self, value):
 
-        self.dX.Set(value[0], definedon=self.domain)
+        self.dX.Set(value, definedon=self.domain)
 
     def get_solution(self):
 

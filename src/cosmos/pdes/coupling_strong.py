@@ -107,10 +107,10 @@ class StrongCoupling(BasePDE):
             
         return mass
     
-    def PreProcess(self, data):
+    def PreProcess(self, data, dX = None):
 
         for i, pde in enumerate(self.PDEs):
-            pde.PreProcess(data)
+            pde.PreProcess(data, dX)
             for j, k in enumerate(range(self.pntrs[i], self.pntrs[i+1])):
                 if pde.nfields == 1:
                     self.gfu.components[k].vec.data = pde.gfu.vec.data
@@ -119,7 +119,7 @@ class StrongCoupling(BasePDE):
 
         super().PreProcess(data)
     
-    def PostProcess(self, data):
+    def PostProcess(self, data, dX = None):
 
         super().PostProcess(data)
 
@@ -129,7 +129,7 @@ class StrongCoupling(BasePDE):
                     pde.gfu.vec.data = self.gfu.components[k].vec.data
                 else:
                     pde.gfu.components[j].vec.data = self.gfu.components[k].vec.data
-            pde.PostProcess(data)
+            pde.PostProcess(data, dX)
 
     def Update(self, data):
 

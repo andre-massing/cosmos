@@ -37,13 +37,13 @@ class BasePDE():
         
         raise NotImplementedError
     
-    def PreProcess(self, data):
+    def PreProcess(self, data, dX = None):
         
         self.prev_gfu.append(self.gfu.vec.Copy())    
         if len(self.prev_gfu)>6:
             self.prev_gfu.pop(0)
     
-    def PostProcess(self, data):
+    def PostProcess(self, data, dX = None):
         
         pass
     

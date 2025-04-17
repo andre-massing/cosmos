@@ -33,6 +33,8 @@ class Steady(Scheme):
 
     def Solve(self, data, pde):
 
+        pde.PreProcess(data)
+
         A = BilinearForm(pde.fes)
         A += pde.GetLHS(data, pde.get_trial(), pde.get_test(), dX = data.dX)
         
@@ -51,6 +53,8 @@ class Steady(Scheme):
             A.Assemble()
             pde.gfu.vec.data = A.mat.Inverse(freedofs = pde.fes.FreeDofs())*res
 
+        pde.PostProcess(data)
+
 class BDF1(Scheme):
 
     def __init__(self, conservative = True):
@@ -62,9 +66,12 @@ class BDF1(Scheme):
 
         if self.conservative:
 
-            M1 = BilinearForm(pde.fes)
             gfu = GridFunction(data.dX.space)
             gfu.vec.data = data.prev_dX[-1].data
+
+            pde.PreProcess(data, dX = gfu)
+
+            M1 = BilinearForm(pde.fes)
             M1 += pde.GetMass(data, pde.get_trial(), pde.get_test(), dX = gfu)
             M1.Assemble()
             mass_old_vec = M1.mat*pde.prev_gfu[-1]
@@ -74,6 +81,8 @@ class BDF1(Scheme):
         else:
 
             data.t.Set(data.t.Get() + data.dt.Get())
+
+            pde.PreProcess(data, dX = data.dX)
 
             M1 = BilinearForm(pde.fes)
             M1 += pde.GetMass(data, pde.get_trial(), pde.get_test(), dX = data.dX)
@@ -103,6 +112,8 @@ class BDF1(Scheme):
 
         data.t.Set(data.t.Get() - data.dt.Get())
 
+        pde.PostProcess(data, dX = data.dX)
+
 class BDF1imex(Scheme):
 
     def __init__(self, conservative = True):
@@ -114,6 +125,8 @@ class BDF1imex(Scheme):
 
         gfu = GridFunction(data.dX.space)
         gfu.vec.data = data.prev_dX[-1].data
+
+        pde.PreProcess(data, dX = gfu)
 
         if self.conservative:
 
@@ -158,6 +171,8 @@ class BDF1imex(Scheme):
 
         data.t.Set(data.t.Get() - data.dt.Get()) 
 
+        pde.PostProcess(data, dX = gfu)
+
 class BDF2(Scheme):
 
     def __init__(self, conservative = True):
@@ -167,12 +182,14 @@ class BDF2(Scheme):
 
     def Solve(self, data, pde):
 
-        if len(pde.prev_gfu) == 1:
+        if len(pde.prev_gfu) < 1:
 
             scheme = BDF1(self.conservative)
             scheme.Solve(data, pde)
 
         else:
+
+            pde.PreProcess(data, dX = data.dX)
 
             if self.conservative:
 
@@ -232,6 +249,8 @@ class BDF2(Scheme):
 
             data.t.Set(data.t.Get() - data.dt.Get())
 
+            pde.PostProcess(data, dX = data.dX)
+
 class BDF2imex(Scheme):
 
     def __init__(self, conservative = True):
@@ -241,7 +260,7 @@ class BDF2imex(Scheme):
 
     def Solve(self, data, pde):
 
-        if len(pde.prev_gfu) == 1:
+        if len(pde.prev_gfu) < 1:
 
             scheme = BDF1imex(self.conservative)
             scheme.Solve(data, pde)
@@ -250,6 +269,8 @@ class BDF2imex(Scheme):
 
             dX_extr = GridFunction(data.dX.space)
             dX_extr.vec.data = self.Extrapolate([data.prev_dX[-2], data.prev_dX[-1]]).data
+
+            pde.PreProcess(data, dX = dX_extr)
 
             if self.conservative:
 
@@ -314,6 +335,8 @@ class BDF2imex(Scheme):
 
             data.t.Set(data.t.Get() - data.dt.Get())
 
+            pde.PostProcess(data, dX = dX_extr)
+
     def Extrapolate(self, vec):
 
         v_ext = vec[-1].CreateVector()
@@ -331,6 +354,8 @@ class CN(Scheme):
         self.conservative = conservative
 
     def Solve(self, data, pde):
+
+        pde.PreProcess(data, dX = data.dX)
 
         gfu = GridFunction(data.dX.space)
         gfu.vec.data = data.prev_dX[-1].data
@@ -393,3 +418,5 @@ class CN(Scheme):
             pde.gfu.vec.data = A.mat.Inverse(freedofs = pde.fes.FreeDofs())*res
 
         data.t.Set(data.t.Get() - data.dt.Get())
+
+        pde.PostProcess(data, dX = data.dX)

@@ -16,10 +16,11 @@ class WillmoreBGN(BasePDE):
         self.nfields = 2
 
         accepted_keys = ['rhs', 'clamped_bnd', 'clamped_f',
-                         'domain', 'name', 'sp_curv', 'postprocess']
+                         'domain', 'name', 'sp_curv', 'postprocess',
+                         'mc_autoupdate', 'mc0']
         defaults = [None, None, None,
                     '.*', ['displacement', 'mean_curvature'], CF(0),
-                    False]
+                    False, True, None]
         
         if kwargs:
             params_check(kwargs, accepted_keys, defaults)
@@ -60,8 +61,14 @@ class WillmoreBGN(BasePDE):
 
         self.gfu = GridFunction(self.fes)
 
-        self.dX_h, self.kappa_h = self.gfu.components 
-        ComputeMC(data, self.kappa_h, self.params)
+        self.dX_h, self.Y_h = self.gfu.components 
+        self.kappa_h = GridFunction(V2)
+        if not self.params['mc0']:
+            ComputeMC(data, self.kappa_h, self.params)
+        else:
+            self.kappa_h.Set(self.params['mc0'], definedon = self.domain)
+        ns = specialcf.normal(data.mesh.dim)
+        self.Y_h.Set(self.kappa_h - self.params['sp_curv']*ns, definedon = self.domain)
             
         V_vol = VectorH1(data.mesh, order = self.fes_order)
         self.gfu_save = list(GridFunction(CompressCompound(V_vol*V_vol)).components)
@@ -101,10 +108,6 @@ class WillmoreBGN(BasePDE):
         ns = specialcf.normal(data.mesh.dim)
         Ps = Id(data.mesh.dim) - OuterProduct(ns, ns)
 
-        data.mesh.SetDeformation(dX)
-        ComputeMC(data, self.kappa_h, self.params)
-        data.mesh.UnsetDeformation()
-
         if data.mesh.dim == 2:
             ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
             ds_lumped = ds(intrules = { SEGM : ir }, deformation = dX)
@@ -113,6 +116,7 @@ class WillmoreBGN(BasePDE):
             ds_lumped = ds(intrules = { TRIG : ir }, deformation = dX)
 
         rhs = -InnerProduct(grad(self.X0).Trace(), grad(test[1]).Trace())*ds(deformation = dX)
+        rhs += -self.params['sp_curv']*InnerProduct(ns, test[1])*ds_lumped
         if self.params['rhs']:
             rhs += InnerProduct(self.params['rhs'], test[0])*ds(deformation = dX)
 
@@ -120,12 +124,13 @@ class WillmoreBGN(BasePDE):
             sym = 0.5*Ps*(grad(chi).Trace()+grad(chi).Trace().trans)*Ps
             return sym
         if data.mesh.dim == 3:
-            rhs += InnerProduct(Trace(grad(self.kappa_h).Trace()),Trace(grad(test[0]).Trace()))*ds(deformation = dX)
-            rhs += -2*InnerProduct(grad(self.kappa_h).Trace().trans, D_s(test[0], Ps)*Ps.trans)*ds(deformation = dX)
+            rhs += InnerProduct(Trace(grad(self.Y_h).Trace()),Trace(grad(test[0]).Trace()))*ds(deformation = dX)
+            rhs += -2*InnerProduct(grad(self.Y_h).Trace().trans, D_s(test[0], Ps)*Ps.trans)*ds(deformation = dX)
+            rhs += -1*InnerProduct(self.params['sp_curv']*self.kappa_h, grad(test[0]).Trace().trans*ns)*ds_lumped
             rhs += -0.5*InnerProduct((Norm(self.kappa_h - self.params['sp_curv']*ns)**2)*Ps,grad(test[0]).Trace())*ds_lumped
-            rhs += InnerProduct(Norm(self.kappa_h)**2*Ps,grad(test[0]).Trace())*ds_lumped
+            rhs += InnerProduct(InnerProduct(self.Y_h, self.kappa_h)*Ps,grad(test[0]).Trace())*ds_lumped
         elif data.mesh.dim == 2 :
-            rhs += InnerProduct((Norm(self.kappa_h)**2)*Ps,grad(test[0]).Trace())*ds_lumped
+            rhs += InnerProduct(InnerProduct(self.Y_h, self.kappa_h)*Ps,grad(test[0]).Trace())*ds_lumped
 
         tE = specialcf.tangential(data.mesh.dim)
         if data.mesh.dim == 2:
@@ -160,14 +165,21 @@ class WillmoreBGN(BasePDE):
 
         return mass
     
-    def PreProcess(self, data):
+    def PreProcess(self, data, dX = None):
 
         self.gfu.components[0].vec.data = data.dX.vec.data
         self.prev_gfu.append(self.gfu.vec.Copy())      
         if len(self.prev_gfu)>6:
             self.prev_gfu.pop(0)
+
+        ns = specialcf.normal(data.mesh.dim)
+        if self.params['mc_autoupdate']:
+            data.mesh.SetDeformation(dX)
+            ComputeMC(data, self.kappa_h, self.params)
+            self.Y_h.Set(self.kappa_h - self.params['sp_curv']*ns, definedon = self.domain)
+            data.mesh.UnsetDeformation()
     
-    def PostProcess(self, data):
+    def PostProcess(self, data, dX = None):
 
         super().PostProcess(data)
 
