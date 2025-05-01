@@ -20,7 +20,7 @@ class WillmoreBGN(BasePDE):
                          'mc_autoupdate', 'mc0']
         defaults = [None, None, None,
                     '.*', ['displacement', 'mean_curvature'], CF(0),
-                    False, True, None]
+                    None, True, None]
         
         if kwargs:
             params_check(kwargs, accepted_keys, defaults)
@@ -88,44 +88,44 @@ class WillmoreBGN(BasePDE):
         for save in self.save_solution:
             save.Initialize(data, self)
             
-    def GetLHS(self, data, trial, test, dX = None):
+    def GetLHS(self, data, trial, test, ale):
 
         if data.mesh.dim == 2:
             ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
-            ds_lumped = ds(intrules = { SEGM : ir }, deformation = dX)
+            ds_lumped = ds(intrules = { SEGM : ir }, deformation = ale.deformation)
         elif data.mesh.dim == 3:
             ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-            ds_lumped = ds(intrules = { TRIG : ir }, deformation = dX)
+            ds_lumped = ds(intrules = { TRIG : ir }, deformation = ale.deformation)
 
-        lhs = -InnerProduct(grad(trial[1]).Trace(), grad(test[0]).Trace())*ds(deformation = dX)
+        lhs = -InnerProduct(grad(trial[1]).Trace(), grad(test[0]).Trace())*ds(deformation = ale.deformation)
         lhs += InnerProduct(trial[1], test[1])*ds_lumped
-        lhs += (InnerProduct(grad(trial[0]).Trace(), grad(test[1]).Trace()))*ds(deformation = dX)
+        lhs += (InnerProduct(grad(trial[0]).Trace(), grad(test[1]).Trace()))*ds(deformation = ale.deformation)
         
         return lhs
         
-    def GetRHS(self, data, test, dX = None):
+    def GetRHS(self, data, test, ale):
 
         ns = specialcf.normal(data.mesh.dim)
         Ps = Id(data.mesh.dim) - OuterProduct(ns, ns)
 
         if data.mesh.dim == 2:
             ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
-            ds_lumped = ds(intrules = { SEGM : ir }, deformation = dX)
+            ds_lumped = ds(intrules = { SEGM : ir }, deformation = ale.deformation)
         elif data.mesh.dim == 3:
             ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-            ds_lumped = ds(intrules = { TRIG : ir }, deformation = dX)
+            ds_lumped = ds(intrules = { TRIG : ir }, deformation = ale.deformation)
 
-        rhs = -InnerProduct(grad(self.X0).Trace(), grad(test[1]).Trace())*ds(deformation = dX)
+        rhs = -InnerProduct(grad(self.X0).Trace(), grad(test[1]).Trace())*ds(deformation = ale.deformation)
         rhs += -self.params['sp_curv']*InnerProduct(ns, test[1])*ds_lumped
         if self.params['rhs']:
-            rhs += InnerProduct(self.params['rhs'], test[0])*ds(deformation = dX)
+            rhs += InnerProduct(self.params['rhs'], test[0])*ds(deformation = ale.deformation)
 
         def D_s(chi, Ps):
             sym = 0.5*Ps*(grad(chi).Trace()+grad(chi).Trace().trans)*Ps
             return sym
         if data.mesh.dim == 3:
-            rhs += InnerProduct(Trace(grad(self.Y_h).Trace()),Trace(grad(test[0]).Trace()))*ds(deformation = dX)
-            rhs += -2*InnerProduct(grad(self.Y_h).Trace().trans, D_s(test[0], Ps)*Ps.trans)*ds(deformation = dX)
+            rhs += InnerProduct(Trace(grad(self.Y_h).Trace()),Trace(grad(test[0]).Trace()))*ds(deformation = ale.deformation)
+            rhs += -2*InnerProduct(grad(self.Y_h).Trace().trans, D_s(test[0], Ps)*Ps.trans)*ds(deformation = ale.deformation)
             rhs += -1*InnerProduct(self.params['sp_curv']*self.kappa_h, grad(test[0]).Trace().trans*ns)*ds_lumped
             rhs += -0.5*InnerProduct((Norm(self.kappa_h - self.params['sp_curv']*ns)**2)*Ps,grad(test[0]).Trace())*ds_lumped
             rhs += InnerProduct(InnerProduct(self.Y_h, self.kappa_h)*Ps,grad(test[0]).Trace())*ds_lumped
@@ -152,41 +152,41 @@ class WillmoreBGN(BasePDE):
 
         return rhs
 
-    def GetMass(self, data, trial, test, dX = None):
+    def GetMass(self, data, trial, test, ale):
 
         if data.mesh.dim == 2:
             ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
-            ds_lumped = ds(intrules = { SEGM : ir }, deformation = dX)
+            ds_lumped = ds(intrules = { SEGM : ir }, deformation = ale.deformation)
         elif data.mesh.dim == 3:
             ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-            ds_lumped = ds(intrules = { TRIG : ir }, deformation = dX)
+            ds_lumped = ds(intrules = { TRIG : ir }, deformation = ale.deformation)
 
         mass = InnerProduct(trial[0], test[0])/data.dt*ds_lumped
 
         return mass
     
-    def PreProcess(self, data, dX = None):
+    def PreProcess(self, data, ale):
 
-        self.gfu.components[0].vec.data = data.dX.vec.data
+        self.gfu.components[0].vec.data = ale.deformation.vec.data
         self.prev_gfu.append(self.gfu.vec.Copy())      
         if len(self.prev_gfu)>6:
             self.prev_gfu.pop(0)
 
         ns = specialcf.normal(data.mesh.dim)
         if self.params['mc_autoupdate']:
-            data.mesh.SetDeformation(dX)
+            data.mesh.SetDeformation(ale.deformation)
             ComputeMC(data, self.kappa_h, self.params)
             self.Y_h.Set(self.kappa_h - self.params['sp_curv']*ns, definedon = self.domain)
             data.mesh.UnsetDeformation()
     
-    def PostProcess(self, data, dX = None):
+    def PostProcess(self, data, ale):
 
-        super().PostProcess(data)
+        super().PostProcess(data, ale)
 
         if self.postprocess:
 
             ns = specialcf.normal(data.mesh.dim)
-            n_h = GridFunction(data.dX.space)
+            n_h = GridFunction(ale.deformation.space)
             data.mesh.SetDeformation(self.gfu.components[0])
             n_h.Set(ns, definedon=self.domain)
             data.mesh.UnsetDeformation()
@@ -198,20 +198,24 @@ class WillmoreBGN(BasePDE):
             w_h = GridFunction(fes)
             A = BilinearForm(fes)
             (w, kappa), (eta, mu) = fes.TnT()
-            A += InnerProduct(grad(w).Trace(), grad(eta).Trace())*ds
-            A += -1*InnerProduct(kappa*n_h, eta)*ds
-            A += 1*InnerProduct(w, mu*n_h)*ds
+            if self.postprocess == 0:
+                ds_duanli = ds
+            elif self.postprocess == 1:
+                ds_duanli = ds(deformation = self.gfu.components[0])
+            A += InnerProduct(grad(w).Trace(), grad(eta).Trace())*ds_duanli
+            A += -1*InnerProduct(kappa*n_h, eta)*ds_duanli
+            A += 1*InnerProduct(w, mu*n_h)*ds_duanli
             F = LinearForm(fes)
-            F += -1*InnerProduct(grad(self.X0).Trace(), grad(eta).Trace())*ds
-            F += -1*InnerProduct(grad(self.gfu.components[0]).Trace(), grad(eta).Trace())*ds
+            F += -1*InnerProduct(grad(self.X0).Trace(), grad(eta).Trace())*ds_duanli
+            F += -1*InnerProduct(grad(self.gfu.components[0]).Trace(), grad(eta).Trace())*ds_duanli
             A.Assemble()
             F.Assemble()
             w_h.vec.data = A.mat.Inverse(freedofs = fes.FreeDofs())*F.vec
             self.gfu.components[0].vec.data += w_h.components[0].vec.data
         
-    def Update(self, data):
+    def Update(self, data, ale):
 
-        data.mesh.SetDeformation(data.dX)
+        data.mesh.SetDeformation(ale.deformation)
 
         self.dX_save.Set(self.dX_h, definedon = self.domain)
         self.kappa_save.Set(self.kappa_h, definedon = self.domain)

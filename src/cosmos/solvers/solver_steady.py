@@ -1,5 +1,5 @@
 from ngsolve import *
-from cosmos.solvers.solver_base import SolverData, BaseSolver
+from cosmos.solvers.solver_base import SolverData, SolverALE, BaseSolver
 from cosmos.pdes.pde_base import BasePDE
 from cosmos.solvers.schemes import Scheme
 from cosmos.utils.tools import params_check
@@ -20,6 +20,7 @@ class SteadySolver(BaseSolver):
         self.data = SolverData(mesh)
         if self.verbose > 0:
             print_mesh_info(self.data.mesh)
+        self.ale = SolverALE(mesh)
         
         self.PDEs = []
 
@@ -46,11 +47,12 @@ class SteadySolver(BaseSolver):
     def SolveStep(self):
 
         for pde, scheme in self.PDEs:
-            scheme.Solve(self.data, pde)
+            scheme.Solve(self.data, pde, self.ale)
+            self.ale.UpdateALE()
                     
     def PreProcess(self):
 
-        pass
+        self.ale.UpdateALE()
 
     def PostProcess(self):
 

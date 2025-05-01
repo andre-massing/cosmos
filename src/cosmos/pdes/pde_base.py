@@ -25,25 +25,25 @@ class BasePDE():
         
         raise NotImplementedError
     
-    def GetLHS(self, data, trial, test, dX = None):
+    def GetLHS(self, data, trial, test, ale):
         
         raise NotImplementedError
     
-    def GetRHS(self, data, test, dX = None):
+    def GetRHS(self, data, test, ale):
         
         raise NotImplementedError
     
-    def GetMass(self, data, trial, test, dX = None):
+    def GetMass(self, data, trial, test, ale):
         
         raise NotImplementedError
     
-    def PreProcess(self, data, dX = None):
+    def PreProcess(self, data, ale):
         
         self.prev_gfu.append(self.gfu.vec.Copy())    
         if len(self.prev_gfu)>6:
             self.prev_gfu.pop(0)
     
-    def PostProcess(self, data, dX = None):
+    def PostProcess(self, data, ale):
         
         pass
     

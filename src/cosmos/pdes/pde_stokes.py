@@ -16,11 +16,11 @@ class Stokes(BasePDE):
         self.nfields = 2
 
         accepted_keys = ['rhs', 'mu', 'v0',
-                         'neu', 'dir',
-                         'domain', 'name']
+                         'dir', 'rho',
+                         'domain', 'name', 'dirichlet']
         defaults = [None, None, None,
-                    None, None,
-                    '.*', ['velocity', 'pressure']]
+                    None, CF(1),
+                    '.*', ['velocity', 'pressure'], None]
         
         if kwargs:
             params_check(kwargs, accepted_keys, defaults)
@@ -43,7 +43,10 @@ class Stokes(BasePDE):
         self.domain = data.mesh.Materials(self.params['domain'])
         self.name = self.params['name']
         
-        V1 = VectorH1(data.mesh, order = 2, definedon = self.domain)
+        if self.params['dirichlet']:
+            V1 = VectorH1(data.mesh, order = 2, definedon = self.domain, dirichlet = self.params['dirichlet'])
+        else:
+            V1 = VectorH1(data.mesh, order = 2, definedon = self.domain)
         V2 = H1(data.mesh, order = 1, definedon = self.domain)
             
         self.fes = V1*V2
@@ -53,26 +56,20 @@ class Stokes(BasePDE):
 
         self.gfu = GridFunction(self.fes)
 
+        self.lam = 1
+
         self.V_h, self.P_h = self.gfu.components 
         if self.params['v0']:
-            self.V_h.Set(self.params['v0'], definedon = self.domain)
-        else:
-            A = BilinearForm(self.fes)
-            A += self.GetLHS(data, self.get_trial(), self.get_test())
-            A.Assemble()
-            import scipy.sparse as sp
-            import matplotlib.pylab as plt
-            plt.rcParams['figure.figsize'] = (12, 12)
-            AA = sp.csr_matrix(A.mat.CSR())
-            fig = plt.figure(); ax1 = fig.add_subplot(121); ax2 = fig.add_subplot(122)
-            ax1.set_xlabel("numerically non-zero"); ax1.spy(AA)
-            ax2.set_xlabel("reserved entries (potentially non-zero)"); ax2.spy(AA,precision=-1)
-            plt.show()
-            F = LinearForm(self.fes)
-            F += self.GetRHS(data, self.get_test())
-            F.Assemble()
-
-            self.gfu.vec.data = A.mat.Inverse(freedofs = self.fes.FreeDofs())*F.vec
+            self.V_h.Set(self.params['v0'][0], definedon = self.domain)
+            self.P_h.Set(self.params['v0'][1], definedon = self.domain)
+        # else:
+        #     A = BilinearForm(self.fes)
+        #     A += self.GetLHS(data, self.trial, self.test)
+        #     A.Assemble()
+        #     F = LinearForm(self.fes)
+        #     F += self.GetRHS(data, self.test)
+        #     F.Assemble()
+        #     self.gfu.vec.data = A.mat.Inverse(freedofs = self.fes.FreeDofs())*F.vec
         
         self.gfu_save = list(self.gfu.components)
 
@@ -82,67 +79,66 @@ class Stokes(BasePDE):
         for save in self.save_solution:
             save.Initialize(data, self)
             
-    def GetLHS(self, data, trial, test, dX = None):
+    def GetLHS(self, data, trial, test, ale):
 
-        lhs = self.params['mu']*InnerProduct(grad(trial[0]), grad(test[0])) * dx(deformation=dX)
-        lhs += -1* div(test[0]) * trial[1] * dx(deformation=dX)
-        lhs += -1* div(trial[0]) * test[1] * dx(deformation=dX)
+        lhs = 2*self.params['rho']*self.params['mu']*InnerProduct(Sym(grad(trial[0])), Sym(grad(test[0]))) * dx(deformation = ale.deformation)
+        lhs += - div(test[0]) * trial[1] * dx(deformation = ale.deformation)
+        lhs += - div(trial[0]) * test[1] * dx(deformation = ale.deformation)
 
         if self.params['dir']:
             alpha = 5 * self.fes_order * (self.fes_order+1)
+            beta = 5 * self.fes_order * (self.fes_order+1)
             n = specialcf.normal(data.mesh.dim)
             h = specialcf.mesh_size
             for key, value in self.params['dir'].items():
-                lhs += - self.params['mu']*InnerProduct(grad(trial[0])*n, test[0])*ds(definedon = key, skeleton=True, deformation=dX) \
-                    - self.params['mu']*InnerProduct(grad(test[0])*n, trial[0])*ds(definedon = key, skeleton=True, deformation=dX)\
-                    + self.params['mu']*alpha/h*trial[0]*test[0]*ds(definedon = key, skeleton = True, deformation=dX)
-        
+                lhs += - 2*self.params['rho']*self.params['mu']*InnerProduct(Sym(grad(test[0]))*n, trial[0])*ds(definedon = key, skeleton=True, deformation = ale.deformation)\
+                    - 2*self.params['rho']*self.params['mu']*InnerProduct(Sym(grad(trial[0]))*n, test[0])*ds(definedon = key, skeleton=True, deformation = ale.deformation)\
+                    + self.params['rho']*self.params['mu']*alpha/h*trial[0]*test[0]*ds(definedon = key, skeleton = True, deformation = ale.deformation)\
+                    + InnerProduct(test[1]*n, trial[0])*ds(definedon = key, skeleton=True, deformation = ale.deformation)\
+                    + InnerProduct(trial[1]*n, test[0])*ds(definedon = key, skeleton=True, deformation = ale.deformation)\
+                    + self.params['rho']*self.lam*beta/h*trial[0]*n*test[0]*n*ds(definedon = key, skeleton = True, deformation = ale.deformation)\
+                    
         return lhs
         
-    def GetRHS(self, data, test, dX = None):
+    def GetRHS(self, data, test, ale):
 
         if self.params['rhs']:
-            rhs = self.params['rhs']*test[0]*dx(deformation=dX)
+            rhs = self.params['rhs']*test[0]*dx(deformation = ale.deformation)
         else:
-            rhs = CF((0,)*data.mesh.dim)*test[0]*dx(deformation=dX)
-
-        if self.params['neu']:
-            ns = specialcf.normal(data.mesh.dim)
-            dim = data.mesh.dim
-            cf = data.mesh.BoundaryCF(self.params['neu'], default = CF((0,)*dim**2, dims = (dim, dim)))
-            rhs += InnerProduct(cf*ns, test[0])*ds(deformation=dX)
+            rhs = CF((0,)*data.mesh.dim)*test[0]*dx(deformation = ale.deformation)
 
         if self.params['dir']:
             alpha = 5 * self.fes_order * (self.fes_order+1)
+            beta = 5 * self.fes_order * (self.fes_order+1)
             n = specialcf.normal(data.mesh.dim)
             h = specialcf.mesh_size
-            cf = data.mesh.BoundaryCF(self.params['dir'], default = CF((0,)*data.mesh.dim))
             for key, value in self.params['dir'].items():
-                rhs += - self.params['mu']*InnerProduct(grad(test[0])*n, value)*ds(definedon = key, skeleton=True, deformation=dX)\
-                    + self.params['mu']*alpha/h*value*test[0]*ds(definedon = key, skeleton = True, deformation=dX)\
-        
+                rhs += - 2*self.params['rho']*self.params['mu']*InnerProduct(Sym(grad(test[0]))*n, value)*ds(definedon = key, skeleton=True, deformation = ale.deformation)\
+                    + self.params['rho']*self.params['mu']*alpha/h*value*test[0]*ds(definedon = key, skeleton = True, deformation = ale.deformation)\
+                    + InnerProduct(test[1]*n, value)*ds(definedon = key, skeleton=True, deformation = ale.deformation)\
+                    + self.params['rho']*self.lam*beta/h*value*n*test[0]*n*ds(definedon = key, skeleton = True, deformation = ale.deformation)\
         
         return rhs
 
-    def GetMass(self, data, trial, test, dX = None):
+    def GetMass(self, data, trial, test, ale):
 
-        mass = trial[0]*test[0]/data.dt*dx(deformation=dX)
+        mass = self.params['rho']*trial[0]*test[0]/data.dt*dx(deformation = ale.deformation)
 
         return mass
     
-    def PreProcess(self, data, dX = None):
+    def PreProcess(self, data, ale):
 
         self.prev_gfu.append(self.gfu.vec.Copy())      
         if len(self.prev_gfu)>6:
             self.prev_gfu.pop(0)
     
-    def PostProcess(self, data, dX = None):
+    def PostProcess(self, data, ale):
 
-        super().PostProcess(data)
+        super().PostProcess(data, ale)
 
-    def Update(self, data):
+    def Update(self, data, ale):
 
-        data.mesh.SetDeformation(data.dX)
+        data.mesh.SetDeformation(ale.deformation)
 
         for save in self.save_error:
             save.Save(data, self)

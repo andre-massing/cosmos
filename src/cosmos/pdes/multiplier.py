@@ -25,7 +25,6 @@ class Multiplier(BasePDE):
         self.nl = []
         self.rhs = []
         self.lhs = []
-        self.dX = None
 
     def Initialize(self, data):
 
@@ -36,7 +35,7 @@ class Multiplier(BasePDE):
 
         self.name = [self.params['name']] 
         
-        self.fes = Compress(self.params['space'])
+        self.fes = self.params['space']
 
         self.trial = self.fes.TrialFunction()
         self.test = self.fes.TestFunction()
@@ -51,36 +50,42 @@ class Multiplier(BasePDE):
         # for save in self.save_solution:
         #     save.Initialize(data, self)
             
-    def GetLHS(self, data, trial, test, dX = None):
+    def GetLHS(self, data, trial, test, ale):
 
         if self.lhs:
             lhs_i = self.lhs[0]
-            lhs = lhs_i['f'](data, trial, test, dX)
+            lhs = lhs_i['f'](data, trial, test, ale)
             for lhs_i in self.rhs[1:]:
-                lhs += lhs_i['f'](data, trial, test, dX)
+                lhs += lhs_i['f'](data, trial, test, ale)
         else:
             lhs = CF(0)*trial[0]*test[0]*ds
 
         return lhs 
         
-    def GetRHS(self, data, test, dX = None):
+    def GetRHS(self, data, test, ale):
 
         if self.rhs:
             rhs_i = self.rhs[0]
-            rhs = rhs_i['f'](data, test, dX)
+            rhs = rhs_i['f'](data, test, ale)
             for rhs_i in self.rhs[1:]:
-                rhs += rhs_i['f'](data, test, dX)
+                rhs += rhs_i['f'](data, test, ale)
         else:
-            rhs = CF(0)*test[0]*ds
+            rhs = CF(0)*ds
 
         return rhs
     
-    def GetNL(self, data, trial, test, dX = None):
+    def GetMass(self, data, trial, test, ale):
+
+        mass = CF(0)*ds
+
+        return mass
+    
+    def GetNL(self, data, trial, test, ale):
 
         nl_i = self.nl[0]
-        nonlin = nl_i['f'](data, trial, test, dX)
+        nonlin = nl_i['f'](data, trial, test, ale)
         for nl_i in self.nl[1:]:
-            nonlin += nl_i['f'](data, trial, test, dX)
+            nonlin += nl_i['f'](data, trial, test, ale)
 
         return nonlin
     
@@ -113,15 +118,15 @@ class Multiplier(BasePDE):
         params_check(params, accepted_keys, defaults)
         self.lhs.append(params)
     
-    def PreProcess(self, data, dX = None):
+    def PreProcess(self, data, ale):
 
         pass
     
-    def PostProcess(self, data, dX = None):
+    def PostProcess(self, data, ale):
 
         pass
         
-    def Update(self, data):
+    def Update(self, data, ale):
 
         pass
 

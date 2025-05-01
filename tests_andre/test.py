@@ -124,3 +124,18 @@ print(gfu.components)
 gfu2.components[1:].vec.data = gfu1.vec.data
 # Draw(grad(gfu), mesh)
 # isinstance(gfu.components, tuple)
+
+# %%
+
+from ngsolve import *
+from cosmos.utils.generate_surface_meshes import generate_circle
+from ngsolve.webgui import Draw
+
+mesh, _ = generate_circle()
+fes = VectorL2(mesh)
+gfu = GridFunction(fes)
+gfu.Set((0,y))
+
+mesh.SetDeformation(gfu)
+
+Draw(mesh)

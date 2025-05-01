@@ -75,7 +75,7 @@ class AdBndADR(BndADR):
         for save in self.save_solution:
             save.Initialize(data, self)
 
-    def GetLHS(self, data, trial, test, dX = None):
+    def GetLHS(self, data, trial, test, ale):
 
         ns = specialcf.normal(data.mesh.dim)
         Ps = Id(self.dim) - OuterProduct(ns, ns) 
@@ -92,12 +92,12 @@ class AdBndADR(BndADR):
             facet_space = FacetSurface(data.mesh, order = 0)
 
         if self.params['c']:
-            lhs = self.params['c']*trial[0]*test[0]*ds(deformation=dX)
+            lhs = self.params['c']*trial[0]*test[0]*ds(deformation = ale.deformation)
         else:
-            lhs = CF(0)*trial[0]*test[0]*ds(deformation=dX)
+            lhs = CF(0)*trial[0]*test[0]*ds(deformation = ale.deformation)
 
         if self.params['d']:
-            lhs += self.params['d']*grad(trial[0]).Trace()*grad(test[0]).Trace()*ds(deformation=dX)
+            lhs += self.params['d']*grad(trial[0]).Trace()*grad(test[0]).Trace()*ds(deformation = ale.deformation)
             
             if self.params['dir_d']:
 
@@ -108,13 +108,13 @@ class AdBndADR(BndADR):
 
                     dir_d[str(i)] = GridFunction(facet_space)
                     dir_d[str(i)].Set(1, definedon=data.mesh.BBoundaries(key))
-                    lhs += - self.params['d']*InnerProduct(nE, grad(trial[0]).Trace())*dir_d[str(i)]*test[0]*ds(element_boundary=True, deformation=dX) \
-                            - self.params['d']*InnerProduct(nE, grad(test[0]).Trace())*dir_d[str(i)]*trial[0]*ds(element_boundary=True, deformation=dX)\
-                            + self.params['d']*alpha/h*trial[0]*test[0]*dir_d[str(i)]*ds(element_boundary=True, deformation=dX)
+                    lhs += - self.params['d']*InnerProduct(nE, grad(trial[0]).Trace())*dir_d[str(i)]*test[0]*ds(element_boundary=True, deformation = ale.deformation) \
+                            - self.params['d']*InnerProduct(nE, grad(test[0]).Trace())*dir_d[str(i)]*trial[0]*ds(element_boundary=True, deformation = ale.deformation)\
+                            + self.params['d']*alpha/h*trial[0]*test[0]*dir_d[str(i)]*ds(element_boundary=True, deformation = ale.deformation)
 
         if self.params['b']:
             b = Ps*self.params['b']
-            lhs += -b*grad(test[0]).Trace() * trial[0] *ds(deformation=dX)
+            lhs += -b*grad(test[0]).Trace() * trial[0] *ds(deformation = ale.deformation)
 
             if self.params['neu_b']:
 
@@ -124,7 +124,7 @@ class AdBndADR(BndADR):
                     neu_b[str(i)].Set(1, definedon=data.mesh.BBoundaries(key))
                     lhs += IfPos(InnerProduct(nE, b), 
                                     InnerProduct(nE, b)*trial[0], 0)\
-                                        *neu_b[str(i)]*test[0]*ds(element_boundary=True, deformation=dX)
+                                        *neu_b[str(i)]*test[0]*ds(element_boundary=True, deformation = ale.deformation)
             
             if self.params['Fneu_b']:
 
@@ -134,7 +134,7 @@ class AdBndADR(BndADR):
                     Fneu_b[str(i)].Set(1, definedon=data.mesh.BBoundaries('.*') - data.mesh.BBoundaries(key))
                     lhs += IfPos(InnerProduct(nE, b), 
                                     InnerProduct(nE, b)*trial[0], CF(0))\
-                                        *Fneu_b[str(i)]*test[0]*ds(element_boundary=True, deformation=dX)
+                                        *Fneu_b[str(i)]*test[0]*ds(element_boundary=True, deformation = ale.deformation)
                     
             if self.params['dir_b']:
 
@@ -144,7 +144,7 @@ class AdBndADR(BndADR):
                     dir_b[str(i)].Set(1, definedon=data.mesh.BBoundaries(key))
                     lhs += IfPos(InnerProduct(nE, b), 
                                     InnerProduct(nE, b)*trial[0], 0)\
-                                        *dir_b[str(i)]*test[0]*ds(element_boundary=True, deformation=dX)
+                                        *dir_b[str(i)]*test[0]*ds(element_boundary=True, deformation = ale.deformation)
                     
             stab = Norm(b)*h
             if self.params['d']:
@@ -164,17 +164,17 @@ class AdBndADR(BndADR):
             gfFBB = GridFunction(facet_space)
             gfFBB.Set(1, definedon=data.mesh.BBoundaries('.*'))
             lhs +=  h**3/stab*(gfFone - gfFBB)*InnerProduct(jump_dudn,jump_dvdn)\
-                *ds(element_boundary=True, deformation=dX)
+                *ds(element_boundary=True, deformation = ale.deformation)
             
             if data.mesh.dim == 2:
                 lhs +=  gfFBB*InnerProduct(trial[1],test[1])\
-                         *ds(element_boundary=True, deformation=dX)
+                         *ds(element_boundary=True, deformation = ale.deformation)
             elif data.mesh.dim == 3:
-                lhs +=  gfFBB*trial[1].Trace()*test[1].Trace()*ds(element_boundary=True, deformation=dX)
+                lhs +=  gfFBB*trial[1].Trace()*test[1].Trace()*ds(element_boundary=True, deformation = ale.deformation)
                     
         return lhs
 
-    def GetRHS(self, data, test, dX=None):
+    def GetRHS(self, data, test, ale):
 
         ns = specialcf.normal(data.mesh.dim)
         Ps = Id(self.dim) - OuterProduct(ns, ns)
@@ -191,9 +191,9 @@ class AdBndADR(BndADR):
             facet_space = FacetSurface(data.mesh, order = 0)
 
         if self.params['rhs']:
-            rhs =  self.params['rhs']*test[0]*ds(deformation=dX)
+            rhs =  self.params['rhs']*test[0]*ds(deformation = ale.deformation)
         else:
-            rhs =  CF(0)*test[0]*ds(deformation=dX)
+            rhs =  CF(0)*test[0]*ds(deformation = ale.deformation)
 
         if self.params['neu_d']:
 
@@ -201,7 +201,7 @@ class AdBndADR(BndADR):
             for i, (key, value) in enumerate(self.params['neu_d'].items()):                
                 neu_d[str(i)] = GridFunction(facet_space)
                 neu_d[str(i)].Set(1, definedon=data.mesh.BBoundaries(key))
-                rhs += -InnerProduct(nE, value)*neu_d[str(i)]*test[0]*ds(element_boundary=True, deformation=dX)
+                rhs += -InnerProduct(nE, value)*neu_d[str(i)]*test[0]*ds(element_boundary=True, deformation = ale.deformation)
 
         if self.params['neu_b']:
 
@@ -212,7 +212,7 @@ class AdBndADR(BndADR):
                 neu_b[str(i)].Set(1, definedon=data.mesh.BBoundaries(key))
                 rhs += -IfPos(InnerProduct(nE, b), 0,
                             InnerProduct(nE, value))*neu_b[str(i)]*test[0]\
-                                *ds(element_boundary=True, deformation=dX)
+                                *ds(element_boundary=True, deformation = ale.deformation)
             
         if self.params['Fneu_b']:
 
@@ -221,7 +221,7 @@ class AdBndADR(BndADR):
                 Fneu_b[str(i)] = GridFunction(facet_space)
                 Fneu_b[str(i)].Set(1, definedon=data.mesh.BBoundaries(key))
                 rhs += -InnerProduct(nE, value)*Fneu_b[str(i)]*test[0]\
-                                *ds(element_boundary=True, deformation=dX)
+                                *ds(element_boundary=True, deformation = ale.deformation)
                 
         if self.params['dir_d']:
 
@@ -230,8 +230,8 @@ class AdBndADR(BndADR):
             for i, (key, value) in enumerate(self.params['dir_d'].items()):
                 dir_d[str(i)] = GridFunction(facet_space)
                 dir_d[str(i)].Set(1, definedon=data.mesh.BBoundaries(key))
-                rhs += self.params['d']*alpha/h*value*test[0]*dir_d[str(i)]*ds(element_boundary=True, deformation=dX) \
-                    - self.params['d']*InnerProduct(nE, grad(test[0]).Trace())*dir_d[str(i)]*value*ds(element_boundary=True, deformation=dX)
+                rhs += self.params['d']*alpha/h*value*test[0]*dir_d[str(i)]*ds(element_boundary=True, deformation = ale.deformation) \
+                    - self.params['d']*InnerProduct(nE, grad(test[0]).Trace())*dir_d[str(i)]*value*ds(element_boundary=True, deformation = ale.deformation)
                 
                 
         if self.params['dir_b']:
@@ -243,17 +243,17 @@ class AdBndADR(BndADR):
                 dir_b[str(i)].Set(1, definedon=data.mesh.BBoundaries(key))
                 rhs += -IfPos(InnerProduct(nE, b), 0,
                             InnerProduct(nE, b*value))*dir_b[str(i)]*test[0]\
-                                *ds(element_boundary=True, deformation=dX)         
+                                *ds(element_boundary=True, deformation = ale.deformation)         
                 
         return rhs
 
-    def GetMass(self, data, trial, test, dX=None):
-        mass = 1/data.dt*trial[0]*test[0]*ds(deformation=dX) 
+    def GetMass(self, data, trial, test, ale):
+        mass = 1/data.dt*trial[0]*test[0]*ds(deformation = ale.deformation) 
         return mass
     
-    def PostProcess(self, data, dX = None):
+    def PostProcess(self, data, ale):
 
-        super().PostProcess(data, dX)
+        super().PostProcess(data, ale)
 
         if self.params['BP'] and not self.params['MP']:
 
@@ -292,9 +292,9 @@ class AdBndADR(BndADR):
 
             self.gfu_comp[0].vec.data = gfu_new
 
-    def Update(self, data):
+    def Update(self, data, ale):
 
-        data.mesh.SetDeformation(data.dX)
+        data.mesh.SetDeformation(ale.deformation)
 
         self.gfu_save[0].Set(self.gfu.components[0], definedon = self.domain)
 

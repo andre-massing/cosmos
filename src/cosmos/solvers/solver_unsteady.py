@@ -1,5 +1,5 @@
 from ngsolve import *
-from cosmos.solvers.solver_base import SolverData
+from cosmos.solvers.solver_base import SolverData, SolverALE
 from cosmos.pdes.pde_base import BasePDE
 from cosmos.solvers.schemes import Scheme
 from cosmos.utils.tools import params_check
@@ -23,14 +23,15 @@ class UnsteadySolver(SteadySolver):
         self.t0 = self.data.t.Get()
         if self.verbose > 0:
             print_mesh_info(self.data.mesh)
+        self.ale = SolverALE(mesh)
         
         self.PDEs = []
 
     def SolveStep(self):
 
         for pde, scheme in self.PDEs:
-            scheme.Solve(self.data, pde)
-            self.data.UpdateALE()
+            scheme.Solve(self.data, pde, self.ale)
+            self.ale.UpdateALE()
 
     def __generator__(self):
 
@@ -78,14 +79,14 @@ class UnsteadySolver(SteadySolver):
         self.data.prev_dt.append(self.data.dt.Get())    
         if len(self.data.prev_dt)>6:
             self.data.prev_dt.pop(0)
-        self.data.UpdateALE()
+        self.ale.UpdateALE()
 
     def Initialize(self):
 
-        self.data.prev_dX.append(self.data.dX.vec.Copy())
-        self.data.prev_V.append(self.data.V.vec.Copy())
+        self.ale.prev_d.append(self.ale.deformation.vec.Copy())
+        self.ale.prev_v.append(self.ale.velocity.vec.Copy())
         for pde, _ in self.PDEs:
-            pde.Update(self.data)
+            pde.Update(self.data, self.ale)
 
     def Solve(self):
 
@@ -95,10 +96,10 @@ class UnsteadySolver(SteadySolver):
         
     def PostProcess(self):
 
-        self.data.prev_dX.append(self.data.dX.vec.Copy())
-        self.data.prev_V.append(self.data.V.vec.Copy())    
-        if len(self.data.prev_dX)>6:
-            self.data.prev_dX.pop(0)
-            self.data.prev_V.pop(0)
+        self.ale.prev_d.append(self.ale.deformation.vec.Copy())
+        self.ale.prev_v.append(self.ale.velocity.vec.Copy())    
+        if len(self.ale.prev_d)>6:
+            self.ale.prev_d.pop(0)
+            self.ale.prev_v.pop(0)
         for pde, _ in self.PDEs:
-            pde.Update(self.data)
+            pde.Update(self.data, self.ale)

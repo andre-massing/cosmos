@@ -16,11 +16,11 @@ class NeoHook(BasePDE):
         self.nonlinear = True
 
         accepted_keys = ['rhs', 'mu', 'lam', 'd0',
-                         'neu', 'dir',
-                         'domain', 'name']
+                        'factor', 'rho',
+                         'domain', 'name', 'dirichlet', 'steady']
         defaults = [None, None, None, None,
-                    None, None,
-                    '.*', ['displacement', 'velocity']]
+                    None, CF(1),
+                    '.*', ['displacement', 'velocity'], None, False]
         
         if kwargs:
             params_check(kwargs, accepted_keys, defaults)
@@ -43,10 +43,12 @@ class NeoHook(BasePDE):
         self.domain = data.mesh.Materials(self.params['domain'])
         self.name = self.params['name']
         
-        V1 = VectorH1(data.mesh, order = 1, definedon = self.domain)
-        V2 = VectorH1(data.mesh, order = 1, definedon = self.domain)
-            
-        self.fes = V1*V2
+        if self.params['dirichlet']:
+            V1 = Compress(VectorH1(data.mesh, order = 1, definedon = self.domain,
+                          dirichlet = self.params['dirichlet']))
+        else:
+            V1 = Compress(VectorH1(data.mesh, order = 1, definedon = self.domain))
+        self.fes = V1*V1
 
         self.trial = self.fes.TrialFunction()
         self.test = self.fes.TestFunction()
@@ -64,13 +66,13 @@ class NeoHook(BasePDE):
         for save in self.save_solution:
             save.Initialize(data, self)
             
-    def GetLHS(self, data, trial, test, dX = None):
+    def GetLHS(self, data, trial, test, ale):
         
-        lhs += -1*trial[1]*test[0]*dx
+        lhs = -1*trial[1]*test[1]*dx
         
         return lhs
         
-    def GetRHS(self, data, test, dX = None):
+    def GetRHS(self, data, test, ale):
 
         if self.params['rhs']:
             rhs = self.params['rhs']*test[0]*dx
@@ -79,45 +81,53 @@ class NeoHook(BasePDE):
         
         return rhs
 
-    def GetMass(self, data, trial, test, dX = None):
+    def GetMass(self, data, trial, test, ale):
 
-        mass = trial[0]*test[0]/data.dt*dx
-        mass += trial[1]*test[1]/data.dt*dx
+        if self.params['steady']:
+            mass = CF(0)*trial[0]*test[1]/data.dt*dx
+            mass += CF(0)*self.params['rho']*trial[1]*test[0]/data.dt*dx
+        else:
+            mass = trial[0]*test[1]/data.dt*dx
+            mass += self.params['rho']*trial[1]*test[0]/data.dt*dx
 
         return mass
     
-    def GetNL(self, data, trial, test, dX = None):
+    def GetNL(self, data, trial, test, ale):
 
         I = Id(data.mesh.dim)
         def CalcStresses(A):
             F = A + I
             C = F.trans * F
+            B = F * F.trans
             E = 0.5 * (C - I)
             J = Det(F)
             Finv = Inv(F)
-            return (F, C, E, J, Finv)
-        F, C, E, J, Finv = CalcStresses(Grad(trial[0]))
+            return (F, C, B, E, J, Finv)
+        F, C, B, E, J, Finv = CalcStresses(Grad(trial[0]))
 
-        def NeoHooke(C, mu=1, lam=1):
-            return 0.5 * mu * (Trace(C - I) + 2 * mu / lam * Det(C) ** (-lam / 2 / mu) - 1)
+        power = - self.params['lam']/2/self.params['mu']
+        stress = self.params['mu']*(I - Det(C)**power*Inv(C).trans)
 
-        nonlin = Variation( NeoHooke(C, self.params['mu'], self.params['lam']))*dx
+        if self.params['factor']:
+            nonlin = (InnerProduct(self.params['factor'] * F * stress, Grad(test[0])))*dx
+        else:
+            nonlin = (InnerProduct(F * stress, Grad(test[0])))*dx
 
         return nonlin
     
-    def PreProcess(self, data, dX = None):
+    def PreProcess(self, data, ale):
 
         self.prev_gfu.append(self.gfu.vec.Copy())      
         if len(self.prev_gfu)>6:
             self.prev_gfu.pop(0)
     
-    def PostProcess(self, data, dX = None):
+    def PostProcess(self, data, ale):
 
-        super().PostProcess(data)
+        super().PostProcess(data, ale)
 
-    def Update(self, data):
+    def Update(self, data, ale):
 
-        data.mesh.SetDeformation(data.dX)
+        data.mesh.SetDeformation(ale.deformation)
 
         for save in self.save_error:
             save.Save(data, self)

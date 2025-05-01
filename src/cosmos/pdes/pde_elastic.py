@@ -14,11 +14,11 @@ class Elastic(BasePDE):
         self.params = kwargs
         self.nfields = 2
 
-        accepted_keys = ['rhs', 'mu', 'lam', 'd0'
-                         'neu', 'dir',
+        accepted_keys = ['rhs', 'mu', 'lam', 'd0',
+                         'dirichlet', 'rho',
                          'domain', 'name']
         defaults = [None, None, None, None,
-                    None, None,
+                    None, CF(1),
                     '.*', ['displacement', 'velocity']]
         
         if kwargs:
@@ -42,10 +42,13 @@ class Elastic(BasePDE):
         self.domain = data.mesh.Materials(self.params['domain'])
         self.name = self.params['name']
         
-        V1 = VectorH1(data.mesh, order = 1, definedon = self.domain)
-        V2 = VectorH1(data.mesh, order = 1, definedon = self.domain)
+        if self.params['dirichlet']:
+            V1 = Compress(VectorH1(data.mesh, order = 1, definedon = self.domain,
+                          dirichlet = self.params['dirichlet']))
+        else:
+            V1 = Compress(VectorH1(data.mesh, order = 1, definedon = self.domain))
             
-        self.fes = V1*V2
+        self.fes = V1*V1
 
         self.trial = self.fes.TrialFunction()
         self.test = self.fes.TestFunction()
@@ -63,7 +66,7 @@ class Elastic(BasePDE):
         for save in self.save_solution:
             save.Initialize(data, self)
             
-    def GetLHS(self, data, trial, test, dX = None):
+    def GetLHS(self, data, trial, test, ale):
 
         I = Id(data.mesh.dim)
         def CalcStresses(A):
@@ -78,12 +81,12 @@ class Elastic(BasePDE):
         def Stress(mat):
             return self.params['mu'] * mat + self.params['lam'] / 2 * Trace(mat) * I
 
-        lhs = (InnerProduct(F * Stress(E), Grad(test[1])))*dx
-        lhs += -1*trial[1]*test[0]*dx
+        lhs = (InnerProduct(F * Stress(E), Grad(test[0])))*dx
+        lhs += -1*trial[1]*test[1]*dx
         
         return lhs
         
-    def GetRHS(self, data, test, dX = None):
+    def GetRHS(self, data, test, ale):
 
         if self.params['rhs']:
             rhs = self.params['rhs']*test[0]*dx
@@ -92,26 +95,26 @@ class Elastic(BasePDE):
         
         return rhs
 
-    def GetMass(self, data, trial, test, dX = None):
+    def GetMass(self, data, trial, test, ale):
 
-        mass = trial[0]*test[0]/data.dt*dx
-        mass += trial[1]*test[1]/data.dt*dx
+        mass = trial[0]*test[1]/data.dt*dx
+        mass += self.params['rho']*trial[1]*test[0]/data.dt*dx
 
         return mass
     
-    def PreProcess(self, data, dX = None):
+    def PreProcess(self, data, ale):
 
         self.prev_gfu.append(self.gfu.vec.Copy())      
         if len(self.prev_gfu)>6:
             self.prev_gfu.pop(0)
     
-    def PostProcess(self, data, dX = None):
+    def PostProcess(self, data, ale):
 
-        super().PostProcess(data)
+        super().PostProcess(data, ale)
 
-    def Update(self, data):
+    def Update(self, data, ale):
 
-        data.mesh.SetDeformation(data.dX)
+        data.mesh.SetDeformation(ale.deformation)
 
         for save in self.save_error:
             save.Save(data, self)

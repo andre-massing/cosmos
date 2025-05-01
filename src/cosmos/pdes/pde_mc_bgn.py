@@ -69,57 +69,57 @@ class MCBGN(BasePDE):
         for save in self.save_solution:
             save.Initialize(data, self)
             
-    def GetLHS(self, data, trial, test, dX = None):
+    def GetLHS(self, data, trial, test, ale):
 
         if data.mesh.dim == 2:
             ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
-            ds_lumped = ds(intrules = { SEGM : ir }, deformation = dX)
+            ds_lumped = ds(intrules = { SEGM : ir }, deformation = ale.deformation)
         elif data.mesh.dim == 3:
             ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-            ds_lumped = ds(intrules = { TRIG : ir }, deformation = dX)
+            ds_lumped = ds(intrules = { TRIG : ir }, deformation = ale.deformation)
 
         lhs = -InnerProduct(trial[1], test[0])*ds_lumped
         lhs += InnerProduct(trial[1], test[1])*ds_lumped
-        lhs += (InnerProduct(grad(trial[0]).Trace(), grad(test[1]).Trace()))*ds(deformation = dX)
+        lhs += (InnerProduct(grad(trial[0]).Trace(), grad(test[1]).Trace()))*ds(deformation = ale.deformation)
         
         return lhs
         
-    def GetRHS(self, data, test, dX = None):
+    def GetRHS(self, data, test, ale):
 
-        rhs = -InnerProduct(grad(self.X0).Trace(), grad(test[1]).Trace())*ds(deformation = dX)
+        rhs = -InnerProduct(grad(self.X0).Trace(), grad(test[1]).Trace())*ds(deformation = ale.deformation)
         if self.params['rhs']:
-            rhs += InnerProduct(self.params['rhs'], test[0])*ds(deformation = dX)
+            rhs += InnerProduct(self.params['rhs'], test[0])*ds(deformation = ale.deformation)
 
         return rhs
 
-    def GetMass(self, data, trial, test, dX = None):
+    def GetMass(self, data, trial, test, ale):
 
         if data.mesh.dim == 2:
             ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
-            ds_lumped = ds(intrules = { SEGM : ir }, deformation = dX)
+            ds_lumped = ds(intrules = { SEGM : ir }, deformation = ale.deformation)
         elif data.mesh.dim == 3:
             ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-            ds_lumped = ds(intrules = { TRIG : ir }, deformation = dX)
+            ds_lumped = ds(intrules = { TRIG : ir }, deformation = ale.deformation)
 
         mass = InnerProduct(trial[0], test[0])/data.dt*ds_lumped
 
         return mass
     
-    def PreProcess(self, data):
+    def PreProcess(self, data, ale):
 
-        self.gfu.components[0].vec.data = data.dX.vec.data
+        self.gfu.components[0].vec.data = ale.deformation.vec.data
         self.prev_gfu.append(self.gfu.vec.Copy())      
         if len(self.prev_gfu)>6:
             self.prev_gfu.pop(0)
     
-    def PostProcess(self, data):
+    def PostProcess(self, data, ale):
 
-        super().PostProcess(data)
+        super().PostProcess(data, ale)
 
         if self.postprocess:
 
             ns = specialcf.normal(data.mesh.dim)
-            n_h = GridFunction(data.dX.space)
+            n_h = GridFunction(ale.deformation.space)
             data.mesh.SetDeformation(self.gfu.components[0])
             n_h.Set(ns, definedon=self.domain)
             data.mesh.UnsetDeformation()
@@ -144,9 +144,9 @@ class MCBGN(BasePDE):
             w_h.vec.data = A.mat.Inverse(freedofs = fes.FreeDofs())*F.vec
             self.gfu.components[0].vec.data += w_h.components[0].vec.data
         
-    def Update(self, data):
+    def Update(self, data, ale):
 
-        data.mesh.SetDeformation(data.dX)
+        data.mesh.SetDeformation(ale.deformation)
 
         self.dX_save.Set(self.dX_h, definedon = self.domain)
         self.kappa_save.Set(self.kappa_h, definedon = self.domain)

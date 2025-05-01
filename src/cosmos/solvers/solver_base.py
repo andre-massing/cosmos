@@ -16,13 +16,6 @@ class SolverData():
             self.domain_markers = list(Counter(self.mesh.GetMaterials()).keys())
             self.boundary_markers = list(Counter(self.mesh.GetBoundaries()).keys())
 
-        self.dX = GridFunction(Compress(VectorH1(mesh)))
-        self.V = GridFunction(Compress(VectorH1(mesh)))
-        self.prev_dX = []
-        self.prev_V = []
-        self.dX_f = None
-        self.V_f = None
-
         if len(kwargs)>0:
 
             if len(kwargs)!=3:
@@ -39,27 +32,39 @@ class SolverData():
             self.T = kwargs['T']
             self.iter = 0
 
+class SolverALE():
+
+    def __init__(self, mesh, **kwargs):
+
+        self.mesh = mesh
+        self.deformation = GridFunction(Compress(VectorH1(mesh)))
+        self.velocity = GridFunction(Compress(VectorH1(mesh)))
+        self.prev_d = []
+        self.prev_v = []
+        self.d_f = None
+        self.v_f = None
+
     def SetMeshDeformation(self, value):
-        self.dX_f = value
+        self.d_f = value
 
     def SetMeshVelocity(self, value):
-        self.V_f = value
+        self.v_f = value
 
     def UpdateMeshDeformation(self):
 
-        if self.dX_f:
+        if self.d_f:
             if self.mesh.ne == 0:
-                self.dX.Set(self.dX_f, definedon = self.mesh.Boundaries('.*'))
+                self.deformation.Set(self.d_f, definedon = self.mesh.Boundaries('.*'))
             else:
-                self.dX.Set(self.dX_f)
+                self.deformation.Set(self.d_f)
 
     def UpdateMeshVelocity(self):
 
-        if self.V_f:
+        if self.v_f:
             if self.mesh.ne == 0:
-                self.V.Set(self.V_f, definedon = self.mesh.Boundaries('.*'))
+                self.velocity.Set(self.v_f, definedon = self.mesh.Boundaries('.*'))
             else:
-                self.V.Set(self.V_f)
+                self.velocity.Set(self.v_f)
 
     def UpdateALE(self):
         self.UpdateMeshDeformation()

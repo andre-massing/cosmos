@@ -56,39 +56,39 @@ class MCDziuk(BasePDE):
         for save in self.save_solution:
             save.Initialize(data, self)
             
-    def GetLHS(self, data, trial, test, dX = None):
+    def GetLHS(self, data, trial, test, ale):
 
-        lhs = (InnerProduct(grad(trial[0]).Trace(), grad(test[0]).Trace()))*ds(deformation=dX)
+        lhs = (InnerProduct(grad(trial[0]).Trace(), grad(test[0]).Trace()))*ds(deformation=ale.deformation)
         
         return lhs
         
-    def GetRHS(self, data, test, dX = None):
+    def GetRHS(self, data, test, ale):
 
-        rhs = -1*InnerProduct(grad(self.X0).Trace(), grad(test[0]).Trace())*ds(deformation=dX)
+        rhs = -1*InnerProduct(grad(self.X0).Trace(), grad(test[0]).Trace())*ds(deformation=ale.deformation)
 
         return rhs
     
-    def GetMass(self, data, trial, test, dX = None):
+    def GetMass(self, data, trial, test, ale):
 
-        mass = trial[0]*test[0]/data.dt*ds(deformation=dX)
+        mass = trial[0]*test[0]/data.dt*ds(deformation=ale.deformation)
 
         return mass
     
-    def PreProcess(self, data):
+    def PreProcess(self, data, ale):
         
-        self.gfu.vec.data = data.dX.vec.data
+        self.gfu.vec.data = ale.deformation.vec.data
         self.prev_gfu.append(self.gfu.vec.Copy())      
         if len(self.prev_gfu)>6:
             self.prev_gfu.pop(0)
     
-    def PostProcess(self, data):
+    def PostProcess(self, data, ale):
 
-        super().PostProcess(data)
+        super().PostProcess(data, ale)
 
         if self.postprocess:
 
             ns = specialcf.normal(data.mesh.dim)
-            n_h = GridFunction(data.dX.space)
+            n_h = GridFunction(ale.deformation.space)
             data.mesh.SetDeformation(self.gfu)
             n_h.Set(ns, definedon=self.domain)
             data.mesh.UnsetDeformation()
@@ -114,9 +114,9 @@ class MCDziuk(BasePDE):
             self.gfu.vec.data += w_h.components[0].vec.data
 
         
-    def Update(self, data):
+    def Update(self, data, ale):
 
-        data.mesh.SetDeformation(data.dX)
+        data.mesh.SetDeformation(ale.deformation)
 
         self.gfu_save[0].Set(self.gfu, definedon = self.domain)
 
