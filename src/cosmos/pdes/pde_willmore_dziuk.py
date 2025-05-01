@@ -5,7 +5,7 @@ from cosmos.pdes.pde_tools import compute_error
 import numpy as np
 from ngsolve.webgui import Draw
 
-class WillmoreBGN(BasePDE):
+class WillmoreDziuk(BasePDE):
 
     def __init__(self, **kwargs):
 
@@ -90,9 +90,6 @@ class WillmoreBGN(BasePDE):
             
     def GetLHS(self, data, trial, test, ale):
 
-        omega = specialcf.normal(data.mesh.dim)
-        Q = OuterProduct(omega,omega)
-
         if data.mesh.dim == 2:
             ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
             ds_lumped = ds(intrules = { SEGM : ir }, deformation = ale.deformation)
@@ -101,7 +98,7 @@ class WillmoreBGN(BasePDE):
             ds_lumped = ds(intrules = { TRIG : ir }, deformation = ale.deformation)
 
         lhs = -InnerProduct(grad(trial[1]).Trace(), grad(test[0]).Trace())*ds(deformation = ale.deformation)
-        lhs += InnerProduct(Q*trial[1], Q*test[1])*ds_lumped
+        lhs += InnerProduct(trial[1], test[1])*ds_lumped
         lhs += (InnerProduct(grad(trial[0]).Trace(), grad(test[1]).Trace()))*ds(deformation = ale.deformation)
         
         return lhs
@@ -110,11 +107,6 @@ class WillmoreBGN(BasePDE):
 
         ns = specialcf.normal(data.mesh.dim)
         Ps = Id(data.mesh.dim) - OuterProduct(ns, ns)
-
-        omega = ns
-        Q = OuterProduct(omega,omega)
-        def G(Y, k):
-            return ((Y*omega)*k + (k*omega)*Y-2*(Y*omega)*(k*omega)*omega/Norm(omega)**2)/Norm(omega)**2
 
         if data.mesh.dim == 2:
             ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
@@ -136,10 +128,8 @@ class WillmoreBGN(BasePDE):
             rhs += -2*InnerProduct(grad(self.Y_h).Trace().trans, D_s(test[0], Ps)*Ps.trans)*ds(deformation = ale.deformation)
             rhs += -1*InnerProduct(self.params['sp_curv']*self.kappa_h, grad(test[0]).Trace().trans*ns)*ds_lumped
             rhs += -0.5*InnerProduct((Norm(self.kappa_h - self.params['sp_curv']*ns)**2)*Ps,grad(test[0]).Trace())*ds_lumped
-            rhs += InnerProduct(InnerProduct(self.Y_h, Q*self.kappa_h)*Ps,grad(test[0]).Trace())*ds_lumped
+            rhs += InnerProduct(InnerProduct(self.Y_h, self.kappa_h)*Ps,grad(test[0]).Trace())*ds_lumped
 
-            rhs += InnerProduct(InnerProduct(G(self.Y_h, self.kappa_h), ns)*Ps, grad(test[0]).Trace())*ds_lumped
-            rhs += -1*InnerProduct(G(self.Y_h, self.kappa_h), grad(test[0]).Trace().trans*ns)*ds_lumped
         elif data.mesh.dim == 2 :
             rhs += InnerProduct(InnerProduct(self.Y_h, self.kappa_h)*Ps,grad(test[0]).Trace())*ds_lumped
 
@@ -165,9 +155,6 @@ class WillmoreBGN(BasePDE):
 
     def GetMass(self, data, trial, test, ale):
 
-        omega = specialcf.normal(data.mesh.dim)
-        Q = OuterProduct(omega,omega)
-
         if data.mesh.dim == 2:
             ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
             ds_lumped = ds(intrules = { SEGM : ir }, deformation = ale.deformation)
@@ -175,7 +162,7 @@ class WillmoreBGN(BasePDE):
             ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
             ds_lumped = ds(intrules = { TRIG : ir }, deformation = ale.deformation)
 
-        mass = InnerProduct(Q*trial[0], test[0])/data.dt*ds_lumped
+        mass = InnerProduct(trial[0], test[0])/data.dt*ds_lumped
 
         return mass
     

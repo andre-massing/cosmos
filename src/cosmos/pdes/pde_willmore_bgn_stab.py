@@ -98,6 +98,10 @@ class WillmoreBGNStab(BasePDE):
 
         h = specialcf.mesh_size
         ns = specialcf.normal(data.mesh.dim)
+
+        omega = specialcf.normal(data.mesh.dim)
+        Q = OuterProduct(omega,omega)
+        
         tE = specialcf.tangential(data.mesh.dim)
         if data.mesh.dim == 2:
             nE = tE
@@ -121,7 +125,7 @@ class WillmoreBGNStab(BasePDE):
             ds_lumped = ds(intrules = { TRIG : ir }, deformation = ale.deformation)
 
         lhs = -InnerProduct(grad(trial[1]).Trace(), grad(test[0]).Trace())*ds(deformation = ale.deformation)
-        lhs += InnerProduct(trial[1], test[1])*ds(deformation=ale.deformation)
+        lhs += InnerProduct(Q*trial[1], Q*test[1])*ds_lumped
         lhs += (InnerProduct(grad(trial[0]).Trace(), grad(test[1]).Trace()))*ds(deformation = ale.deformation)
 
         lhs += self.params['stab']*h*InnerProduct(jump_dkappadn,jump_detadn)\
@@ -133,6 +137,11 @@ class WillmoreBGNStab(BasePDE):
 
         ns = specialcf.normal(data.mesh.dim)
         Ps = Id(data.mesh.dim) - OuterProduct(ns, ns)
+
+        omega = ns
+        Q = OuterProduct(omega,omega)
+        def G(Y, k):
+            return ((Y*omega)*k + (k*omega)*Y-2*(Y*omega)*(k*omega)*omega/Norm(omega)**2)/Norm(omega)**2
 
         if data.mesh.dim == 2:
             ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
@@ -154,7 +163,10 @@ class WillmoreBGNStab(BasePDE):
             rhs += -2*InnerProduct(grad(self.Y_h).Trace().trans, D_s(test[0], Ps)*Ps.trans)*ds(deformation = ale.deformation)
             rhs += -1*InnerProduct(self.params['sp_curv']*self.kappa_h, grad(test[0]).Trace().trans*ns)*ds_lumped
             rhs += -0.5*InnerProduct((Norm(self.kappa_h - self.params['sp_curv']*ns)**2)*Ps,grad(test[0]).Trace())*ds_lumped
-            rhs += InnerProduct(InnerProduct(self.Y_h, self.kappa_h)*Ps,grad(test[0]).Trace())*ds_lumped
+            rhs += InnerProduct(InnerProduct(self.Y_h, Q*self.kappa_h)*Ps,grad(test[0]).Trace())*ds_lumped
+
+            rhs += InnerProduct(InnerProduct(G(self.Y_h, self.kappa_h), ns)*Ps, grad(test[0]).Trace())*ds_lumped
+            rhs += -1*InnerProduct(G(self.Y_h, self.kappa_h), grad(test[0]).Trace().trans*ns)*ds_lumped
         elif data.mesh.dim == 2 :
             rhs += InnerProduct(InnerProduct(self.Y_h, self.kappa_h)*Ps,grad(test[0]).Trace())*ds_lumped
 
@@ -180,6 +192,9 @@ class WillmoreBGNStab(BasePDE):
 
     def GetMass(self, data, trial, test, ale):
 
+        omega = specialcf.normal(data.mesh.dim)
+        Q = OuterProduct(omega,omega)
+
         if data.mesh.dim == 2:
             ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
             ds_lumped = ds(intrules = { SEGM : ir }, deformation = ale.deformation)
@@ -187,7 +202,7 @@ class WillmoreBGNStab(BasePDE):
             ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
             ds_lumped = ds(intrules = { TRIG : ir }, deformation = ale.deformation)
 
-        mass = InnerProduct(trial[0], test[0])/data.dt*ds_lumped
+        mass = InnerProduct(Q*trial[0], test[0])/data.dt*ds_lumped
 
         return mass
     
@@ -208,6 +223,13 @@ class WillmoreBGNStab(BasePDE):
     def PostProcess(self, data, ale):
 
         super().PostProcess(data, ale)
+
+        ns = specialcf.normal(data.mesh.dim)
+        omega = ns
+        Q = OuterProduct(omega,omega)
+        data.mesh.SetDeformation(ale.deformation)
+        self.kappa_h.Set(Q*self.Y_h + self.params['sp_curv']*ns, definedon = self.domain)
+        data.mesh.UnsetDeformation()
 
         if self.postprocess:
 
@@ -333,7 +355,7 @@ def ComputeStabMC(data, gfu, params):
         jump_detadn0 = (eta0.Trace().Deriv()*nE-deta0.Trace())
     A0 = BilinearForm(fes0)
     F0 = LinearForm(fes0)
-    A0 += kappa0*eta0*ds
+    A0 += kappa0*eta0*ds_lumped
     A0 += params['stab']*h*InnerProduct(jump_dkappadn0,jump_detadn0)\
         *ds(element_boundary=True)
     A0.Assemble()
