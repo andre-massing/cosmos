@@ -123,7 +123,7 @@ class WillmoreDziukStab(BasePDE):
             ds_lumped = ds(intrules = { TRIG : ir }, deformation = ale.deformation)
 
         lhs = -InnerProduct(grad(trial[1]).Trace(), grad(test[0]).Trace())*ds(deformation = ale.deformation)
-        lhs += InnerProduct(trial[1], test[1])*ds_lumped
+        lhs += InnerProduct(trial[1], test[1])*ds(deformation = ale.deformation)
         lhs += (InnerProduct(grad(trial[0]).Trace(), grad(test[1]).Trace()))*ds(deformation = ale.deformation)
 
         lhs += self.params['stab']*h*InnerProduct(jump_dkappadn,jump_detadn)\
@@ -154,12 +154,12 @@ class WillmoreDziukStab(BasePDE):
         if data.mesh.dim == 3:
             rhs += InnerProduct(Trace(grad(self.Y_h).Trace()),Trace(grad(test[0]).Trace()))*ds(deformation = ale.deformation)
             rhs += -2*InnerProduct(grad(self.Y_h).Trace().trans, D_s(test[0], Ps)*Ps.trans)*ds(deformation = ale.deformation)
-            rhs += -1*InnerProduct(self.params['sp_curv']*self.kappa_h, grad(test[0]).Trace().trans*ns)*ds_lumped
-            rhs += -0.5*InnerProduct((Norm(self.kappa_h - self.params['sp_curv']*ns)**2)*Ps,grad(test[0]).Trace())*ds_lumped
-            rhs += InnerProduct(InnerProduct(self.Y_h, self.kappa_h)*Ps,grad(test[0]).Trace())*ds_lumped
+            rhs += -1*InnerProduct(self.params['sp_curv']*self.kappa_h, grad(test[0]).Trace().trans*ns)*ds(deformation = ale.deformation)
+            rhs += -0.5*InnerProduct((Norm(self.kappa_h - self.params['sp_curv']*ns)**2)*Ps,grad(test[0]).Trace())*ds(deformation = ale.deformation)
+            rhs += InnerProduct(InnerProduct(self.Y_h, self.kappa_h)*Ps,grad(test[0]).Trace())*ds(deformation = ale.deformation)
 
         elif data.mesh.dim == 2 :
-            rhs += InnerProduct(InnerProduct(self.Y_h, self.kappa_h)*Ps,grad(test[0]).Trace())*ds_lumped
+            rhs += InnerProduct(InnerProduct(self.Y_h, self.kappa_h)*Ps,grad(test[0]).Trace())*ds(deformation = ale.deformation)
 
         tE = specialcf.tangential(data.mesh.dim)
         if data.mesh.dim == 2:
@@ -190,7 +190,7 @@ class WillmoreDziukStab(BasePDE):
             ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
             ds_lumped = ds(intrules = { TRIG : ir }, deformation = ale.deformation)
 
-        mass = InnerProduct(trial[0], test[0])/data.dt*ds_lumped
+        mass = InnerProduct(trial[0], test[0])/data.dt*ds(deformation = ale.deformation)
 
         return mass
     
@@ -213,10 +213,8 @@ class WillmoreDziukStab(BasePDE):
         super().PostProcess(data, ale)
 
         ns = specialcf.normal(data.mesh.dim)
-        omega = ns
-        Q = OuterProduct(omega,omega)
         data.mesh.SetDeformation(ale.deformation)
-        self.kappa_h.Set(Q*self.Y_h + self.params['sp_curv']*ns, definedon = self.domain)
+        self.kappa_h.Set(self.Y_h + self.params['sp_curv']*ns, definedon = self.domain)
         data.mesh.UnsetDeformation()
 
         if self.postprocess:
@@ -343,7 +341,7 @@ def ComputeStabMC(data, gfu, params):
         jump_detadn0 = (eta0.Trace().Deriv()*nE-deta0.Trace())
     A0 = BilinearForm(fes0)
     F0 = LinearForm(fes0)
-    A0 += kappa0*eta0*ds_lumped
+    A0 += kappa0*eta0*ds
     A0 += params['stab']*h*InnerProduct(jump_dkappadn0,jump_detadn0)\
         *ds(element_boundary=True)
     A0.Assemble()
@@ -354,13 +352,13 @@ def ComputeStabMC(data, gfu, params):
         if data.mesh.dim == 3:
             gfF = GridFunction(FacetSurface(data.mesh, order=0))
             gfF.Set(1, definedon=data.mesh.BBoundaries(params['clamped_bnd']))
-            F0 += InnerProduct(nE, eta0) * gfF * ds_el_lumped
+            F0 += InnerProduct(nE, eta0) * gfF * ds(element_boundary=True)
 
         elif data.mesh.dim == 2:
             gfF = GridFunction(H1(data.mesh, order =1,\
                     definedon=data.mesh.Boundaries('.*')))
             gfF.Set(1, definedon=data.mesh.BBoundaries(params['clamped_bnd']))
-            F0 += InnerProduct(gfF*nE, eta0) * ds_el_lumped
+            F0 += InnerProduct(gfF*nE, eta0) * ds(element_boundary=True)
 
     F0.Assemble()
     gfu0.vec.data = A0.mat.Inverse(fes0.FreeDofs())*F0.vec
