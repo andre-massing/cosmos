@@ -16,10 +16,10 @@ class NeoHook(BasePDE):
         self.nonlinear = True
 
         accepted_keys = ['rhs', 'mu', 'lam', 'd0',
-                        'factor', 'rho',
+                        'factor', 'rho', 'dir',
                          'domain', 'name', 'dirichlet', 'steady']
         defaults = [None, None, None, None,
-                    None, CF(1),
+                    None, CF(1), None,
                     '.*', ['displacement', 'velocity'], None, False]
         
         if kwargs:
@@ -78,6 +78,13 @@ class NeoHook(BasePDE):
             rhs = self.params['rhs']*test[0]*dx
         else:
             rhs = CF((0,)*data.mesh.dim)*test[0]*dx
+
+        if self.params['dir']:
+            gamma = 5 * self.fes_order * (self.fes_order+1)
+            n = specialcf.normal(data.mesh.dim)
+            h = specialcf.mesh_size
+            for key, value in self.params['dir'].items():
+                rhs += gamma/h*value*test[0]*ds(definedon = key, skeleton = True, deformation = ale.deformation)
         
         return rhs
 
@@ -108,10 +115,15 @@ class NeoHook(BasePDE):
         power = - self.params['lam']/2/self.params['mu']
         stress = self.params['mu']*(I - Det(C)**power*Inv(C).trans)
 
-        if self.params['factor']:
-            nonlin = (InnerProduct(self.params['factor'] * F * stress, Grad(test[0])))*dx
-        else:
-            nonlin = (InnerProduct(F * stress, Grad(test[0])))*dx
+        nonlin = (InnerProduct(F * stress, Grad(test[0])))*dx
+
+        if self.params['dir']:
+            gamma = 5 * self.fes_order * (self.fes_order+1)
+            n = specialcf.normal(data.mesh.dim)
+            h = specialcf.mesh_size
+            for key, value in self.params['dir'].items():
+                nonlin += - InnerProduct((F * stress)*n, test[0])*ds(definedon = key, skeleton=True, deformation = ale.deformation)\
+                    + gamma/h*trial[0]*test[0]*ds(definedon = key, skeleton = True, deformation = ale.deformation)
 
         return nonlin
     

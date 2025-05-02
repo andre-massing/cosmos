@@ -15,11 +15,11 @@ class Elastic(BasePDE):
         self.nfields = 2
 
         accepted_keys = ['rhs', 'mu', 'lam', 'd0',
-                         'dirichlet', 'rho',
-                         'domain', 'name']
+                         'dirichlet', 'dir', 'rho',
+                         'domain', 'name', 'steady']
         defaults = [None, None, None, None,
-                    None, CF(1),
-                    '.*', ['displacement', 'velocity']]
+                    None, None, CF(1),
+                    '.*', ['displacement', 'velocity'], False]
         
         if kwargs:
             params_check(kwargs, accepted_keys, defaults)
@@ -77,28 +77,64 @@ class Elastic(BasePDE):
             Finv = Inv(F)
             return (F, C, E, J, Finv)
         F, C, E, J, Finv = CalcStresses(Grad(trial[0]))
+        Ft, Ct, Et, Jt, Finvt = CalcStresses(Grad(test[0]))
 
         def Stress(mat):
             return self.params['mu'] * mat + self.params['lam'] / 2 * Trace(mat) * I
 
         lhs = (InnerProduct(F * Stress(E), Grad(test[0])))*dx
         lhs += -1*trial[1]*test[1]*dx
+
+        if self.params['dir']:
+            gamma = 5 * self.fes_order * (self.fes_order+1)
+            n = specialcf.normal(data.mesh.dim)
+            h = specialcf.mesh_size
+            for key, value in self.params['dir'].items():
+                lhs += - InnerProduct((Ft * Stress(Et))*n, trial[0])*ds(definedon = key, skeleton=True, deformation = ale.deformation)\
+                    - InnerProduct((F * Stress(E))*n, test[0])*ds(definedon = key, skeleton=True, deformation = ale.deformation)\
+                    + gamma/h*trial[0]*test[0]*ds(definedon = key, skeleton = True, deformation = ale.deformation)
+        
         
         return lhs
         
     def GetRHS(self, data, test, ale):
 
+        I = Id(data.mesh.dim)
+        def CalcStresses(A):
+            F = A + I
+            C = F.trans * F
+            E = 0.5 * (C - I)
+            J = Det(F)
+            Finv = Inv(F)
+            return (F, C, E, J, Finv)
+        Ft, Ct, Et, Jt, Finvt = CalcStresses(Grad(test[0]))
+
+        def Stress(mat):
+            return self.params['mu'] * mat + self.params['lam'] / 2 * Trace(mat) * I
+
         if self.params['rhs']:
             rhs = self.params['rhs']*test[0]*dx
         else:
             rhs = CF((0,)*data.mesh.dim)*test[0]*dx
+
+        if self.params['dir']:
+            gamma = 5 * self.fes_order * (self.fes_order+1)
+            n = specialcf.normal(data.mesh.dim)
+            h = specialcf.mesh_size
+            for key, value in self.params['dir'].items():
+                rhs += - InnerProduct((Ft * Stress(Et))*n, value)*ds(definedon = key, skeleton=True, deformation = ale.deformation)\
+                    + gamma/h*value*test[0]*ds(definedon = key, skeleton = True, deformation = ale.deformation)
         
         return rhs
 
     def GetMass(self, data, trial, test, ale):
 
-        mass = trial[0]*test[1]/data.dt*dx
-        mass += self.params['rho']*trial[1]*test[0]/data.dt*dx
+        if self.params['steady']:
+            mass = CF(0)*trial[0]*test[1]/data.dt*dx
+            mass += CF(0)*self.params['rho']*trial[1]*test[0]/data.dt*dx
+        else:
+            mass = trial[0]*test[1]/data.dt*dx
+            mass += self.params['rho']*trial[1]*test[0]/data.dt*dx
 
         return mass
     
