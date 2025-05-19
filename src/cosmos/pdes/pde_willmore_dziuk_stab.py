@@ -98,8 +98,6 @@ class WillmoreDziukStab(BasePDE):
 
         h = specialcf.mesh_size
         ns = specialcf.normal(data.mesh.dim)
-
-        
         tE = specialcf.tangential(data.mesh.dim)
         if data.mesh.dim == 2:
             nE = tE
@@ -126,7 +124,11 @@ class WillmoreDziukStab(BasePDE):
         lhs += InnerProduct(trial[1], test[1])*ds(deformation = ale.deformation)
         lhs += (InnerProduct(grad(trial[0]).Trace(), grad(test[1]).Trace()))*ds(deformation = ale.deformation)
 
-        lhs += self.params['stab']*h*InnerProduct(jump_dkappadn,jump_detadn)\
+        J = specialcf.JacobianMatrix(data.mesh.dim, data.mesh.dim-1)
+        area = sqrt(Det(J.trans*J))/2
+        length = sqrt(area/pi)
+
+        lhs += self.params['stab']*length*InnerProduct(jump_dkappadn,jump_detadn)\
             *ds(element_boundary=True, deformation = ale.deformation)
         
         return lhs
@@ -146,7 +148,8 @@ class WillmoreDziukStab(BasePDE):
         rhs = -InnerProduct(grad(self.X0).Trace(), grad(test[1]).Trace())*ds(deformation = ale.deformation)
         rhs += -self.params['sp_curv']*InnerProduct(ns, test[1])*ds_lumped
         if self.params['rhs']:
-            rhs += InnerProduct(self.params['rhs'], test[0])*ds(deformation = ale.deformation)
+            rhs += InnerProduct(self.params['rhs'][0], test[0])*ds_lumped
+            rhs += InnerProduct(self.params['rhs'][1], test[1])*ds(deformation = ale.deformation)
 
         def D_s(chi, Ps):
             sym = 0.5*Ps*(grad(chi).Trace()+grad(chi).Trace().trans)*Ps
@@ -154,12 +157,11 @@ class WillmoreDziukStab(BasePDE):
         if data.mesh.dim == 3:
             rhs += InnerProduct(Trace(grad(self.Y_h).Trace()),Trace(grad(test[0]).Trace()))*ds(deformation = ale.deformation)
             rhs += -2*InnerProduct(grad(self.Y_h).Trace().trans, D_s(test[0], Ps)*Ps.trans)*ds(deformation = ale.deformation)
-            rhs += -1*InnerProduct(self.params['sp_curv']*self.kappa_h, grad(test[0]).Trace().trans*ns)*ds(deformation = ale.deformation)
-            rhs += -0.5*InnerProduct((Norm(self.kappa_h - self.params['sp_curv']*ns)**2)*Ps,grad(test[0]).Trace())*ds(deformation = ale.deformation)
-            rhs += InnerProduct(InnerProduct(self.Y_h, self.kappa_h)*Ps,grad(test[0]).Trace())*ds(deformation = ale.deformation)
-
+            rhs += -1*InnerProduct(self.params['sp_curv']*self.kappa_h, grad(test[0]).Trace().trans*ns)*ds_lumped
+            rhs += -0.5*InnerProduct((Norm(self.kappa_h - self.params['sp_curv']*ns)**2)*Ps,grad(test[0]).Trace())*ds_lumped
+            rhs += InnerProduct(InnerProduct(self.Y_h, self.kappa_h)*Ps,grad(test[0]).Trace())*ds_lumped
         elif data.mesh.dim == 2 :
-            rhs += InnerProduct(InnerProduct(self.Y_h, self.kappa_h)*Ps,grad(test[0]).Trace())*ds(deformation = ale.deformation)
+            rhs += InnerProduct(InnerProduct(self.Y_h, self.kappa_h)*Ps,grad(test[0]).Trace())*ds_lumped
 
         tE = specialcf.tangential(data.mesh.dim)
         if data.mesh.dim == 2:
@@ -190,7 +192,7 @@ class WillmoreDziukStab(BasePDE):
             ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
             ds_lumped = ds(intrules = { TRIG : ir }, deformation = ale.deformation)
 
-        mass = InnerProduct(trial[0], test[0])/data.dt*ds(deformation = ale.deformation)
+        mass = InnerProduct(trial[0], test[0])/data.dt*ds_lumped
 
         return mass
     
@@ -212,11 +214,6 @@ class WillmoreDziukStab(BasePDE):
 
         super().PostProcess(data, ale)
 
-        ns = specialcf.normal(data.mesh.dim)
-        data.mesh.SetDeformation(ale.deformation)
-        self.kappa_h.Set(self.Y_h + self.params['sp_curv']*ns, definedon = self.domain)
-        data.mesh.UnsetDeformation()
-
         if self.postprocess:
 
             ns = specialcf.normal(data.mesh.dim)
@@ -232,9 +229,9 @@ class WillmoreDziukStab(BasePDE):
             w_h = GridFunction(fes)
             A = BilinearForm(fes)
             (w, kappa), (eta, mu) = fes.TnT()
-            if self.postprocess == 0:
+            if self.postprocess == 1:
                 ds_duanli = ds
-            elif self.postprocess == 1:
+            elif self.postprocess == 2:
                 ds_duanli = ds(deformation = self.gfu.components[0])
             A += InnerProduct(grad(w).Trace(), grad(eta).Trace())*ds_duanli
             A += -1*InnerProduct(kappa*n_h, eta)*ds_duanli
@@ -342,7 +339,12 @@ def ComputeStabMC(data, gfu, params):
     A0 = BilinearForm(fes0)
     F0 = LinearForm(fes0)
     A0 += kappa0*eta0*ds
-    A0 += params['stab']*h*InnerProduct(jump_dkappadn0,jump_detadn0)\
+
+    J = specialcf.JacobianMatrix(data.mesh.dim, data.mesh.dim-1)
+    area = sqrt(Det(J.trans*J))/2
+    length = sqrt(area/pi)
+    
+    A0 += params['stab']*length*InnerProduct(jump_dkappadn0,jump_detadn0)\
         *ds(element_boundary=True)
     A0.Assemble()
     F0 += -InnerProduct(Ps, grad(eta0).Trace())*ds
@@ -352,13 +354,13 @@ def ComputeStabMC(data, gfu, params):
         if data.mesh.dim == 3:
             gfF = GridFunction(FacetSurface(data.mesh, order=0))
             gfF.Set(1, definedon=data.mesh.BBoundaries(params['clamped_bnd']))
-            F0 += InnerProduct(nE, eta0) * gfF * ds(element_boundary=True)
+            F0 += InnerProduct(nE, eta0) * gfF * ds_el_lumped
 
         elif data.mesh.dim == 2:
             gfF = GridFunction(H1(data.mesh, order =1,\
                     definedon=data.mesh.Boundaries('.*')))
             gfF.Set(1, definedon=data.mesh.BBoundaries(params['clamped_bnd']))
-            F0 += InnerProduct(gfF*nE, eta0) * ds(element_boundary=True)
+            F0 += InnerProduct(gfF*nE, eta0) * ds_el_lumped
 
     F0.Assemble()
     gfu0.vec.data = A0.mat.Inverse(fes0.FreeDofs())*F0.vec

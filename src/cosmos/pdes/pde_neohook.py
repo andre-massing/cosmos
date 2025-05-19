@@ -78,13 +78,6 @@ class NeoHook(BasePDE):
             rhs = self.params['rhs']*test[0]*dx
         else:
             rhs = CF((0,)*data.mesh.dim)*test[0]*dx
-
-        if self.params['dir']:
-            gamma = 5 * self.fes_order * (self.fes_order+1)
-            n = specialcf.normal(data.mesh.dim)
-            h = specialcf.mesh_size
-            for key, value in self.params['dir'].items():
-                rhs += gamma/h*value*test[0]*ds(definedon = key, skeleton = True, deformation = ale.deformation)
         
         return rhs
 
@@ -111,9 +104,11 @@ class NeoHook(BasePDE):
             Finv = Inv(F)
             return (F, C, B, E, J, Finv)
         F, C, B, E, J, Finv = CalcStresses(Grad(trial[0]))
+        Ft, Ct, Bt, Et, Jt, Finvt = CalcStresses(Grad(test[0]))
 
         power = - self.params['lam']/2/self.params['mu']
         stress = self.params['mu']*(I - Det(C)**power*Inv(C).trans)
+        stresst = self.params['mu']*(I - Det(Ct)**power*Inv(Ct).trans)
 
         nonlin = (InnerProduct(F * stress, Grad(test[0])))*dx
 
@@ -122,8 +117,13 @@ class NeoHook(BasePDE):
             n = specialcf.normal(data.mesh.dim)
             h = specialcf.mesh_size
             for key, value in self.params['dir'].items():
-                nonlin += - InnerProduct((F * stress)*n, test[0])*ds(definedon = key, skeleton=True, deformation = ale.deformation)\
-                    + gamma/h*trial[0]*test[0]*ds(definedon = key, skeleton = True, deformation = ale.deformation)
+                nonlin += - InnerProduct((Ft * stresst)*n, trial[0])*ds(definedon = key, skeleton=True)\
+                    - InnerProduct((F * stress)*n, test[0])*ds(definedon = key, skeleton=True)\
+                    + gamma/h*trial[0]*test[0]*ds(definedon = key, skeleton = True)
+                
+            for key, value in self.params['dir'].items():
+                nonlin += InnerProduct((Ft * stresst)*n, value)*ds(definedon = key, skeleton=True)\
+                    -1*gamma/h*value*test[0]*ds(definedon = key, skeleton = True)
 
         return nonlin
     

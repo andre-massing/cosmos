@@ -21,8 +21,6 @@ penalty = 10
 u_ex = x**2+y**2
 f = -u_ex.Diff(x).Diff(x) - u_ex.Diff(y).Diff(y)
 
-mesh.SetDeformation(dX)
-
 a = BilinearForm(V, symmetric=True)
 a += grad(u)*grad(v)*dx(deformation=dX)
 a += (-n*grad(u)*v )*ds(deformation=dX, skeleton=True)
@@ -39,7 +37,7 @@ l.Assemble()
 u = GridFunction(V)
 u.vec.data = a.mat.Inverse(freedofs = V.FreeDofs()) * l.vec
 
-Draw(u)
+Draw(u, deformation = dX)
 
 # %%
 

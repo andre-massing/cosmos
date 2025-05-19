@@ -1,18 +1,39 @@
 from ngsolve import *
-from cosmos.pdes.pde_adr_bnd import BndADR
+from cosmos.pdes.pde_base import BasePDE
+from cosmos.utils.tools import params_check
 from cosmos.pdes.pde_tools import compute_error, MandBP
 import os
 from ngsolve.webgui import Draw
 import numpy as np
 import scipy.sparse as sp
 
-class AdBndADR(BndADR):
+class AdBndADR(BasePDE):
 
     def __init__(self, **kwargs):
 
-        super().__init__(**kwargs)
+        super().__init__()
 
         self.nfields = 2
+
+        # Initialize the parameters
+        accepted_keys = ['b', 'c', 'd', 'u0', 'rhs',
+                         'neu_d', 'neu_b', 'dir_d', 'dir_b', 'Fneu_b',
+                         'domain', 'name', 'periodic',
+                         'MP', 'BP']
+        defaults = [None, None, None, None, None, 
+                    {}, {}, {}, {}, {},
+                    '.*', "surface_adr", False,
+                    None, None]
+        
+        if kwargs:
+            params_check(kwargs, accepted_keys, defaults)
+            self.params = kwargs
+            for i, (key, value) in enumerate(self.params.items()):
+                if i<5 and isinstance(self.params[key], (int, float)):
+                    self.params[key] = CF(self.params[key])
+        else:
+            self.params = {}
+            params_check(self.params, accepted_keys, defaults)
 
     def Initialize(self, data):
 
@@ -60,13 +81,13 @@ class AdBndADR(BndADR):
             elif data.mesh.dim == 3:
                 ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
                 ds_lumped = ds(intrules = { TRIG : ir })
-            A = BilinearForm(self.gfu_comp[0].space, symmetric = True)
-            u, v = self.gfu_comp[0].space.TnT()
+            A = BilinearForm(self.gfu.components[0].space, symmetric = True)
+            u, v = self.gfu.components[0].space.TnT()
             A += u*v*ds_lumped
             A.Assemble()
             rows,cols,vals = A.mat.COO()
             weights = sp.csr_matrix((vals,(rows,cols))).diagonal()
-            gfu0_vec = self.gfu_comp[0].vec.Copy().FV().NumPy()
+            gfu0_vec = self.gfu.components[0].vec.Copy().FV().NumPy()
             self.mass0 = np.sum(weights*gfu0_vec)
 
         for save in self.save_error:
@@ -257,9 +278,9 @@ class AdBndADR(BndADR):
 
         if self.params['BP'] and not self.params['MP']:
 
-            gfu_vec = self.gfu_comp[0].vec.Copy().FV().NumPy()
+            gfu_vec = self.gfu.components[0].vec.Copy().FV().NumPy()
             gfu_new = MandBP(gfu_vec, BP = self.params['BP'])
-            self.gfu_comp[0].vec.data = gfu_new
+            self.gfu.components[0].vec.data = gfu_new
 
         elif self.params['MP']:
 
@@ -270,17 +291,17 @@ class AdBndADR(BndADR):
 
             if data.mesh.dim == 2:
                 ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
-                ds_lumped = ds(intrules = { SEGM : ir }, deformation=data.dX)
+                ds_lumped = ds(intrules = { SEGM : ir }, deformation=ale.deformation)
             elif data.mesh.dim == 3:
                 ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-                ds_lumped = ds(intrules = { TRIG : ir }, deformation=data.dX)
-            A = BilinearForm(self.gfu_comp[0].space, symmetric = True)
-            u, v = self.gfu_comp[0].space.TnT()
+                ds_lumped = ds(intrules = { TRIG : ir }, deformation=ale.deformation)
+            A = BilinearForm(self.gfu.components[0].space, symmetric = True)
+            u, v = self.gfu.components[0].space.TnT()
             A += u*v*ds_lumped
             A.Assemble()
             rows,cols,vals = A.mat.COO()
             weights = sp.csr_matrix((vals,(rows,cols))).diagonal()
-            gfu_vec = self.gfu_comp[0].vec.Copy().FV().NumPy()
+            gfu_vec = self.gfu.components[0].vec.Copy().FV().NumPy()
 
             if self.params['BP']:
                 BP = self.params['BP']
@@ -290,7 +311,7 @@ class AdBndADR(BndADR):
             gfu_new = MandBP(gfu_vec, weights=weights, BP=BP,
                                 MP=self.params['MP'], mass0 =self.mass0, dt = dt)
 
-            self.gfu_comp[0].vec.data = gfu_new
+            self.gfu.components[0].vec.data = gfu_new
 
     def Update(self, data, ale):
 

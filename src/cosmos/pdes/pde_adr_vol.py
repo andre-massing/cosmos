@@ -73,7 +73,7 @@ class VolADR(BasePDE):
                 ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
                 dx_lumped = dx(intrules = { TRIG : ir })
             elif data.mesh.dim == 3:
-                raise Exception('Note implemented yet!')
+                raise Exception('Not implemented yet!')
                 ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
                 dx_lumped = dx(intrules = { TRIG : ir })
             A = BilinearForm(self.gfu.space, symmetric = True)
@@ -187,11 +187,11 @@ class VolADR(BasePDE):
 
             if data.mesh.dim == 2:
                 ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-                dx_lumped = dx(intrules = { TRIG : ir }, deformation=data.dX)
+                dx_lumped = dx(intrules = { TRIG : ir }, deformation=ale.deformation)
             elif data.mesh.dim == 3:
                 raise Exception('Not yet implemented!')
                 ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-                dx_lumped = dx(intrules = { TRIG : ir }, deformation=data.dX)
+                dx_lumped = dx(intrules = { TRIG : ir }, deformation=ale.deformation)
             A = BilinearForm(self.gfu.space, symmetric = True)
             u, v = self.gfu.space.TnT()
             A += u*v*dx_lumped

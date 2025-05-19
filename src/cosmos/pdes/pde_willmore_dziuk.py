@@ -41,10 +41,6 @@ class WillmoreDziuk(BasePDE):
         self.postprocess = self.params['postprocess']
         
         if self.params['clamped_bnd']:
-            if not set([self.params['clamped_bnd']]) <= set(data.boundary_markers + ['.*']):
-                raise ValueError('Clamped boundary conditions are imposed on non-existing boundary!')
-        
-        if self.params['clamped_bnd']:
             self.V1 = Compress(VectorH1(data.mesh, order=self.fes_order,
                         definedon=self.domain,
                         dirichlet_bbnd = data.mesh.BBoundaries(self.params['clamped_bnd'])))
@@ -98,7 +94,7 @@ class WillmoreDziuk(BasePDE):
             ds_lumped = ds(intrules = { TRIG : ir }, deformation = ale.deformation)
 
         lhs = -InnerProduct(grad(trial[1]).Trace(), grad(test[0]).Trace())*ds(deformation = ale.deformation)
-        lhs += InnerProduct(trial[1], test[1])*ds(deformation = ale.deformation)
+        lhs += InnerProduct(trial[1], test[1])*ds_lumped
         lhs += (InnerProduct(grad(trial[0]).Trace(), grad(test[1]).Trace()))*ds(deformation = ale.deformation)
         
         return lhs
@@ -111,14 +107,17 @@ class WillmoreDziuk(BasePDE):
         if data.mesh.dim == 2:
             ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
             ds_lumped = ds(intrules = { SEGM : ir }, deformation = ale.deformation)
+            ds_el_lumped = ds(element_boundary=True, intrules = { SEGM : ir })
         elif data.mesh.dim == 3:
             ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
             ds_lumped = ds(intrules = { TRIG : ir }, deformation = ale.deformation)
+            ds_el_lumped = ds(element_boundary=True, intrules = { TRIG : ir })
 
         rhs = -InnerProduct(grad(self.X0).Trace(), grad(test[1]).Trace())*ds(deformation = ale.deformation)
-        rhs += -self.params['sp_curv']*InnerProduct(ns, test[1])*ds(deformation = ale.deformation)
+        rhs += -self.params['sp_curv']*InnerProduct(ns, test[1])*ds_lumped
         if self.params['rhs']:
-            rhs += InnerProduct(self.params['rhs'], test[0])*ds(deformation = ale.deformation)
+            rhs += InnerProduct(self.params['rhs'][0], test[0])*ds_lumped
+            rhs += InnerProduct(self.params['rhs'][1], test[1])*ds_lumped
 
         def D_s(chi, Ps):
             sym = 0.5*Ps*(grad(chi).Trace()+grad(chi).Trace().trans)*Ps
@@ -126,12 +125,11 @@ class WillmoreDziuk(BasePDE):
         if data.mesh.dim == 3:
             rhs += InnerProduct(Trace(grad(self.Y_h).Trace()),Trace(grad(test[0]).Trace()))*ds(deformation = ale.deformation)
             rhs += -2*InnerProduct(grad(self.Y_h).Trace().trans, D_s(test[0], Ps)*Ps.trans)*ds(deformation = ale.deformation)
-            rhs += -1*InnerProduct(self.params['sp_curv']*self.kappa_h, grad(test[0]).Trace().trans*ns)*ds(deformation = ale.deformation)
-            rhs += -0.5*InnerProduct((Norm(self.kappa_h - self.params['sp_curv']*ns)**2)*Ps,grad(test[0]).Trace())*ds(deformation = ale.deformation)
-            rhs += InnerProduct(InnerProduct(self.Y_h, self.kappa_h)*Ps,grad(test[0]).Trace())*ds(deformation = ale.deformation)
-
+            rhs += -1*InnerProduct(self.params['sp_curv']*self.kappa_h, grad(test[0]).Trace().trans*ns)*ds_lumped
+            rhs += -0.5*InnerProduct((Norm(self.kappa_h - self.params['sp_curv']*ns)**2)*Ps,grad(test[0]).Trace())*ds_lumped
+            rhs += InnerProduct(InnerProduct(self.Y_h, self.kappa_h)*Ps,grad(test[0]).Trace())*ds_lumped
         elif data.mesh.dim == 2 :
-            rhs += InnerProduct(InnerProduct(self.Y_h, self.kappa_h)*Ps,grad(test[0]).Trace())*ds(deformation = ale.deformation)
+            rhs += InnerProduct(InnerProduct(self.Y_h, self.kappa_h)*Ps,grad(test[0]).Trace())*ds_lumped
 
         tE = specialcf.tangential(data.mesh.dim)
         if data.mesh.dim == 2:
@@ -147,9 +145,9 @@ class WillmoreDziuk(BasePDE):
                 gfF.Set(1, definedon=data.mesh.BBoundaries(self.params['clamped_bnd']))
             
             if self.params['clamped_f']:
-                rhs += InnerProduct(self.params['clamped_f'], test[1]) * gfF * ds(element_boundary=True)
+                rhs += InnerProduct(self.params['clamped_f'], test[1]) * gfF * ds_el_lumped
             else:
-                rhs += InnerProduct(nE, test[1]) * gfF * ds(element_boundary=True)
+                rhs += InnerProduct(nE, test[1]) * gfF * ds_el_lumped
 
         return rhs
 
@@ -162,13 +160,13 @@ class WillmoreDziuk(BasePDE):
             ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
             ds_lumped = ds(intrules = { TRIG : ir }, deformation = ale.deformation)
 
-        mass = InnerProduct(trial[0], test[0])/data.dt*ds(deformation = ale.deformation)
+        mass = InnerProduct(trial[0], test[0])/data.dt*ds_lumped
 
         return mass
     
     def PreProcess(self, data, ale):
 
-        self.gfu.components[0].vec.data = ale.deformation.vec.data
+        self.gfu.components[0].Set(ale.deformation, definedon = self.domain)
         self.prev_gfu.append(self.gfu.vec.Copy())      
         if len(self.prev_gfu)>6:
             self.prev_gfu.pop(0)
@@ -296,7 +294,7 @@ def ComputeMC(data, gfu, params):
     kappa0, eta0 = fes0.TnT()
     A0 = BilinearForm(fes0)
     F0 = LinearForm(fes0)
-    A0 += kappa0*eta0*ds
+    A0 += kappa0*eta0*ds_lumped
     A0.Assemble()
     F0 += -InnerProduct(Ps, grad(eta0).Trace())*ds
 
@@ -305,13 +303,13 @@ def ComputeMC(data, gfu, params):
         if data.mesh.dim == 3:
             gfF = GridFunction(FacetSurface(data.mesh, order=0))
             gfF.Set(1, definedon=data.mesh.BBoundaries(params['clamped_bnd']))
-            F0 += InnerProduct(nE, eta0) * gfF * ds(element_boundary=True)
+            F0 += InnerProduct(nE, eta0) * gfF * ds_el_lumped
 
         elif data.mesh.dim == 2:
             gfF = GridFunction(H1(data.mesh, order =1,\
                     definedon=data.mesh.Boundaries('.*')))
             gfF.Set(1, definedon=data.mesh.BBoundaries(params['clamped_bnd']))
-            F0 += InnerProduct(gfF*nE, eta0) * ds(element_boundary=True)
+            F0 += InnerProduct(gfF*nE, eta0) * ds_el_lumped
 
     F0.Assemble()
     gfu0.vec.data = A0.mat.Inverse(fes0.FreeDofs())*F0.vec

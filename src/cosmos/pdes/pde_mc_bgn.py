@@ -14,9 +14,9 @@ class MCBGN(BasePDE):
 
         self.nfields = 2
 
-        accepted_keys = ['rhs', 'domain', 'name', 'postprocess']
+        accepted_keys = ['rhs', 'domain', 'name', 'postprocess', 'mc0']
         defaults = [None, '.*', ['displacement', 'mean_curvature'],
-                    False]
+                    False, None]
         
         if kwargs:
             params_check(kwargs, accepted_keys, defaults)
@@ -50,6 +50,8 @@ class MCBGN(BasePDE):
         self.gfu = GridFunction(self.fes)
 
         self.dX_h, self.kappa_h = self.gfu.components 
+        if self.params['mc0']:
+            self.kappa_h.Set(self.params['mc0'], definedon = self.domain)
             
         V_vol = VectorH1(data.mesh, order = self.fes_order)
         self.gfu_save = list(GridFunction(CompressCompound(V_vol*V_vol)).components)
@@ -196,57 +198,3 @@ class MCBGN(BasePDE):
         #     print('  -', key, '- with value ', str(value))
 
         # print(60*'-', '\n')
-
-def ComputeMC(data, gfu, params):
-
-    V2 = gfu.space
-
-    if data.mesh.dim == 2:
-        ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
-        ds_lumped = ds(intrules = { SEGM : ir })
-    elif data.mesh.dim == 3:
-        ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-        ds_lumped = ds(intrules = { TRIG : ir })
-
-    ns = specialcf.normal(data.mesh.dim)
-    tE = specialcf.tangential(data.mesh.dim)
-    if data.mesh.dim == 2:
-        nE = tE
-    else:
-        nE = Cross(ns, tE)
-    Ps = Id(data.mesh.dim) - OuterProduct(ns, ns)
-
-    fes0 = V2
-    gfu0 = GridFunction(fes0)
-    
-    kappa0, eta0 = fes0.TnT()
-
-
-    A0 = BilinearForm(fes0)
-    F0 = LinearForm(fes0)
-    A0 += kappa0*eta0*ds_lumped
-    A0.Assemble()
-
-    F0 += -InnerProduct(Ps, Grad(eta0).Trace())*ds
-
-    if params['clamped_bnd']:
-
-        if data.mesh.dim == 3:
-            gfF = GridFunction(FacetSurface(data.mesh, order=0))
-            gfF.Set(1, definedon=data.mesh.BBoundaries(params['clamped_bnd']))
-
-            F0 += InnerProduct(nE, eta0) * gfF * ds(element_boundary=True, intrules = { TRIG : ir })
-
-        elif data.mesh.dim == 2:
-
-            gfF = GridFunction(H1(data.mesh, order =1,\
-                    definedon=data.mesh.Boundaries('.*')))
-            gfF.Set(1, definedon=data.mesh.BBoundaries(params['clamped_bnd']))
-
-            F0 += InnerProduct(gfF*nE, eta0) \
-                * ds(element_boundary=True, intrules = { SEGM : ir })
-
-    F0.Assemble()
-    gfu0.vec.data = A0.mat.Inverse(fes0.FreeDofs())*F0.vec
-
-    gfu.vec.data = gfu0.vec.data

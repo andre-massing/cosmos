@@ -13,8 +13,6 @@ class CahnHilliardBnd(BasePDE):
 
         super().__init__()
 
-        self.params = kwargs
-
         self.fields = 2
         self.nonlinear = True
 
@@ -48,11 +46,6 @@ class CahnHilliardBnd(BasePDE):
         self.dim = data.mesh.dim
         self.domain = data.mesh.Boundaries(self.params['domain'])
         self.name = self.params['name']
-        if self.params['ALE']:
-            self.ale = self.params['ALE']
-        else:
-            self.ale = ALE()
-        self.ale.Initialize(data)
         
         if self.params['periodic']:
             V = Compress(Periodic(H1(data.mesh, order = self.fes_order, 
@@ -66,25 +59,14 @@ class CahnHilliardBnd(BasePDE):
         self.test = self.fes.TestFunction()
         
         self.gfu = GridFunction(self.fes)
-        self.gfu_old = GridFunction(self.fes)
-
-        self.gfu_comp = self.gfu.components
-        self.gfu_old_comp = self.gfu_old.components
         self.gfu_save = list(GridFunction(Compress(H1(data.mesh, order = self.fes_order))**2).components)
 
         if self.params['u0']:
-            self.gfu_comp[0].Set(self.params['u0'][0], definedon = self.domain)
-            self.gfu_comp[1].Set(self.params['u0'][1], definedon = self.domain)
-        self.gfu_old.vec.data = self.gfu.vec.data
+            self.gfu.components[0].Set(self.params['u0'][0], definedon = self.domain)
+            self.gfu.components[1].Set(self.params['u0'][1], definedon = self.domain)
 
         self.gfu_save[0].Set(self.gfu.components[0], definedon = self.domain)
         self.gfu_save[1].Set(self.gfu.components[1], definedon = self.domain)
-
-        for save in self.save_error:
-            save.Initialize(data, self)
-
-        for save in self.save_solution:
-            save.Initialize(data, self)
 
         if self.params['MP']:
 
@@ -94,19 +76,22 @@ class CahnHilliardBnd(BasePDE):
             elif data.mesh.dim == 3:
                 ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
                 ds_lumped = ds(intrules = { TRIG : ir })
-            A = BilinearForm(self.gfu_comp[0].space, symmetric = True)
-            u, v = self.gfu_comp[0].space.TnT()
+            A = BilinearForm(self.gfu.components[0].space, symmetric = True)
+            u, v = self.gfu.components[0].space.TnT()
             A += u*v*ds_lumped
             A.Assemble()
             rows,cols,vals = A.mat.COO()
             weights = sp.csr_matrix((vals,(rows,cols))).diagonal()
-            gfu_vec = self.gfu_comp[0].vec.Copy().FV().NumPy()
+            gfu_vec = self.gfu.components[0].vec.Copy().FV().NumPy()
             self.mass0 = np.sum(weights*gfu_vec)
 
-    def GetLHS(self, data, trial, test, ale = None):
+        for save in self.save_error:
+            save.Initialize(data, self)
 
-        if not ale:
-            ale = self.ale
+        for save in self.save_solution:
+            save.Initialize(data, self)
+
+    def GetLHS(self, data, trial, test, ale):
 
         ns = specialcf.normal(data.mesh.dim)
         Ps = Id(self.dim) - OuterProduct(ns, ns) 
@@ -123,7 +108,7 @@ class CahnHilliardBnd(BasePDE):
             facet_space = FacetSurface(data.mesh, order = 0)
 
         if self.params['D']:
-            lhs = self.params['D']*grad(trial[1]).Trace()*grad(test[0]).Trace()*ds(deformation=ale.X)
+            lhs = self.params['D']*grad(trial[1]).Trace()*grad(test[0]).Trace()*ds(deformation = ale.deformation)
                    
             if self.params['dir_mu']:
                 dir_mu = {}
@@ -131,16 +116,16 @@ class CahnHilliardBnd(BasePDE):
                 for i, (key, value) in enumerate(self.params['dir_mu'].items()):
                     dir_mu[str(i)] = GridFunction(facet_space)
                     dir_mu[str(i)].Set(1, definedon=data.mesh.BBoundaries(key))
-                    lhs += - self.params['gamma']*InnerProduct(nE, grad(trial[1]).Trace())*dir_mu[str(i)]*test[0]*ds(element_boundary=True, deformation=ale.X) \
-                            - self.params['gamma']*InnerProduct(nE, grad(test[0]).Trace())*dir_mu[str(i)]*trial[1]*ds(element_boundary=True, deformation=ale.X)\
-                            + self.params['gamma']*alpha/h*trial[1]*test[1]*dir_mu[str(i)]*ds(element_boundary=True, deformation=ale.X)
+                    lhs += - self.params['gamma']*InnerProduct(nE, grad(trial[1]).Trace())*dir_mu[str(i)]*test[0]*ds(element_boundary=True, deformation = ale.deformation) \
+                            - self.params['gamma']*InnerProduct(nE, grad(test[0]).Trace())*dir_mu[str(i)]*trial[1]*ds(element_boundary=True, deformation = ale.deformation)\
+                            + self.params['gamma']*alpha/h*trial[1]*test[1]*dir_mu[str(i)]*ds(element_boundary=True, deformation = ale.deformation)
         else:
-            lhs =  CF(0)*grad(trial[1])*grad(test[0])*ds(deformation=ale.X)
+            lhs =  CF(0)*grad(trial[1])*grad(test[0])*ds(deformation = ale.deformation)
 
-        lhs += trial[1]*test[1]*ds(deformation=ale.X)
+        lhs += trial[1]*test[1]*ds(deformation = ale.deformation)
 
         if self.params['gamma']:
-            lhs += -1*self.params['gamma']*grad(trial[0]).Trace()*grad(test[1]).Trace()*ds(deformation=ale.X)
+            lhs += -1*self.params['gamma']*grad(trial[0]).Trace()*grad(test[1]).Trace()*ds(deformation = ale.deformation)
                     
             if self.params['dir_c']:
                 dir_c = {}
@@ -148,16 +133,13 @@ class CahnHilliardBnd(BasePDE):
                 for i, (key, value) in enumerate(self.params['dir_c'].items()):
                     dir_c[str(i)] = GridFunction(facet_space)
                     dir_c[str(i)].Set(1, definedon=data.mesh.BBoundaries(key))
-                    lhs += self.params['D']*InnerProduct(nE, grad(trial[0]).Trace())*dir_c[str(i)]*test[1]*ds(element_boundary=True, deformation=ale.X) \
-                        + self.params['D']*InnerProduct(nE, grad(test[1]).Trace())*dir_c[str(i)]*trial[0]*ds(element_boundary=True, deformation=ale.X)\
-                        + self.params['D']*alpha/h*trial[0]*test[0]*dir_c[str(i)]*ds(element_boundary=True, deformation=ale.X)
+                    lhs += self.params['D']*InnerProduct(nE, grad(trial[0]).Trace())*dir_c[str(i)]*test[1]*ds(element_boundary=True, deformation = ale.deformation) \
+                        + self.params['D']*InnerProduct(nE, grad(test[1]).Trace())*dir_c[str(i)]*trial[0]*ds(element_boundary=True, deformation = ale.deformation)\
+                        + self.params['D']*alpha/h*trial[0]*test[0]*dir_c[str(i)]*ds(element_boundary=True, deformation = ale.deformation)
             
         return lhs
 
-    def GetRHS(self, data, test, ale = None):
-
-        if not ale:
-            ale = self.ale
+    def GetRHS(self, data, test, ale):
 
         ns = specialcf.normal(data.mesh.dim)
         Ps = Id(self.dim) - OuterProduct(ns, ns) 
@@ -174,11 +156,11 @@ class CahnHilliardBnd(BasePDE):
             facet_space = FacetSurface(data.mesh, order = 0)
 
         if self.params['rhs']:
-            rhs = self.params['rhs'][0]*test[0]*ds(deformation=ale.X)
-            rhs += self.params['rhs'][1]*test[1]*ds(deformation=ale.X)
+            rhs = self.params['rhs'][0]*test[0]*ds(deformation = ale.deformation)
+            rhs += self.params['rhs'][1]*test[1]*ds(deformation = ale.deformation)
         else:
-            rhs = CF(0)*test[0]*ds(deformation=ale.X)
-            rhs += CF(0)*test[1]*ds(deformation=ale.X)
+            rhs = CF(0)*test[0]*ds(deformation = ale.deformation)
+            rhs += CF(0)*test[1]*ds(deformation = ale.deformation)
         
         if self.params['dir_c']:
             dir_c = {}
@@ -186,14 +168,14 @@ class CahnHilliardBnd(BasePDE):
             for i, (key, value)  in enumerate(self.params['dir_c'].items()):
                 dir_c[str(i)] = GridFunction(facet_space)
                 dir_c[str(i)].Set(1, definedon=data.mesh.BBoundaries(key))
-                lhs += self.params['D']*InnerProduct(nE, grad(test[1]).Trace())*dir_c[str(i)]*value*ds(element_boundary=True, deformation=ale.X)\
-                    + self.params['D']*alpha/h*value*test[0]*dir_c[str(i)]*ds(element_boundary=True, deformation=ale.X)
+                lhs += self.params['D']*InnerProduct(nE, grad(test[1]).Trace())*dir_c[str(i)]*value*ds(element_boundary=True, deformation = ale.deformation)\
+                    + self.params['D']*alpha/h*value*test[0]*dir_c[str(i)]*ds(element_boundary=True, deformation = ale.deformation)
         if self.params['neu_c']:
             neu_c = {}
             for i, (key, value) in enumerate(self.params['neu_c'].items()):
                 neu_c[str(i)] = GridFunction(facet_space)
                 neu_c[str(i)].Set(1, definedon=data.mesh.BBoundaries(key))
-                rhs += InnerProduct(nE, value)*neu_c[str(i)]*test[1]*ds(element_boundary=True, deformation=ale.X)
+                rhs += InnerProduct(nE, value)*neu_c[str(i)]*test[1]*ds(element_boundary=True, deformation = ale.deformation)
 
         if self.params['dir_mu']:
             dir_mu = {}
@@ -201,52 +183,38 @@ class CahnHilliardBnd(BasePDE):
             for i, (key, value) in enumerate(self.params['dir_mu'].items()):
                 dir_mu[str(i)] = GridFunction(facet_space)
                 dir_mu[str(i)].Set(1, definedon=data.mesh.BBoundaries(key))
-                lhs += - self.params['gamma']*InnerProduct(nE, grad(test[0]).Trace())*dir_mu[str(i)]*value*ds(element_boundary=True, deformation=ale.X)\
-                        + self.params['gamma']*alpha/h*value*test[1]*dir_mu[str(i)]*ds(element_boundary=True, deformation=ale.X)
+                lhs += - self.params['gamma']*InnerProduct(nE, grad(test[0]).Trace())*dir_mu[str(i)]*value*ds(element_boundary=True, deformation = ale.deformation)\
+                        + self.params['gamma']*alpha/h*value*test[1]*dir_mu[str(i)]*ds(element_boundary=True, deformation = ale.deformation)
         if self.params['neu_mu']:
             neu_mu = {}
             for i, (key, value) in enumerate(self.params['neu_mu'].items()):
                 neu_mu[str(i)] = GridFunction(facet_space)
                 neu_mu[str(i)].Set(1, definedon=data.mesh.BBoundaries(key))
-                rhs += InnerProduct(nE, value)*neu_mu[str(i)]*test[0]*ds(element_boundary=True, deformation=ale.X)
+                rhs += InnerProduct(nE, value)*neu_mu[str(i)]*test[0]*ds(element_boundary=True, deformation = ale.deformation)
             
             
         return rhs
 
-    def GetMass(self, data, trial, test, ale = None):
+    def GetMass(self, data, trial, test, ale):
 
-        if not ale:
-            ale = self.ale
-        mass = 1/data.dt*trial[0]*test[0]*ds(deformation=ale.X)
-        return mass
-    
-    def GetMassOld(self, data, trial, test, ale = None):
-
-        if not ale:
-            ale = self.ale
-        mass = 1/data.dt*trial[0]*test[0]*ds(deformation=ale.X_old)
+        mass = 1/data.dt*trial[0]*test[0]*ds(deformation = ale.deformation)
         return mass
 
-    def GetNL(self, data, trial, test, ale = None):
+    def GetNL(self, data, trial, test, ale):
 
-        if not ale:
-            ale = self.ale
-
-        nonlin = -1*self.params['epsilon']*(trial[0]**3 - trial[0])*test[1]*ds(deformation=ale.X)
+        nonlin = -1*self.params['epsilon']*(trial[0]**3 - trial[0])*test[1]*ds(deformation = ale.deformation)
                     
         return nonlin
     
-    def PreProcess(self, data):
+    def PostProcess(self, data, ale):
 
-        pass
-    
-    def PostProcess(self, data):
+        super().PostProcess(data, ale)
 
         if self.params['BP'] and not self.params['MP']:
 
-            gfu_vec = self.gfu_comp[0].vec.Copy().FV().NumPy()
+            gfu_vec = self.gfu.components[0].vec.Copy().FV().NumPy()
             gfu_new = MandBP(gfu_vec, BP = self.params['BP'])
-            self.gfu_comp[0].vec.data = gfu_new
+            self.gfu.components[0].vec.data = gfu_new
 
         elif self.params['MP']:
 
@@ -257,17 +225,17 @@ class CahnHilliardBnd(BasePDE):
 
             if data.mesh.dim == 2:
                 ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
-                ds_lumped = ds(intrules = { SEGM : ir }, deformation=self.ale.X)
+                ds_lumped = ds(intrules = { SEGM : ir }, deformation=ale.deformation)
             elif data.mesh.dim == 3:
                 ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-                ds_lumped = ds(intrules = { TRIG : ir }, deformation=self.ale.X)
-            A = BilinearForm(self.gfu_comp[0].space, symmetric = True)
-            u, v = self.gfu_comp[0].space.TnT()
+                ds_lumped = ds(intrules = { TRIG : ir }, deformation=ale.deformation)
+            A = BilinearForm(self.gfu.components[0].space, symmetric = True)
+            u, v = self.gfu.components[0].space.TnT()
             A += u*v*ds_lumped
             A.Assemble()
             rows,cols,vals = A.mat.COO()
             weights = sp.csr_matrix((vals,(rows,cols))).diagonal()
-            gfu_vec = self.gfu_comp[0].vec.Copy().FV().NumPy()
+            gfu_vec = self.gfu.components[0].vec.Copy().FV().NumPy()
 
             if self.params['BP']:
                 BP = self.params['BP']
@@ -277,13 +245,12 @@ class CahnHilliardBnd(BasePDE):
             gfu_new = MandBP(gfu_vec, weights=weights, BP=BP,
                                 MP=self.params['MP'], mass0 =self.mass0, dt = dt)
 
-            self.gfu_comp[0].vec.data = gfu_new
+            self.gfu.components[0].vec.data = gfu_new
 
-    def Update(self, data):
+    def Update(self, data, ale):
 
-        data.mesh.SetDeformation(self.ale.X)
+        data.mesh.SetDeformation(ale.deformation)
 
-        self.gfu_old.vec.data = self.gfu.vec.data
         self.gfu_save[0].Set(self.gfu.components[0], definedon = self.domain)
         self.gfu_save[1].Set(self.gfu.components[1], definedon = self.domain)
 
@@ -297,7 +264,7 @@ class CahnHilliardBnd(BasePDE):
 
     def get_error(self, data, ex_sol, norm):
 
-        err1 = compute_error(data=data, gfu = self.gfu_comp[0], u_ex=ex_sol[0],
+        err1 = compute_error(data=data, gfu = self.gfu.components[0], u_ex=ex_sol[0],
                             norm = norm, domain = self.domain, 
                             VorB = BND)
         
@@ -310,7 +277,6 @@ class CahnHilliardBnd(BasePDE):
     def set_solution(self, value):
 
         self.gfu.Set(value, definedon=self.domain)
-        self.gfu_old.Set(value, definedon=self.domain)
 
     def get_solution(self):
 

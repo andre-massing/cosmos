@@ -90,9 +90,9 @@ class Elastic(BasePDE):
             n = specialcf.normal(data.mesh.dim)
             h = specialcf.mesh_size
             for key, value in self.params['dir'].items():
-                lhs += - InnerProduct((Ft * Stress(Et))*n, trial[0])*ds(definedon = key, skeleton=True, deformation = ale.deformation)\
-                    - InnerProduct((F * Stress(E))*n, test[0])*ds(definedon = key, skeleton=True, deformation = ale.deformation)\
-                    + gamma/h*trial[0]*test[0]*ds(definedon = key, skeleton = True, deformation = ale.deformation)
+                lhs += - InnerProduct((Ft * Stress(Et))*n, trial[0])*ds(definedon = key, skeleton=True)\
+                    - InnerProduct((F * Stress(E))*n, test[0])*ds(definedon = key, skeleton=True)\
+                    + gamma/h*trial[0]*test[0]*ds(definedon = key, skeleton = True)
         
         
         return lhs
@@ -122,8 +122,8 @@ class Elastic(BasePDE):
             n = specialcf.normal(data.mesh.dim)
             h = specialcf.mesh_size
             for key, value in self.params['dir'].items():
-                rhs += - InnerProduct((Ft * Stress(Et))*n, value)*ds(definedon = key, skeleton=True, deformation = ale.deformation)\
-                    + gamma/h*value*test[0]*ds(definedon = key, skeleton = True, deformation = ale.deformation)
+                rhs += - InnerProduct((Ft * Stress(Et))*n, value)*ds(definedon = key, skeleton=True)\
+                    + gamma/h*value*test[0]*ds(definedon = key, skeleton = True)
         
         return rhs
 
