@@ -2,7 +2,6 @@ from ngsolve import *
 from ngsolve.webgui import Draw
 from cosmos.solvers.solver_base import SolverALE
 
-
 class Scheme():
 
     def __init__(self):
@@ -12,7 +11,7 @@ class Scheme():
 
         raise Exception('Base class method is called! Empty method!')
     
-def SimpleNewtonSolve(data, a, f, gfu, tol=1e-2, maxits=20):
+def SimpleNewtonSolve(data, a, f, gfu, tol=1e-6, maxits=20):
     res = gfu.vec.CreateVector()
     du = gfu.vec.CreateVector()
     fes = gfu.space
@@ -121,65 +120,6 @@ class BDF1(Scheme):
 
         pde.PostProcess(data, ale)
 
-# class BDF1imex(Scheme):
-
-#     def __init__(self, conservative = True):
-        
-#         super().__init__()
-#         self.conservative = conservative
-
-#     def Solve(self, data, pde):
-
-#         gfu = GridFunction(data.dX.space)
-#         gfu.vec.data = data.prev_dX[-1].data
-
-#         pde.PreProcess(data, dX = gfu)
-
-#         if self.conservative:
-
-#             M1 = BilinearForm(pde.fes)
-#             M1 += pde.GetMass(data, pde.get_trial(), pde.get_test(), dX = gfu)
-#             M1.Assemble()
-#             mass_old_vec = M1.mat*pde.prev_gfu[-1]
-
-#             data.t.Set(data.t.Get() + data.dt.Get())
-
-#         else:
-
-#             data.t.Set(data.t.Get() + data.dt.Get())
-
-#             M1 = BilinearForm(pde.fes)
-#             M1 += pde.GetMass(data, pde.get_trial(), pde.get_test(), dX = gfu)
-#             M1.Assemble()
-#             mass_old_vec = M1.mat*pde.prev_gfu[-1]
-
-#         F = LinearForm(pde.fes)
-#         F += pde.GetRHS(data, pde.get_test(), dX = gfu)
-#         F.Assemble()
-#         res = F.vec
-
-#         if pde.nonlinear:
-
-#             N1 = BilinearForm(pde.fes)
-#             N1 += pde.GetNL(data, pde.get_trial(), pde.get_test(), dX = gfu)
-#             nonlin = pde.gfu.vec.CreateVector()
-#             N1.Apply(pde.prev_gfu[-1], nonlin)
-#             res += -1*nonlin
-
-#         res += mass_old_vec
-
-#         A = BilinearForm(pde.fes)
-#         lhs = pde.GetLHS(data, pde.get_trial(), pde.get_test(), dX = gfu)
-#         mass = pde.GetMass(data, pde.get_trial(), pde.get_test(), dX = gfu)
-#         A += lhs + mass
-
-#         A.Assemble()
-#         pde.gfu.vec.data = A.mat.Inverse(freedofs = pde.fes.FreeDofs())*res
-
-#         data.t.Set(data.t.Get() - data.dt.Get()) 
-
-#         pde.PostProcess(data, dX = gfu)
-
 class BDF2(Scheme):
 
     def __init__(self, conservative = True):
@@ -259,100 +199,7 @@ class BDF2(Scheme):
 
             pde.PostProcess(data, ale)
 
-# class BDF2imex(Scheme):
 
-#     def __init__(self, conservative = True):
-        
-#         super().__init__()
-#         self.conservative = conservative
-
-#     def Solve(self, data, pde):
-
-#         if len(pde.prev_gfu) < 1:
-
-#             scheme = BDF1imex(self.conservative)
-#             scheme.Solve(data, pde)
-
-#         else:
-
-#             dX_extr = GridFunction(data.dX.space)
-#             dX_extr.vec.data = self.Extrapolate([data.prev_dX[-2], data.prev_dX[-1]]).data
-
-#             pde.PreProcess(data, dX = dX_extr)
-
-#             if self.conservative:
-
-#                 data.t.Set(data.t.Get() - data.prev_dt[-2])
-
-#                 gfu2 = GridFunction(data.dX.space)
-#                 gfu2.vec.data = data.prev_dX[-2].data
-#                 M2 = BilinearForm(pde.fes)
-#                 M2 += pde.GetMass(data, pde.get_trial(), pde.get_test(), dX = gfu2)
-#                 M2.Assemble()
-#                 mass_old_vec = -0.5*M2.mat*pde.prev_gfu[-2]
-
-#                 data.t.Set(data.t.Get() + data.prev_dt[-2])
-
-#                 gfu1 = GridFunction(data.dX.space)
-#                 gfu1.vec.data = data.prev_dX[-1].data
-#                 M1 = BilinearForm(pde.fes)
-#                 M1 += pde.GetMass(data, pde.get_trial(), pde.get_test(), dX = gfu1)
-#                 M1.Assemble()
-#                 mass_old_vec += 2*M1.mat*pde.prev_gfu[-1]
-
-#                 data.t.Set(data.t.Get() + data.dt.Get())
-
-#                 mass = 1.5*pde.GetMass(data, pde.get_trial(), pde.get_test(), dX = dX_extr)
-
-#             else:
-
-#                 data.t.Set(data.t.Get() + data.dt.Get())
-#                 M = BilinearForm(pde.fes)
-#                 M += pde.GetMass(data, pde.get_trial(), pde.get_test(), dX = dX_extr)
-#                 M.Assemble()
-
-#                 mass_old_vec = -0.5*M.mat*pde.prev_gfu[-2]
-#                 mass_old_vec += 2*M.mat*pde.prev_gfu[-1]
-
-#                 mass = 1.5*pde.GetMass(data, pde.get_trial(), pde.get_test(), dX = dX_extr)
-
-#             A = BilinearForm(pde.fes)
-#             lhs = pde.GetLHS(data, pde.get_trial(), pde.get_test(), dX = dX_extr)
-#             A += lhs + mass
-
-#             F = LinearForm(pde.fes)
-#             F += pde.GetRHS(data, pde.get_test(), dX = dX_extr)
-#             F.Assemble()
-#             res = F.vec
-
-#             if pde.nonlinear:
-
-#                 gfu_extr = GridFunction(pde.gfu.space)
-#                 gfu_extr.vec.data = self.Extrapolate([pde.prev_gfu[-2], pde.prev_gfu[-1]]).data
-
-#                 N1 = BilinearForm(pde.fes)
-#                 nonlin = pde.gfu.vec.CreateVector()
-#                 N1 += pde.GetNL(data, pde.get_trial(), pde.get_test(), dX = dX_extr)
-#                 N1.Apply(gfu_extr.vec, nonlin)
-#                 res += -1*nonlin
-
-#             res += mass_old_vec
-
-#             A.Assemble()
-#             pde.gfu.vec.data = A.mat.Inverse(freedofs = pde.fes.FreeDofs())*res
-
-#             data.t.Set(data.t.Get() - data.dt.Get())
-
-#             pde.PostProcess(data, dX = dX_extr)
-
-#     def Extrapolate(self, vec):
-
-#         v_ext = vec[-1].CreateVector()
-#         v_ext.data[:] = 0
-#         v_ext += 2*vec[-1] 
-#         v_ext += -1*vec[-2] 
-
-#         return v_ext
 
 class CN(Scheme):
 

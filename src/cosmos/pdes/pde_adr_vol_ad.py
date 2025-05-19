@@ -17,14 +17,13 @@ class AdVolADR(VolADR):
         else:
             self.initialized = True
 
-        self.domain = data.mesh.Materials(self.params['domain'])
-        self.name = [self.params['name']]
+        self.domain = data.mesh.Materials(self.domain)
 
         if data.mesh.ne == 0:
             raise Exception('The mesh has no volume elements! The PDE ' 
                             + str(self.name) + ' cannot be initialized')
         
-        if self.params['periodic']:
+        if self.periodic:
             self.fes = Compress(Periodic(H1(data.mesh, order = self.fes_order, 
                                             dgjumps = True, definedon = self.domain)))
         else:
@@ -36,12 +35,12 @@ class AdVolADR(VolADR):
         
         self.gfu = GridFunction(self.fes)
 
-        if self.params['u0']:
-            self.gfu.Set(self.params['u0'])
+        if self.u0():
+            self.gfu.Set(self.u0())
 
         self.gfu_save = [self.gfu]
 
-        if self.params['MP']:
+        if self.MP:
             if data.mesh.dim == 2:
                 ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
                 dx_lumped = dx(intrules = { TRIG : ir })
@@ -68,45 +67,45 @@ class AdVolADR(VolADR):
         n = specialcf.normal(data.mesh.dim)
         h = specialcf.mesh_size
 
-        if self.params['c']:
-            lhs = self.params['c']*trial[0]*test[0]*dx(deformation = ale.deformation)
+        if self.c():
+            lhs = self.c()*trial[0]*test[0]*dx(deformation = ale.deformation)
         else:
             lhs =  CF(0)*trial[0]*test[0]*dx(deformation = ale.deformation)
 
-        if self.params['d']:
-            lhs += self.params['d']*grad(trial[0])*grad(test[0])*dx(deformation = ale.deformation)
+        if self.d():
+            lhs += self.d()*grad(trial[0])*grad(test[0])*dx(deformation = ale.deformation)
                     
-            if self.params['dir_d']:
+            if self.dir_d:
                 alpha = 5 * self.fes_order * (self.fes_order+1)
-                for key, value in self.params['dir_d'].items():
-                    lhs += - self.params['d']*InnerProduct(n, grad(trial[0]))*test[0]*ds(definedon = key, skeleton=True, deformation = ale.deformation) \
-                        - self.params['d']*InnerProduct(n, grad(test[0]))*trial[0]*ds(definedon = key, skeleton=True, deformation = ale.deformation)\
-                        + self.params['d']*alpha/h*trial[0]*test[0]*ds(definedon = key, skeleton = True, deformation = ale.deformation)\
+                for key, field in self.dir_d.items():
+                    lhs += - self.d()*InnerProduct(n, grad(trial[0]))*test[0]*ds(definedon = key, skeleton=True, deformation = ale.deformation) \
+                        - self.d()*InnerProduct(n, grad(test[0]))*trial[0]*ds(definedon = key, skeleton=True, deformation = ale.deformation)\
+                        + self.d()*alpha/h*trial[0]*test[0]*ds(definedon = key, skeleton = True, deformation = ale.deformation)\
             
-        if self.params['b']:
-            stab = Norm(self.params['b'])*h
-            if self.params['d']:
-                stab += Norm(self.params['d'])
-            if self.params['c']:
-                stab += Norm(self.params['c'])*h**2
+        if self.b():
+            stab = Norm(self.b())*h
+            if self.d():
+                stab += Norm(self.d())
+            if self.c:
+                stab += Norm(self.c())*h**2
             jump_u = n*(grad(trial[0]) - (grad(trial[0])).Other())
             jump_v = n*(grad(test[0]) - (grad(test[0])).Other())
-            lhs += -self.params['b']*grad(test[0]) * trial[0]*dx(deformation = ale.deformation)\
+            lhs += -self.b()*grad(test[0]) * trial[0]*dx(deformation = ale.deformation)\
                     + h**3/stab*jump_u*jump_v*dx(skeleton=True, deformation = ale.deformation)
 
-            if self.params['neu_b']:
-                for key, value in self.params['neu_b'].items():
-                    lhs += IfPos(self.params['b']*n, self.params['b']*n*trial[0], CF(0))*test[0]\
+            if self.neu_b:
+                for key, field in self.neu_b.items():
+                    lhs += IfPos(self.b()*n, self.b()*n*trial[0], CF(0))*test[0]\
                         *ds(definedon = key, deformation = ale.deformation)
 
-            if self.params['dir_b']:
-                for key, value in self.params['dir_b'].items():
-                    lhs += IfPos(self.params['b']*n, self.params['b']*n*trial[0], CF(0))*test[0]\
+            if self.dir_b:
+                for key, field in self.dir_b.items():
+                    lhs += IfPos(self.b()*n, self.b()*n*trial[0], CF(0))*test[0]\
                         *ds(definedon = key, deformation = ale.deformation)
                     
-            if self.params['Fneu_b']:
-                for key, value in self.params['Fneu_b'].items():
-                    lhs += IfPos(self.params['b']*n, self.params['b']*n*trial[0], CF(0))*test[0]\
+            if self.Fneu_b:
+                for key, field in self.Fneu_b.items():
+                    lhs += IfPos(self.b()*n, self.b()*n*trial[0], CF(0))*test[0]\
                         *ds(definedon = data.mesh.Boundaries('.*') - data.mesh.Boundaries(key), deformation = ale.deformation)
             
         return lhs
