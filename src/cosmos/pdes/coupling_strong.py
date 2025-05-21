@@ -1,24 +1,35 @@
 # Import necessary libraries
 from ngsolve import *
 from cosmos.pdes.pde_base import BasePDE
-from cosmos.pdes.ale import ALE
-from cosmos.utils.tools import params_check
-from collections import Counter
-from tqdm import tqdm
-import numpy as np
+from cosmos.pdes.ale import ale
+from ngsolve.webgui import Draw
+from cosmos.solvers.time_schemes import BDF1, BDF2, CN, Steady
+
+def SimpleNewtonSolve(a, f, gfu, tol=1e-10, maxits=20):
+    res = gfu.vec.CreateVector()
+    du = gfu.vec.CreateVector()
+    fes = gfu.space
+    for it in range(maxits):
+        a.Apply(gfu.vec, res)
+        res += -1*f
+        a.AssembleLinearization(gfu.vec)
+        du.data = a.mat.Inverse(fes.FreeDofs()) * res
+        gfu.vec.data -= du
+        #stopping criteria
+        stopcritval = sqrt(abs(InnerProduct(du,res)))
+        if stopcritval < tol:
+            break
+
+    if it == maxits-1:
+        print(stopcritval)
+        raise Exception('Newton solver has not converged!')
 
 class StrongCoupling(BasePDE):
     
-    def __init__(self, **kwargs):
+    def __init__(self, time_scheme = BDF1()):
 
         super().__init__()
-
-        self.params = kwargs
-
-        # Initialize the parameters
-        accepted_keys = ['ale', 'MP', 'BP']
-        defaults = [False, False, None]
-        params_check(self.params, accepted_keys, defaults)
+        self.time_scheme = time_scheme
         
         self.PDEs = []
         self.pntrs = [0]
@@ -31,18 +42,12 @@ class StrongCoupling(BasePDE):
                 raise TypeError("The added PDE must inherit from BasePDE")
             self.PDEs.append(pde)
 
-    def AddCoupling(self, **kwargs):
+    def AddCoupling(self, f = None):
 
         self.nonlinear = True
+        self.cpl.append({'f': f})
 
-        params = kwargs
-        # Initialize the parameters
-        accepted_keys = ['f']
-        defaults = [None]  
-        params_check(params, accepted_keys, defaults)
-        self.cpl.append(params)
-
-    def Initialize(self, data):
+    def Initialize(self, solverdata):
 
         if self.initialized:
             return
@@ -51,13 +56,8 @@ class StrongCoupling(BasePDE):
 
         if len(self.PDEs)<2:
             raise Exception('Coupling class is meant for more than only 1 PDE!')
-        
-        if self.params['ale']:
-            self.aux_ale = auxALE()
-            self.ale = ALE()
-            self.PDEs.append(self.ale)
 
-        self.PDEs[0].Initialize(data)
+        self.PDEs[0].Initialize(solverdata)
         self.fes = self.PDEs[0].fes
         if self.PDEs[0].nonlinear:
             self.nonlinear = True
@@ -67,110 +67,76 @@ class StrongCoupling(BasePDE):
         for pde in self.PDEs[1:]:
             i += pde.nfields
             self.pntrs.append(i)
-            pde.Initialize(data)
+            pde.Initialize(solverdata)
             self.fes = self.fes*pde.fes
             if pde.nonlinear:
                 self.nonlinear = True
             
         self.gfu = GridFunction(self.fes)
 
-        if self.params['ale']:
-            self.aux_ale.deformation = self.gfu.components[-2]
-            self.aux_ale.velocity = self.gfu.components[-1]
-
         self.trial = self.fes.TrialFunction()
         self.test = self.fes.TestFunction()
 
-    def GetLHS(self, data, trial, test, ale):
+    def GetLHS(self, solverdata, trial, test):
 
-        if self.params['ale']:
-            ale_aux = self.aux_ale
-        else:
-            ale_aux = ale
-
-        lhs = self.PDEs[0].GetLHS(data, trial[self.pntrs[0]:self.pntrs[1]],
-                                test[self.pntrs[0]:self.pntrs[1]], ale_aux)
+        lhs = self.PDEs[0].GetLHS(solverdata, trial[self.pntrs[0]:self.pntrs[1]],
+                                test[self.pntrs[0]:self.pntrs[1]])
         for i, pde in enumerate(self.PDEs[1:]):
-            lhs += pde.GetLHS(data, trial[self.pntrs[i+1]:self.pntrs[i+2]],
-                            test[self.pntrs[i+1]:self.pntrs[i+2]], ale_aux)       
+            lhs += pde.GetLHS(solverdata, trial[self.pntrs[i+1]:self.pntrs[i+2]],
+                            test[self.pntrs[i+1]:self.pntrs[i+2]])       
             
         return lhs
     
-    def GetRHS(self, data, test, ale):
+    def GetRHS(self, solverdata, test):
 
-        if self.params['ale']:
-            ale_aux = self.aux_ale
-        else:
-            ale_aux = ale
-
-        rhs = self.PDEs[0].GetRHS(data, test[self.pntrs[0]:self.pntrs[1]], ale_aux)
+        rhs = self.PDEs[0].GetRHS(solverdata, test[self.pntrs[0]:self.pntrs[1]])
         for i, pde in enumerate(self.PDEs[1:]):
-            rhs += pde.GetRHS(data, test[self.pntrs[i+1]:self.pntrs[i+2]], ale_aux)
+            rhs += pde.GetRHS(solverdata, test[self.pntrs[i+1]:self.pntrs[i+2]])
             
         return rhs
     
-    def GetNL(self, data, trial, test, ale):
-
-        if self.params['ale']:
-            ale_aux = self.aux_ale
-        else:
-            ale_aux = ale
+    def GetNL(self, solverdata, trial, test):
 
         if self.cpl:
-            cpl = self.cpl[0]['f'](data, trial, test, ale_aux)
+            cpl = self.cpl[0]['f'](solverdata, trial, test)
             for cpl_i in self.cpl[1:]:
-                cpl += cpl_i['f'](data, trial, test, ale_aux)
+                cpl += cpl_i['f'](solverdata, trial, test)
         else:
             cpl = CF(0)*ds
         for i, pde in enumerate(self.PDEs):
             if pde.nonlinear:
-                cpl += pde.GetNL(data, trial[self.pntrs[i]:self.pntrs[i+1]],
-                            test[self.pntrs[i]:self.pntrs[i+1]], ale_aux)
+                cpl += pde.GetNL(solverdata, trial[self.pntrs[i]:self.pntrs[i+1]],
+                            test[self.pntrs[i]:self.pntrs[i+1]])
 
         return cpl
     
-    def GetMass(self, data, trial, test, ale):
+    def GetMass(self, solverdata, trial, test):
 
-        if self.params['ale']:
-            ale_aux = self.aux_ale
-        else:
-            ale_aux = ale
-
-        mass = self.PDEs[0].GetMass(data, trial[self.pntrs[0]:self.pntrs[1]],
-                                    test[self.pntrs[0]:self.pntrs[1]], ale_aux)
+        mass = self.PDEs[0].GetMass(solverdata, trial[self.pntrs[0]:self.pntrs[1]],
+                                    test[self.pntrs[0]:self.pntrs[1]])
 
         for i, pde in enumerate(self.PDEs[1:]):
-            mass_i  = pde.GetMass(data, trial[self.pntrs[i+1]:self.pntrs[i+2]],
-                            test[self.pntrs[i+1]:self.pntrs[i+2]], ale_aux)
+            mass_i  = pde.GetMass(solverdata, trial[self.pntrs[i+1]:self.pntrs[i+2]],
+                            test[self.pntrs[i+1]:self.pntrs[i+2]])
             mass += mass_i
             
         return mass
     
-    def PreProcess(self, data, ale):
-
-        if self.params['ale']:
-            ale_aux = self.aux_ale
-        else:
-            ale_aux = ale
+    def PreProcess(self, solverdata):
 
         for i, pde in enumerate(self.PDEs):
-            pde.PreProcess(data, ale_aux)
+            pde.PreProcess(solverdata)
             for j, k in enumerate(range(self.pntrs[i], self.pntrs[i+1])):
                 if pde.nfields == 1:
                     self.gfu.components[k].vec.data = pde.gfu.vec.data
                 else:
                     self.gfu.components[k].vec.data = pde.gfu.components[j].vec.data
 
-        super().PreProcess(data, ale_aux)
+        super().PreProcess(solverdata)
     
-    def PostProcess(self, data, ale):
+    def PostProcess(self, solverdata):
 
-        if self.params['ale']:
-            ale_aux = self.aux_ale
-        else:
-            ale_aux = ale
-
-        super().PostProcess(data, ale_aux)
+        super().PostProcess(solverdata)
 
         for i, pde in enumerate(self.PDEs):
             for j, k in enumerate(range(self.pntrs[i], self.pntrs[i+1])):
@@ -178,17 +144,71 @@ class StrongCoupling(BasePDE):
                     pde.gfu.vec.data = self.gfu.components[k].vec.data
                 else:
                     pde.gfu.components[j].vec.data = self.gfu.components[k].vec.data
-            pde.PostProcess(data, ale_aux)
+            pde.PostProcess(solverdata)
 
-    def Update(self, data, ale):
+    def Solve(self, solverdata):
 
-        if self.params['ale']:
-            ale_aux = self.aux_ale
-        else:
-            ale_aux = ale
+        if isinstance(self.time_scheme, CN):
+            raise Exception('Strong Coupling not implemented for Crank-Nicholson scheme')
+
+        self.PreProcess(solverdata)
+
+        if not isinstance(self.time_scheme, Steady):
+
+            ale_curr = ale(solverdata)
+            ale_curr.deformation.vec.data = solverdata.ale.deformation.vec.data
+            ale_curr.velocity.vec.data = solverdata.ale.velocity.vec.data
+
+            if isinstance(self.time_scheme, BDF2) and len(self.prev_gfu)>1:
+
+                solverdata.ale.deformation.vec.data = solverdata.prev_def[-2].data
+                solverdata.ale.velocity.vec.data = solverdata.prev_vel[-2].data
+                Moldold = BilinearForm(self.fes)
+                Moldold += self.GetMass(solverdata, self.get_trial(), self.get_test())
+                Moldold.Assemble()
+                resMoldold = Moldold.mat*self.prev_gfu[-2]
+
+            solverdata.ale.deformation.vec.data = solverdata.prev_def[-1].data
+            solverdata.ale.velocity.vec.data = solverdata.prev_vel[-1].data
+            
+            Mold = BilinearForm(self.fes)
+            Mold += self.GetMass(solverdata, self.get_trial(), self.get_test())
+            Mold.Assemble()
+            resMold = Mold.mat*self.prev_gfu[-1]
+
+        solverdata.t.Set(solverdata.t.Get() + solverdata.dt.Get())
+        solverdata.ale.deformation.vec.data = ale_curr.deformation.vec.data
+        solverdata.ale.velocity.vec.data = ale_curr.velocity.vec.data
+
+        A = BilinearForm(self.fes)
+        F = LinearForm(self.fes)
+        F += self.GetRHS(solverdata, self.get_test())
+        F.Assemble()
+
+        A += self.GetLHS(solverdata, self.get_trial(), self.get_test())
+        A += self.GetNL(solverdata, self.get_trial(), self.get_test())
+
+        if isinstance(self.time_scheme, BDF2) and len(self.prev_gfu)>1:
+            res = F.vec
+            res += -0.5*resMoldold
+            res += 2*resMold
+            A += 1.5*self.GetMass(solverdata, self.get_trial(), self.get_test())
+        elif isinstance(self.time_scheme, BDF2) and len(self.prev_gfu)==1 or \
+            isinstance(self.time_scheme, BDF1):
+            res = F.vec
+            res += resMold
+            A += self.GetMass(solverdata, self.get_trial(), self.get_test())
+
+        SimpleNewtonSolve(A, res, self.gfu)
+
+        solverdata.t.Set(solverdata.t.Get() - solverdata.dt.Get())
+
+        self.PostProcess(solverdata)
+
+    def Update(self, solverdata):
 
         for pde in self.PDEs:
-            pde.Update(data, ale_aux)
+            pde.Update(solverdata)
 
     def get_error(self, data, ex_sol, norm):
 
@@ -206,11 +226,3 @@ class StrongCoupling(BasePDE):
 
         for pde in self.PDEs:
             pde.print_info()
-
-
-class auxALE():
-
-    def __init__(self):
-
-        self.deformation = None
-        self.velocity = None

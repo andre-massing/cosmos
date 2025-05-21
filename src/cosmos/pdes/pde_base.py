@@ -21,33 +21,33 @@ class BasePDE():
         self.nonlinear = False
         self.initialized = False
 
-    def Initialize(self, data):
+    def Initialize(self, solverdata):
         
         raise NotImplementedError
     
-    def GetLHS(self, data, trial, test, ale):
+    def GetLHS(self, solverdata, trial, test):
         
         raise NotImplementedError
     
-    def GetRHS(self, data, test, ale):
+    def GetRHS(self, solverdata, test):
         
         raise NotImplementedError
     
-    def GetMass(self, data, trial, test, ale):
+    def GetMass(self, solverdata, trial, test):
         
         raise NotImplementedError
     
-    def PreProcess(self, data, ale):
+    def PreProcess(self, solverdata):
         
         self.prev_gfu.append(self.gfu.vec.Copy())    
         if len(self.prev_gfu)>6:
             self.prev_gfu.pop(0)
     
-    def PostProcess(self, data, ale):
+    def PostProcess(self, solverdata):
         
         pass
     
-    def Update(self, data):
+    def Update(self, solverdata):
         
         pass
     
@@ -79,7 +79,7 @@ class BasePDE():
         else:
             return [self.test]
     
-    def get_error(self, data, ex_sol, norm):
+    def get_error(self, solverdata, ex_sol, norm):
 
         raise NotImplementedError
     

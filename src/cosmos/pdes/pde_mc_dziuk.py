@@ -1,136 +1,95 @@
 from ngsolve import *
-from cosmos.pdes.pde_base import BasePDE
-from cosmos.utils.tools import params_check
+from cosmos.pdes.pde_mc_base import BaseMC
 from cosmos.pdes.pde_tools import compute_error
 from ngsolve.webgui import Draw
 import numpy as np
+from cosmos.solvers.fields import Field
+from cosmos.solvers.time_schemes import BDF1, BDF2, CN, Steady
 
-class MCDziuk(BasePDE):
+class MCDziuk(BaseMC):
 
-    def __init__(self, **kwargs):
+    def __init__(self, rhs = Field(), domain:str = '.*', name:str = 'displacement',
+                 time_scheme = BDF1()):
 
         super().__init__()
 
+        self.rhs = rhs
+        self.domain = domain
+        self.name = [name]
+        self.time_scheme = time_scheme
+
         self.nfields = 1
+        self.displacement = self.gfu
 
-        accepted_keys = ['rhs', 'domain', 'name', 'postprocess']
-        defaults = [None, '.*', "displacement", False]
-        
-        if kwargs:
-            params_check(kwargs, accepted_keys, defaults)
-            self.params = kwargs
-        else:
-            self.params = {}
-            params_check(self.params, accepted_keys, defaults)
-
-    def Initialize(self, data):
+    def Initialize(self, solverdata):
 
         if self.initialized:
             return
         else:
             self.initialized = True
 
-        self.domain = data.mesh.Boundaries(self.params['domain'])
-        self.name = [self.params['name']]
-        self.postprocess = self.params['postprocess']
+        self.domain = solverdata.mesh.Boundaries(self.domain)
         
-        self.fes = Compress(VectorH1(data.mesh, order=self.fes_order,
+        self.fes = Compress(VectorH1(solverdata.mesh, order=self.fes_order,
                     definedon=self.domain))
 
         self.trial = self.fes.TrialFunction()
         self.test = self.fes.TestFunction()
 
         self.gfu = GridFunction(self.fes)
+        self.displacement = self.gfu
         self.X0 = GridFunction(self.fes)
-        if data.mesh.dim == 2:
+        if solverdata.mesh.dim == 2:
             self.X0.Set(CF((x,y)), definedon=self.domain)
-        elif data.mesh.dim == 3:
+        elif solverdata.mesh.dim == 3:
             self.X0.Set(CF((x, y, z)), definedon=self.domain)
             
-        V_vol = VectorH1(data.mesh, order = self.fes_order)
+        V_vol = VectorH1(solverdata.mesh, order = self.fes_order)
         self.gfu_save = [GridFunction(Compress(V_vol))]
 
         for save in self.save_error:
-            save.Initialize(data, self)
+            save.Initialize(solverdata, self)
 
         for save in self.save_solution:
-            save.Initialize(data, self)
+            save.Initialize(solverdata, self)
             
-    def GetLHS(self, data, trial, test, ale):
+    def GetLHS(self, solverdata, trial, test):
 
-        lhs = (InnerProduct(grad(trial[0]).Trace(), grad(test[0]).Trace()))*ds(deformation=ale.deformation)
+        lhs = (InnerProduct(grad(trial[0]).Trace(), grad(test[0]).Trace()))*ds(deformation=solverdata.ale.deformation)
         
         return lhs
         
-    def GetRHS(self, data, test, ale):
+    def GetRHS(self, solverdata, test):
 
-        rhs = -1*InnerProduct(grad(self.X0).Trace(), grad(test[0]).Trace())*ds(deformation=ale.deformation)
+        rhs = -1*InnerProduct(grad(self.X0).Trace(), grad(test[0]).Trace())*ds(deformation=solverdata.ale.deformation)
+        if self.rhs():
+            rhs += self.rhs()*test[0]*ds(deformation = solverdata.ale.deformation)
 
         return rhs
     
-    def GetMass(self, data, trial, test, ale):
+    def GetMass(self, solverdata, trial, test):
 
-        mass = trial[0]*test[0]/data.dt*ds(deformation=ale.deformation)
+        mass = trial[0]*test[0]/solverdata.dt*ds(deformation=solverdata.ale.deformation)
 
         return mass
     
-    def PreProcess(self, data, ale):
-        
-        self.gfu.vec.data = ale.deformation.vec.data
-        self.prev_gfu.append(self.gfu.vec.Copy())      
-        if len(self.prev_gfu)>6:
-            self.prev_gfu.pop(0)
-    
-    def PostProcess(self, data, ale):
+    def Update(self, solverdata, ale):
 
-        super().PostProcess(data, ale)
+        solverdata.mesh.SetDeformation(ale.deformation)
 
-        if self.postprocess:
-
-            ns = specialcf.normal(data.mesh.dim)
-            n_h = GridFunction(ale.deformation.space)
-            data.mesh.SetDeformation(self.gfu)
-            n_h.Set(ns, definedon=self.domain)
-            data.mesh.UnsetDeformation()
-
-            V1 = VectorH1(data.mesh, order=self.fes_order,
-                        definedon=self.domain)
-            V2 = H1(data.mesh, order=self.fes_order,
-                        definedon=self.domain)
-            
-            fes = V1*V2
-            w_h = GridFunction(fes)
-            A = BilinearForm(fes)
-            (w, kappa), (eta, mu) = fes.TnT()
-            A += InnerProduct(grad(w).Trace(), grad(eta).Trace())*ds
-            A += -1*InnerProduct(kappa*n_h, eta)*ds
-            A += 1*InnerProduct(w, mu*n_h)*ds
-            F = LinearForm(fes)
-            F += -1*InnerProduct(grad(self.X0).Trace(), grad(eta).Trace())*ds
-            F += -1*InnerProduct(grad(self.gfu).Trace(), grad(eta).Trace())*ds
-            A.Assemble()
-            F.Assemble()
-            w_h.vec.data = A.mat.Inverse(freedofs = fes.FreeDofs())*F.vec
-            self.gfu.vec.data += w_h.components[0].vec.data
-
-        
-    def Update(self, data, ale):
-
-        data.mesh.SetDeformation(ale.deformation)
-
-        self.gfu_save[0].Set(self.gfu, definedon = self.domain)
+        self.gfu_save.Set(self.displacement, definedon = self.domain)
 
         for save in self.save_error:
-            save.Save(data, self)
+            save.Save(solverdata, self)
 
         for save in self.save_solution:
-            save.Save(data, self)
+            save.Save(solverdata, self)
 
-        data.mesh.UnsetDeformation()
+        solverdata.mesh.UnsetDeformation()
 
-    def get_error(self, data, ex_sol, norm):
+    def get_error(self, solverdata, ex_sol, norm):
 
-        err = compute_error(data=data, gfu = self.gfu, u_ex=ex_sol,
+        err = compute_error(data=solverdata, gfu = self.displacement, u_ex=ex_sol,
                             norm = norm, domain = self.domain, 
                             VorB = BND)
         
@@ -138,11 +97,11 @@ class MCDziuk(BasePDE):
     
     def set_solution(self, value):
 
-        self.gfu.Set(value, definedon=self.domain)
+        self.displacement.Set(value, definedon=self.domain)
 
     def get_solution(self):
 
-        return self.gfu
+        return self.displacement
 
     def print_info(self):
 

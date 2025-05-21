@@ -1,6 +1,5 @@
 from ngsolve import *
 from cosmos.pdes.pde_adr_vol import VolADR
-from cosmos.pdes.pde_tools import MandBP
 import numpy as np
 import scipy.sparse as sp
 

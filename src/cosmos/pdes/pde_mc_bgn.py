@@ -1,45 +1,39 @@
 from ngsolve import *
-from cosmos.pdes.pde_base import BasePDE
-from cosmos.utils.tools import params_check
+from cosmos.pdes.pde_mc_base import BaseMC
 from cosmos.pdes.pde_tools import compute_error
 import numpy as np
+from cosmos.solvers.fields import Field
+from cosmos.solvers.time_schemes import BDF1, BDF2, CN, Steady
 
-class MCBGN(BasePDE):
+class MCBGN(BaseMC):
 
-    def __init__(self, **kwargs):
+    def __init__(self, rhs = Field(), domain:str = '.*', name = ['displacement', 'mean_curvature'],
+                 mc0 = Field(), time_scheme = BDF1()):
 
         super().__init__()
 
-        self.params = kwargs
+        self.rhs = rhs
+        self.domain = domain
+        self.name = name
+        self.mc0 = mc0
+        self.time_scheme = time_scheme
 
         self.nfields = 2
+        self.displacement = self.gfu
 
-        accepted_keys = ['rhs', 'domain', 'name', 'postprocess', 'mc0']
-        defaults = [None, '.*', ['displacement', 'mean_curvature'],
-                    False, None]
-        
-        if kwargs:
-            params_check(kwargs, accepted_keys, defaults)
-            self.params = kwargs
-        else:
-            self.params = {}
-            params_check(self.params, accepted_keys, defaults)
-
-    def Initialize(self, data):
+    def Initialize(self, solverdata):
 
         if self.initialized:
             return
         else:
             self.initialized = True
 
-        self.domain = data.mesh.Boundaries(self.params['domain'])
-        self.name = self.params['name']
-        self.postprocess = self.params['postprocess']
+        self.domain = solverdata.mesh.Boundaries(self.domain)
         
-        V1 = Compress(VectorH1(data.mesh, order=self.fes_order,
+        V1 = Compress(VectorH1(solverdata.mesh, order=self.fes_order,
                     definedon=self.domain))
             
-        V2 = Compress(VectorH1(data.mesh, order=self.fes_order,
+        V2 = Compress(VectorH1(solverdata.mesh, order=self.fes_order,
                     definedon=self.domain))
             
         self.fes = V1*V2
@@ -48,126 +42,86 @@ class MCBGN(BasePDE):
         self.test = self.fes.TestFunction()
 
         self.gfu = GridFunction(self.fes)
-
-        self.dX_h, self.kappa_h = self.gfu.components 
-        if self.params['mc0']:
-            self.kappa_h.Set(self.params['mc0'], definedon = self.domain)
+        self.displacement, self.mean_curvature = self.gfu.components 
+        if self.mc0():
+            self.mean_curvature.Set(self.mc0(), definedon = self.domain)
             
-        V_vol = VectorH1(data.mesh, order = self.fes_order)
+        V_vol = VectorH1(solverdata.mesh, order = self.fes_order)
         self.gfu_save = list(GridFunction(CompressCompound(V_vol*V_vol)).components)
         self.dX_save, self.kappa_save = self.gfu_save[0], self.gfu_save[1]
-        self.dX_save.Set(self.dX_h, definedon = self.domain)
-        self.kappa_save.Set(self.kappa_h, definedon = self.domain)
+        self.dX_save.Set(self.displacement, definedon = self.domain)
+        self.kappa_save.Set(self.mean_curvature, definedon = self.domain)
 
         self.X0 = GridFunction(V1)
-        if data.mesh.dim == 2:
+        if solverdata.mesh.dim == 2:
             self.X0.Set(CF((x,y)), definedon=self.domain)
-        elif data.mesh.dim == 3:
+        elif solverdata.mesh.dim == 3:
             self.X0.Set(CF((x, y, z)), definedon=self.domain)
 
         for save in self.save_error:
-            save.Initialize(data, self)
+            save.Initialize(solverdata, self)
 
         for save in self.save_solution:
-            save.Initialize(data, self)
+            save.Initialize(solverdata, self)
             
-    def GetLHS(self, data, trial, test, ale):
+    def GetLHS(self, solverdata, trial, test):
 
-        if data.mesh.dim == 2:
+        if solverdata.mesh.dim == 2:
             ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
-            ds_lumped = ds(intrules = { SEGM : ir }, deformation = ale.deformation)
-        elif data.mesh.dim == 3:
+            ds_lumped = ds(intrules = { SEGM : ir }, deformation = solverdata.ale.deformation)
+        elif solverdata.mesh.dim == 3:
             ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-            ds_lumped = ds(intrules = { TRIG : ir }, deformation = ale.deformation)
+            ds_lumped = ds(intrules = { TRIG : ir }, deformation = solverdata.ale.deformation)
 
         lhs = -InnerProduct(trial[1], test[0])*ds_lumped
         lhs += InnerProduct(trial[1], test[1])*ds_lumped
-        lhs += (InnerProduct(grad(trial[0]).Trace(), grad(test[1]).Trace()))*ds(deformation = ale.deformation)
+        lhs += (InnerProduct(grad(trial[0]).Trace(), grad(test[1]).Trace()))*ds(deformation = solverdata.ale.deformation)
         
         return lhs
         
-    def GetRHS(self, data, test, ale):
+    def GetRHS(self, solverdata, test):
 
-        rhs = -InnerProduct(grad(self.X0).Trace(), grad(test[1]).Trace())*ds(deformation = ale.deformation)
-        if self.params['rhs']:
-            rhs += InnerProduct(self.params['rhs'], test[0])*ds(deformation = ale.deformation)
+        rhs = -InnerProduct(grad(self.X0).Trace(), grad(test[1]).Trace())*ds(deformation = solverdata.ale.deformation)
+        if self.rhs():
+            rhs += InnerProduct(self.rhs(), test[0])*ds(deformation = solverdata.ale.deformation)
 
         return rhs
 
-    def GetMass(self, data, trial, test, ale):
+    def GetMass(self, solverdata, trial, test):
 
-        if data.mesh.dim == 2:
+        if solverdata.mesh.dim == 2:
             ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
-            ds_lumped = ds(intrules = { SEGM : ir }, deformation = ale.deformation)
-        elif data.mesh.dim == 3:
+            ds_lumped = ds(intrules = { SEGM : ir }, deformation = solverdata.ale.deformation)
+        elif solverdata.mesh.dim == 3:
             ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-            ds_lumped = ds(intrules = { TRIG : ir }, deformation = ale.deformation)
+            ds_lumped = ds(intrules = { TRIG : ir }, deformation = solverdata.ale.deformation)
 
-        mass = InnerProduct(trial[0], test[0])/data.dt*ds_lumped
+        mass = InnerProduct(trial[0], test[0])/solverdata.dt*ds_lumped
 
         return mass
-    
-    def PreProcess(self, data, ale):
-
-        self.gfu.components[0].vec.data = ale.deformation.vec.data
-        self.prev_gfu.append(self.gfu.vec.Copy())      
-        if len(self.prev_gfu)>6:
-            self.prev_gfu.pop(0)
-    
-    def PostProcess(self, data, ale):
-
-        super().PostProcess(data, ale)
-
-        if self.postprocess:
-
-            ns = specialcf.normal(data.mesh.dim)
-            n_h = GridFunction(ale.deformation.space)
-            data.mesh.SetDeformation(self.gfu.components[0])
-            n_h.Set(ns, definedon=self.domain)
-            data.mesh.UnsetDeformation()
-
-            V1 = VectorH1(data.mesh, order=self.fes_order,
-                        definedon=self.domain)
-            V2 = H1(data.mesh, order=self.fes_order,
-                        definedon=self.domain)
-            
-            fes = V1*V2
-            w_h = GridFunction(fes)
-            A = BilinearForm(fes)
-            (w, kappa), (eta, mu) = fes.TnT()
-            A += InnerProduct(grad(w).Trace(), grad(eta).Trace())*ds
-            A += -1*InnerProduct(kappa*n_h, eta)*ds
-            A += 1*InnerProduct(w, mu*n_h)*ds
-            F = LinearForm(fes)
-            F += -1*InnerProduct(grad(self.X0).Trace(), grad(eta).Trace())*ds
-            F += -1*InnerProduct(grad(self.gfu.components[0]).Trace(), grad(eta).Trace())*ds
-            A.Assemble()
-            F.Assemble()
-            w_h.vec.data = A.mat.Inverse(freedofs = fes.FreeDofs())*F.vec
-            self.gfu.components[0].vec.data += w_h.components[0].vec.data
         
-    def Update(self, data, ale):
+    def Update(self, solverdata):
 
-        data.mesh.SetDeformation(ale.deformation)
+        solverdata.mesh.SetDeformation(solverdata.ale.deformation)
 
-        self.dX_save.Set(self.dX_h, definedon = self.domain)
-        self.kappa_save.Set(self.kappa_h, definedon = self.domain)
+        self.dX_save.Set(self.displacement, definedon = self.domain)
+        self.kappa_save.Set(self.mean_curvature, definedon = self.domain)
 
         for save in self.save_error:
-            save.Save(data, self)
+            save.Save(solverdata, self)
 
         for save in self.save_solution:
-            save.Save(data, self)
+            save.Save(solverdata, self)
 
-        data.mesh.UnsetDeformation()
+        solverdata.mesh.UnsetDeformation()
 
-    def get_error(self, data, ex_sol, norm):
+    def get_error(self, solverdata, ex_sol, norm):
 
-        err0 = compute_error(data=data, gfu = self.dX_h, u_ex=ex_sol[0],
+        err0 = compute_error(data=solverdata, gfu = self.displacement, u_ex=ex_sol[0],
                             norm = norm, domain = self.domain, 
                             VorB = BND)
         
-        err1 = compute_error(data=data, gfu = self.kappa_h, u_ex=ex_sol[1],
+        err1 = compute_error(data=solverdata, gfu = self.mean_curvature, u_ex=ex_sol[1],
                             norm = norm, domain = self.domain, 
                             VorB = BND)
         
@@ -176,12 +130,12 @@ class MCBGN(BasePDE):
     
     def set_solution(self, value):
 
-        self.dX_h.Set(value[0], definedon=self.domain)
-        self.kappa_h.Set(value[1], definedon=self.domain)
+        self.displacement.Set(value[0], definedon=self.domain)
+        self.mean_curvature.Set(value[1], definedon=self.domain)
 
     def get_solution(self):
 
-        return [self.dX_h, self.kappa_h]
+        return [self.displacement, self.mean_curvature]
 
     def print_info(self):
 
