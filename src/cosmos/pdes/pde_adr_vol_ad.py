@@ -84,15 +84,11 @@ class AdVolADR(VolADR):
                         + self.params['d']*alpha/h*trial[0]*test[0]*ds(definedon = key, skeleton = True, deformation = ale.deformation)\
             
         if self.params['b']:
-            stab = Norm(self.params['b'])*h
-            if self.params['d']:
-                stab += Norm(self.params['d'])
-            if self.params['c']:
-                stab += Norm(self.params['c'])*h**2
+            stab = IfPos(Norm(self.params['b'])-1, Norm(self.params['b']), 1)
             jump_u = n*(grad(trial[0]) - (grad(trial[0])).Other())
             jump_v = n*(grad(test[0]) - (grad(test[0])).Other())
             lhs += -self.params['b']*grad(test[0]) * trial[0]*dx(deformation = ale.deformation)\
-                    + h**3/stab*jump_u*jump_v*dx(skeleton=True, deformation = ale.deformation)
+                    + h**2/stab*jump_u*jump_v*dx(skeleton=True, deformation = ale.deformation)
 
             if self.params['neu_b']:
                 for key, value in self.params['neu_b'].items():

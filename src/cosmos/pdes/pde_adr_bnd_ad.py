@@ -167,11 +167,7 @@ class AdBndADR(BasePDE):
                                     InnerProduct(nE, b)*trial[0], 0)\
                                         *dir_b[str(i)]*test[0]*ds(element_boundary=True, deformation = ale.deformation)
                     
-            stab = Norm(b)*h
-            if self.params['d']:
-                stab += Norm(self.params['d'])
-            if self.params['c']:
-                stab += Norm(self.params['c'])*h**2
+            stab = IfPos(Norm(b)-1, Norm(b), 1)
             if data.mesh.dim == 2:
                 tEc = CF((-ns[1], ns[0]))
                 jump_dudn = (trial[0].Trace().Deriv() - trial[1]*tEc)*nE
@@ -184,7 +180,7 @@ class AdBndADR(BasePDE):
             gfFone.Set(1, definedon=self.domain, dual = True)
             gfFBB = GridFunction(facet_space)
             gfFBB.Set(1, definedon=data.mesh.BBoundaries('.*'))
-            lhs +=  h**3/stab*(gfFone - gfFBB)*InnerProduct(jump_dudn,jump_dvdn)\
+            lhs +=  h**2/stab*(gfFone - gfFBB)*InnerProduct(jump_dudn,jump_dvdn)\
                 *ds(element_boundary=True, deformation = ale.deformation)
             
             if data.mesh.dim == 2:
