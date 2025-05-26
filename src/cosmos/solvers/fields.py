@@ -27,6 +27,40 @@ class Field:
             return self._cf
         else:
             return None
+        
+    def _resolve(self, other):
+        return other() if isinstance(other, Field) else other
+
+    def __add__(self, other):
+        return Field(lambda: self() + self._resolve(other))
+
+    def __sub__(self, other):
+        return Field(lambda: self() - self._resolve(other))
+
+    def __mul__(self, other):
+        return Field(lambda: self() * self._resolve(other))
+
+    def __truediv__(self, other):
+        return Field(lambda: self() / self._resolve(other))
+
+    def __pow__(self, other):
+        return Field(lambda: self() ** self._resolve(other))
+
+    # Allow right-hand operations like 5 + f_wrapped
+    def __radd__(self, other):
+        return Field(lambda: self._resolve(other) + self())
+
+    def __rsub__(self, other):
+        return Field(lambda: self._resolve(other) - self())
+
+    def __rmul__(self, other):
+        return Field(lambda: self._resolve(other) * self())
+
+    def __rtruediv__(self, other):
+        return Field(lambda: self._resolve(other) / self())
+
+    def __rpow__(self, other):
+        return Field(lambda: self._resolve(other) ** self())
     
     def set_to_attribute(self, pde, attribute: str):
         self._pde = pde
