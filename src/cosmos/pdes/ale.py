@@ -8,18 +8,19 @@ class ale:
 
     def __init__(self, solverdata):
 
-        self.mesh = solverdata.mesh
-        self.dim = self.mesh.dim
-        if self.mesh.ne == 0:
-            self.domain = self.mesh.Boundaries('.*')
+        self.solverdata = solverdata
+        self.dim = self.solverdata.mesh.dim
+        if self.solverdata.mesh.ne == 0:
+            self.domain = self.solverdata.mesh.Boundaries('.*')
         else:
-            self.domain = self.mesh.Materials('.*')
+            self.domain = self.solverdata.mesh.Materials('.*')
 
-        V = VectorH1(self.mesh, order=self.mesh.GetCurveOrder(),
+        self.V = VectorH1(self.solverdata.mesh, order=self.solverdata.mesh.GetCurveOrder(),
                     definedon=self.domain)
         
-        self.deformation = GridFunction(V)
-        self.velocity = GridFunction(V)
+        self.deformation = GridFunction(self.V)
+        self.velocity = GridFunction(self.V)
+        self.velocity_correction = GridFunction(self.V)
         self.deformation_field = Field(cf = CF((0,)*self.dim))
         self.velocity_field = Field(cf = CF((0,)*self.dim))
 
@@ -128,13 +129,9 @@ class alePDE(BasePDE):
 
         return nonlin
     
-    def __add_forms__(self, kwargs):
+    def __add_forms__(self, f):
 
-        params = kwargs
-        # Initialize the parameters
-        accepted_keys = ['f']
-        defaults = [None]  
-        params_check(params, accepted_keys, defaults)
+        params = {'f': f}
 
         return params
     

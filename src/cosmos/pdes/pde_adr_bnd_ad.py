@@ -110,7 +110,7 @@ class AdBndADR(BaseADR):
         if solverdata.mesh.dim == 2:
             facet_space = H1(solverdata.mesh, order = 1, definedon=self.domain)
         else:
-            facet_space = FacetSurface(solverdata.mesh, order = 0)
+            facet_space = FacetSurface(solverdata.mesh, order = 0, definedon=self.domain)
 
         if self.c():
             lhs = self.c()*trial[0]*test[0]*ds(deformation = solverdata.ale.deformation)

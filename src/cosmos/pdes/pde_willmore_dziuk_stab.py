@@ -10,7 +10,7 @@ class WillmoreDziukStab(BaseMC):
     def __init__(self, rhs = Field(), clamped_bnd = None, clamped_f = Field(),
                  domain:str = '.*', name = ['displacement', 'mean_curvature'],
                  sp_curv = Field(cf=CF(0)), mc_autoupdate = False, mc0 = Field(),
-                 time_scheme = BDF1(), stab = 1e-3):
+                 time_scheme = BDF1(), stab = 1e-3, ale = False, postprocess = False):
 
         super().__init__()
 
@@ -24,6 +24,8 @@ class WillmoreDziukStab(BaseMC):
         self.mc0 = mc0
         self.stab = stab
         self.time_scheme = time_scheme
+        self.ale = ale
+        self.postprocess = postprocess
 
         self.nfields = 3
         self.displacement = self.gfu
@@ -67,7 +69,7 @@ class WillmoreDziukStab(BaseMC):
         self.displacement, self.Y_h, _ = self.gfu.components
         self.mean_curvature = GridFunction(V2)
         if not self.mc0():
-            ComputeStabMC(solverdata, self.mean_curvature, self.clamped_bnd, self.stab)
+            ComputeStabMC(solverdata, self.mean_curvature, self.clamped_bnd, self.stab, self.domain)
         else:
             self.mean_curvature.Set(self.mc0(), definedon = self.domain)
         ns = specialcf.normal(solverdata.mesh.dim)
@@ -125,8 +127,24 @@ class WillmoreDziukStab(BaseMC):
         area = sqrt(Det(J.trans*J))/2
         length = sqrt(area/pi)
 
-        lhs += self.stab*length*InnerProduct(jump_dkappadn,jump_detadn)\
+        if solverdata.mesh.dim == 2:
+            facet_space = H1(solverdata.mesh, order = 1, definedon=self.domain)
+        else:
+            facet_space = FacetSurface(solverdata.mesh, order = 0)
+        gfFone = GridFunction(facet_space)
+        gfFone.Set(1, definedon=self.domain, dual = True)
+        gfFBB = GridFunction(facet_space)
+        if self.clamped_bnd:
+            gfFBB.Set(1, definedon=solverdata.mesh.BBoundaries(self.clamped_bnd))
+
+        lhs += self.stab*(gfFone - gfFBB)*length*InnerProduct(jump_dkappadn,jump_detadn)\
             *ds(element_boundary=True, deformation = solverdata.ale.deformation)
+        
+        if solverdata.mesh.dim == 2:
+            lhs +=  gfFBB*InnerProduct(trial[2],test[2])\
+                        *ds(element_boundary=True, deformation = solverdata.ale.deformation)
+        elif solverdata.mesh.dim == 3:
+            lhs +=  gfFBB*trial[2].Trace()*test[2].Trace()*ds(element_boundary=True, deformation = solverdata.ale.deformation)
         
         return lhs
         
@@ -201,7 +219,7 @@ class WillmoreDziukStab(BaseMC):
         if self.mc_autoupdate:
             solverdata.mesh.SetDeformation(solverdata.ale.deformation)
             ns = specialcf.normal(solverdata.mesh.dim)
-            ComputeStabMC(solverdata, self.mean_curvature, self.clamped_bnd, self.stab)
+            ComputeStabMC(solverdata, self.mean_curvature, self.clamped_bnd, self.stab, self.domain)
             self.Y_h.Set(self.mean_curvature - self.sp_curv()*ns, definedon = self.domain)
             solverdata.mesh.UnsetDeformation()
     
@@ -213,9 +231,39 @@ class WillmoreDziukStab(BaseMC):
         solverdata.mesh.SetDeformation(solverdata.ale.deformation)
         self.mean_curvature.Set(self.Y_h + self.sp_curv()*ns, definedon = self.domain)
         solverdata.mesh.UnsetDeformation()
+
+        if self.postprocess:
+
+            ns = specialcf.normal(solverdata.mesh.dim)
+            n_h = GridFunction(VectorH1(solverdata.mesh, order=self.fes_order,
+                    definedon=self.domain))
+            solverdata.mesh.SetDeformation(self.displacement)
+            n_h.Set(ns, definedon=self.domain)
+            solverdata.mesh.UnsetDeformation()
+
+            V2 = H1(solverdata.mesh, order=self.fes_order,
+                        definedon=self.domain)
+            
+            fes = self.V1*V2
+            w_h = GridFunction(fes)
+            A = BilinearForm(fes)
+            (w, kappa), (eta, mu) = fes.TnT()
+            ds_duanli = ds
+            A += InnerProduct(grad(w).Trace(), grad(eta).Trace())*ds_duanli
+            A += -1*InnerProduct(kappa*n_h, eta)*ds_duanli
+            A += 1*InnerProduct(w, mu*n_h)*ds_duanli
+            F = LinearForm(fes)
+            F += -1*InnerProduct(grad(self.X0).Trace(), grad(eta).Trace())*ds_duanli
+            F += -1*InnerProduct(grad(self.displacement).Trace(), grad(eta).Trace())*ds_duanli
+            A.Assemble()
+            F.Assemble()
+            w_h.vec.data = A.mat.Inverse(freedofs = fes.FreeDofs())*F.vec
+            self.displacement.vec.data += w_h.components[0].vec.data
         
     def Update(self, solverdata):
 
+        if self.ale:
+            self.gfu.Set(solverdata.ale.deformation, definedon=self.domain)
         solverdata.mesh.SetDeformation(solverdata.ale.deformation)
 
         self.dX_save.Set(self.displacement, definedon = self.domain)
@@ -267,7 +315,7 @@ class WillmoreDziukStab(BaseMC):
 
         # print(60*'-', '\n')
 
-def ComputeStabMC(solverdata, gfu, clamped_bnd, stab):
+def ComputeStabMC(solverdata, gfu, clamped_bnd, stab, domain):
 
     if solverdata.mesh.dim == 2:
         ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
@@ -280,10 +328,10 @@ def ComputeStabMC(solverdata, gfu, clamped_bnd, stab):
 
     if solverdata.mesh.dim == 2:
         dV = H1(solverdata.mesh, order=1,\
-                    definedon = solverdata.mesh.Boundaries('.*'))
+                    definedon = domain)
     elif solverdata.mesh.dim == 3:
         dV = NormalFacetSurface(solverdata.mesh, order=0,\
-                definedon = solverdata.mesh.Boundaries('.*'))
+                definedon = domain)
         
     h = specialcf.mesh_size
     ns = specialcf.normal(solverdata.mesh.dim)
@@ -313,25 +361,33 @@ def ComputeStabMC(solverdata, gfu, clamped_bnd, stab):
     J = specialcf.JacobianMatrix(solverdata.mesh.dim, solverdata.mesh.dim-1)
     area = sqrt(Det(J.trans*J))/2
     length = sqrt(area/pi)
-    
-    A0 += stab*length*InnerProduct(jump_dkappadn0,jump_detadn0)\
-        *ds(element_boundary=True)
-    A0.Assemble()
-    F0 += -InnerProduct(Ps, grad(eta0).Trace())*ds
+
+    if solverdata.mesh.dim == 2:
+        facet_space = H1(solverdata.mesh, order = 1, definedon=domain)
+    else:
+        facet_space = FacetSurface(solverdata.mesh, order = 0, definedon = domain)
 
     if clamped_bnd:
-
-        if solverdata.mesh.dim == 3:
-            gfF = GridFunction(FacetSurface(solverdata.mesh, order=0))
-            gfF.Set(1, definedon=solverdata.mesh.BBoundaries(clamped_bnd))
-            F0 += InnerProduct(nE, eta0) * gfF * ds_el_lumped
-
-        elif solverdata.mesh.dim == 2:
-            gfF = GridFunction(H1(solverdata.mesh, order =1,\
-                    definedon=solverdata.mesh.Boundaries('.*')))
-            gfF.Set(1, definedon=solverdata.mesh.BBoundaries(clamped_bnd))
-            F0 += InnerProduct(gfF*nE, eta0) * ds_el_lumped
-
+        gfFone = GridFunction(facet_space)
+        gfFone.Set(1, definedon=domain, dual = True)
+        gfFBB = GridFunction(facet_space)
+        gfFBB.Set(1, definedon=solverdata.mesh.BBoundaries(clamped_bnd))
+        A0 += stab*(gfFone-gfFBB)*length*InnerProduct(jump_dkappadn0,jump_detadn0)\
+            *ds(element_boundary=True)
+    
+        if solverdata.mesh.dim == 2:
+            A0 +=  gfFBB*InnerProduct(dkappa0, deta0)\
+                        *ds(element_boundary=True)
+            F0 += InnerProduct(gfFBB*nE, eta0) * ds_el_lumped
+        elif solverdata.mesh.dim == 3:
+            A0 +=  gfFBB*dkappa0.Trace()*deta0.Trace()*ds(element_boundary=True)
+            F0 += InnerProduct(nE, eta0) * gfFBB * ds_el_lumped
+    else:
+        A0 += stab*length*InnerProduct(jump_dkappadn0,jump_detadn0)\
+            *ds(element_boundary=True)
+        
+    A0.Assemble()
+    F0 += -InnerProduct(Ps, grad(eta0).Trace())*ds
     F0.Assemble()
     gfu0.vec.data = A0.mat.Inverse(fes0.FreeDofs())*F0.vec
     gfu.vec.data = gfu0.components[0].vec.data
