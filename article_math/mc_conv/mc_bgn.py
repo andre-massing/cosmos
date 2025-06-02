@@ -1,6 +1,6 @@
 # %%
-from cosmos.solvers.solver_unsteady import UnsteadySolver
-from cosmos.solvers.schemes import BDF1, BDF2
+from cosmos.solvers.solvers import Dynamic
+from cosmos.solvers.time_schemes import BDF1, BDF2
 from cosmos.pdes.pde_mc_bgn import MCBGN
 from cosmos.utils.generate_surface_meshes import generate_sphere
 from ngsolve import *
@@ -25,7 +25,7 @@ def mc_bgn(mesh, dt, folderpath, filename):
 
     # With boundary conditions
     mc = MCBGN(name = [filename + 'dX', filename + 'mc'],
-                           postprocess = False, mc0 = H_ex)
+                           mc0 = H_ex, time_scheme=BDF1())
 
     from cosmos.pdes.pde_tools import SaveError
     err_save = SaveError(ex_sol = [dX_ex, H_ex], 
@@ -34,9 +34,9 @@ def mc_bgn(mesh, dt, folderpath, filename):
                     filename = filename)
     mc.SaveErr(err_save)
 
-    solver = UnsteadySolver(mesh = mesh, dt=dt, T=T, t=t)
-    solver.AddPDE(mc, BDF1(conservative=False))
-    solver.ale.SetMeshDeformation(mc.gfu.components[0])
+    solver = Dynamic(mesh = mesh, dt=dt, T=T, t=t)
+    solver.AddPDE(mc)
+    solver.ale.deformation_field = mc.gfu.components[0]
 
     solver.Solve()
 

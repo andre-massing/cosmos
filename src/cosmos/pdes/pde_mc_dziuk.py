@@ -8,12 +8,12 @@ from cosmos.solvers.time_schemes import BDF1, BDF2, CN, Steady
 
 class MCDziuk(BaseMC):
 
-    def __init__(self, rhs = Field(), domain:str = '.*', name:str = 'displacement',
+    def __init__(self, rhs = None, domain:str = '.*', name:str = 'displacement',
                  time_scheme = BDF1()):
 
         super().__init__()
 
-        self.rhs = rhs
+        self.rhs = Field(rhs)
         self.domain = domain
         self.name = [name]
         self.time_scheme = time_scheme
@@ -73,11 +73,9 @@ class MCDziuk(BaseMC):
 
         return mass
     
-    def Update(self, solverdata, ale):
+    def Update(self, solverdata):
 
-        solverdata.mesh.SetDeformation(ale.deformation)
-
-        self.gfu_save.Set(self.displacement, definedon = self.domain)
+        self.gfu_save[0].Set(self.displacement, definedon = self.domain)
 
         for save in self.save_error:
             save.Save(solverdata, self)

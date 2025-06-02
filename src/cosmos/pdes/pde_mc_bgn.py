@@ -7,15 +7,15 @@ from cosmos.solvers.time_schemes import BDF1, BDF2, CN, Steady
 
 class MCBGN(BaseMC):
 
-    def __init__(self, rhs = Field(), domain:str = '.*', name = ['displacement', 'mean_curvature'],
-                 mc0 = Field(), time_scheme = BDF1()):
+    def __init__(self, rhs = None, domain:str = '.*', name = ['displacement', 'mean_curvature'],
+                 mc0 = None, time_scheme = BDF1()):
 
         super().__init__()
 
-        self.rhs = rhs
+        self.rhs = Field(rhs)
         self.domain = domain
         self.name = name
-        self.mc0 = mc0
+        self.mc0 = Field(mc0)
         self.time_scheme = time_scheme
 
         self.nfields = 2

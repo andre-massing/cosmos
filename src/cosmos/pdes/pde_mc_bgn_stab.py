@@ -7,15 +7,15 @@ from cosmos.solvers.time_schemes import BDF1, BDF2, CN, Steady
 
 class MCBGNStab(BaseMC):
 
-    def __init__(self, rhs = Field(), domain:str = '.*', name = ['displacement', 'mean_curvature'],
-                 mc0 = Field(), stab = 1e-3, time_scheme = BDF1()):
+    def __init__(self, rhs = None, domain:str = '.*', name = ['displacement', 'mean_curvature'],
+                 mc0 = None, stab = 1e-3, time_scheme = BDF1()):
 
         super().__init__()
 
-        self.rhs = rhs
+        self.rhs = Field(rhs)
         self.domain = domain
         self.name = name
-        self.mc0 = mc0
+        self.mc0 = Field(mc0)
         self.time_scheme = time_scheme
         self.stab = stab
 
@@ -72,6 +72,22 @@ class MCBGNStab(BaseMC):
 
         for save in self.save_solution:
             save.Initialize(solverdata, self)
+
+        dim = solverdata.mesh.dim
+        J = specialcf.JacobianMatrix(dim, dim-1) 
+        if dim == 3:
+            area = sqrt(Det(J.trans*J))/2
+            self.h_f = sqrt(area/pi)
+        elif dim == 2:
+            self.h_f = Norm(J[:, 0])
+
+        tE = specialcf.tangential(solverdata.mesh.dim)
+        ns = specialcf.normal(solverdata.mesh.dim)
+        if solverdata.mesh.dim == 2:
+            self.nE = tE
+            self.tEc = CF((-ns[1], ns[0]))
+        else:
+            self.nE = Cross(ns, tE)
             
     def GetLHS(self, solverdata, trial, test):
 
@@ -82,46 +98,19 @@ class MCBGNStab(BaseMC):
             ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
             ds_lumped = ds(intrules = { TRIG : ir }, deformation = solverdata.ale.deformation)
 
-        J = specialcf.JacobianMatrix(solverdata.mesh.dim, solverdata.mesh.dim-1)
-        area = sqrt(Det(J.trans*J))/2
-        length = sqrt(area/pi)
-
         lhs = -InnerProduct(trial[1], test[0])*ds_lumped
         lhs += InnerProduct(trial[1], test[1])*ds_lumped
         lhs += (InnerProduct(grad(trial[0]).Trace(), grad(test[1]).Trace()))*ds(deformation = solverdata.ale.deformation)
 
-        tE = specialcf.tangential(solverdata.mesh.dim)
-        h = specialcf.mesh_size
-        ns = specialcf.normal(solverdata.mesh.dim)
         if solverdata.mesh.dim == 2:
-            nE = tE
-            tEc = CF((-ns[1], ns[0]))
-        else:
-            nE = Cross(ns, tE)
-        if solverdata.mesh.dim == 2:
-            jump_dkappadn = (trial[1].Trace().Deriv()*nE-trial[2]*tEc)
-            jump_detadn = (test[1].Trace().Deriv()*nE-test[2]*tEc)
+            jump_dkappadn = (trial[1].Trace().Deriv()*self.nE-trial[2]*self.tEc)
+            jump_detadn = (test[1].Trace().Deriv()*self.nE-test[2]*self.tEc)
         elif solverdata.mesh.dim == 3:
-            jump_dkappadn = (trial[1].Trace().Deriv()*nE-trial[2].Trace())
-            jump_detadn = (test[1].Trace().Deriv()*nE-test[2].Trace())
+            jump_dkappadn = (trial[1].Trace().Deriv()*self.nE-trial[2].Trace())
+            jump_detadn = (test[1].Trace().Deriv()*self.nE-test[2].Trace())
 
-        if solverdata.mesh.dim == 2:
-            facet_space = H1(solverdata.mesh, order = 1, definedon=self.domain)
-        else:
-            facet_space = FacetSurface(solverdata.mesh, order = 0, definedon = self.domain)
-        gfFone = GridFunction(facet_space)
-        gfFone.Set(1, definedon=self.domain, dual = True)
-        gfFBB = GridFunction(facet_space)
-        gfFBB.Set(1, definedon=solverdata.mesh.BBoundaries('.*'))
-
-        lhs += self.stab*(gfFone - gfFBB)*length*InnerProduct(jump_dkappadn,jump_detadn)\
+        lhs += self.stab*self.h_f*InnerProduct(jump_dkappadn,jump_detadn)\
             *ds(element_boundary=True, deformation = solverdata.ale.deformation)
-        
-        if solverdata.mesh.dim == 2:
-            lhs +=  gfFBB*InnerProduct(trial[2],test[2])\
-                        *ds(element_boundary=True, deformation = solverdata.ale.deformation)
-        elif solverdata.mesh.dim == 3:
-            lhs +=  gfFBB*trial[2].Trace()*test[2].Trace()*ds(element_boundary=True, deformation = solverdata.ale.deformation)
         
         return lhs
         

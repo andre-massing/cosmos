@@ -1,259 +1,178 @@
 from ngsolve import *
-from cosmos.pdes.pde_base import BasePDE
+from cosmos.pdes.pde_ch_base import BaseCH
 from cosmos.pdes.pde_tools import compute_error, MandBP
 import numpy as np
 import scipy.sparse as sp
+from cosmos.solvers.fields import Field
+from cosmos.solvers.time_schemes import BDF1, BDF2, CN, Steady
 from ngsolve.webgui import Draw
 
-class CahnHilliardVol(BasePDE):
+class CahnHilliardVol(BaseCH):
 
-    def __init__(self, **kwargs):
+    def __init__(self, theta = None, gamma = None, c0 = None, phi0 = None, rhs_c = None,
+                 rhs_p = None, domain:str = '.*', name = ['phase', 'potential'], periodic:bool = False,
+                 MP:bool = False, BP:bool = None, time_scheme = BDF1()):
 
         super().__init__()
 
-        self.params = kwargs
+        if theta:
+            self.theta = Field(theta)
+        else:
+            self.theta = Field(1.0)
+        if gamma:
+            self.gamma = Field(gamma)
+        else:
+            self.gamma = Field(1.0)
+        self.c0 = Field(c0)
+        self.phi0 = Field(phi0)
+        self.rhs_c = Field(rhs_c)
+        self.rhs_p = Field(rhs_p)
+        self.domain = domain
+        self.name = name
+        self.periodic = periodic
+        self.MP = MP
+        self.BP = BP
+        self.time_scheme = time_scheme
+
         self.fields = 2
         self.nonlinear = True
 
-        # Initialize the parameters
-        accepted_keys = ['D', 'gamma', 'epsilon', 'u0', 'rhs',
-                         'neu_c', 'neu_mu', 'dir_c', 'dir_mu',
-                         'domain', 'name', 'periodic',
-                         'MP', 'BP', 'ALE']
-        defaults = [None, None, None, None, None, 
-                    {}, {}, {}, {},
-                    '.*', ['c', 'mu'], False,
-                    False, None, None]
-
-        if kwargs:
-            params_check(kwargs, accepted_keys, defaults)
-            self.params = kwargs
-            for i, (key, value) in enumerate(self.params.items()):
-                if i<5 and isinstance(self.params[key], (int, float)):
-                    self.params[key] = CF(self.params[key])
-        else:
-            self.params = {}
-            params_check(self.params, accepted_keys, defaults)
-
-    def Initialize(self, data):
+    def Initialize(self, solverdata):
 
         if self.initialized:
             return
         else:
             self.initialized = True
 
-        self.dim = data.mesh.dim
-        self.domain = data.mesh.Materials(self.params['domain'])
-        self.name = self.params['name']
-        if self.params['ALE']:
-            self.X = self.params['ALE'].X
-            self.X_old = self.params['ALE'].X_old
-        else:
-            self.X = GridFunction(VectorH1(data.mesh))
-            self.X_old = GridFunction(VectorH1(data.mesh))
-
-        if data.mesh.ne == 0:
-            raise Exception('The mesh has no volume elements! The PDE ' 
-                            + self.name + ' cannot be initialized')
+        self.domain = solverdata.mesh.Materials(self.domain)
         
-        if self.params['periodic']:
-            V = Compress(Periodic(H1(data.mesh, order = self.fes_order, 
-                                            definedon = self.params['domain'])))
+        if self.periodic:
+            V = Compress(Periodic(H1(solverdata.mesh, order = self.fes_order, 
+                                            definedon = self.domain)))
         else:
-            V = Compress(H1(data.mesh, order = self.fes_order, 
-                                   definedon = self.params['domain']))
+            V = Compress(H1(solverdata.mesh, order = self.fes_order, 
+                                   definedon = self.domain))
         self.fes = V*V
             
         self.trial = self.fes.TrialFunction()
         self.test = self.fes.TestFunction()
         
         self.gfu = GridFunction(self.fes)
-        self.gfu_old = GridFunction(self.fes)
+        self.phase, self.potential = self.gfu.components
+        self.gfu_save = self.gfu.components
 
-        self.gfu_comp = self.gfu.components
-        self.gfu_old_comp = self.gfu_old.components
-        self.gfu_save = list(self.gfu.components)
+        if self.c0():
+            self.phase.Set(self.c0(), definedon = self.domain)
+            Draw(self.phase)
+        if self.phi0():
+            self.potential.Set(self.phi0(), definedon = self.domain)
 
-        if self.params['u0']:
-            self.gfu_comp[0].Set(self.params['u0'][0])
-            self.gfu_comp[1].Set(self.params['u0'][1])
-        self.gfu_old.vec.data = self.gfu.vec.data
+        if self.MP:
 
-        for save in self.save_error:
-            save.Initialize(data, self)
-
-        for save in self.save_solution:
-            save.Initialize(data, self)
-
-        if self.params['MP']:
-
-            if data.mesh.dim == 2:
+            if solverdata.mesh.dim == 2:
                 ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
                 dx_lumped = dx(intrules = { TRIG : ir })
-            elif data.mesh.dim == 3:
+            elif solverdata.mesh.dim == 3:
+                raise Exception('not yet implemented!')
                 ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
                 dx_lumped = dx(intrules = { TRIG : ir })
-            A = BilinearForm(self.gfu_comp[0].space, symmetric = True)
-            u, v = self.gfu_comp[0].space.TnT()
+            A = BilinearForm(self.phase.space, symmetric = True)
+            u, v = self.phase.space.TnT()
             A += u*v*dx_lumped
             A.Assemble()
             rows,cols,vals = A.mat.COO()
             weights = sp.csr_matrix((vals,(rows,cols))).diagonal()
-            gfu_vec = self.gfu_comp[0].vec.Copy().FV().NumPy()
+            gfu_vec = self.phase.vec.Copy().FV().NumPy()
             self.mass0 = np.sum(weights*gfu_vec)
+        
+        for save in self.save_error:
+            save.Initialize(solverdata, self)
 
-    def GetLHS(self, data, trial, test):
+        for save in self.save_solution:
+            save.Initialize(solverdata, self)
 
-        n = specialcf.normal(data.mesh.dim)
-        h = specialcf.mesh_size
+    def GetLHS(self, solverdata, trial, test):
 
-        if self.params['D']:
-            lhs = self.params['D']*grad(trial[1])*grad(test[0])*dx(deformation=self.X)
+        lhs = self.theta()*grad(trial[1])*grad(test[0])*dx(deformation = solverdata.ale.deformation)
+        lhs += trial[1]*test[1]*dx(deformation = solverdata.ale.deformation)
+        lhs += -1*self.gamma()*grad(trial[0])*grad(test[1])*dx(deformation = solverdata.ale.deformation)
                     
-            if self.params['dir_mu']:
-                alpha = 5 * self.fes_order * (self.fes_order+1)
-                for key, value in self.params['dir_mu'].items():
-                   lhs +=  - self.params['gamma']*InnerProduct(n, grad(trial[1]))*test[0]*ds(definedon = key, skeleton=True, deformation=self.X) \
-                        - self.params['gamma']*InnerProduct(n, grad(test[0]))*trial[1]*ds(definedon = key, skeleton=True, deformation=self.X)\
-                        + self.params['gamma']*alpha/h*trial[1]*test[1]*ds(definedon = key, skeleton = True, deformation=self.X)
-        else:
-            lhs =  CF(0)*grad(trial[1])*grad(test[0])*dx(deformation=self.X)
-
-        lhs += trial[1]*test[1]*dx(deformation=self.X)
-
-        if self.params['gamma']:
-            lhs += -1*self.params['gamma']*grad(trial[0])*grad(test[1])*dx(deformation=self.X)
-
-            if self.params['dir_c']:
-                alpha = 5 * self.fes_order * (self.fes_order+1)
-                for key, value in self.params['dir_c'].items():
-                    lhs +=  self.params['D']*InnerProduct(n, grad(trial[0]))*test[1]*ds(definedon = key, skeleton=True, deformation=self.X) \
-                        + self.params['D']*InnerProduct(n, grad(test[1]))*trial[0]*ds(definedon = key, skeleton=True, deformation=self.X)\
-                        + self.params['D']*alpha/h*trial[0]*test[0]*ds(definedon = key, skeleton = True, deformation=self.X)
-            
         return lhs
 
-    def GetRHS(self, data, test):
+    def GetRHS(self, solverdata, test):
 
-        n = specialcf.normal(data.mesh.dim)
-        h = specialcf.mesh_size
-
-        if self.params['rhs']:
-            rhs = self.params['rhs'][0]*test[0]*dx(deformation=self.X)
-            rhs += self.params['rhs'][1]*test[1]*dx(deformation=self.X)
-        else:
-            rhs = CF(0)*test[0]*dx(deformation=self.X)
-            rhs += CF(0)*test[1]*dx(deformation=self.X)
-        
-        if self.params['dir_c']:
-            alpha = 5 * self.fes_order * (self.fes_order+1)
-            for key, value in self.params['dir_c'].items():
-                rhs +=  self.params['D']*InnerProduct(n, grad(test[1]))*value*ds(definedon = key, skeleton=True, deformation=self.X)\
-                    + self.params['D']*alpha/h*value*test[0]*ds(definedon = key, skeleton = True, deformation=self.X)
-        if self.params['neu_c']:
-            for key, value in self.params['neu_c'].items():
-                rhs += value*n*test[1]*ds(definedon = key, deformation=self.X)
-
-        if self.params['dir_mu']:
-            alpha = 5 * self.fes_order * (self.fes_order+1)
-            for key, value in self.params['dir_mu'].items():
-                rhs +=  - self.params['gamma']*InnerProduct(n, grad(test[0]))*value*ds(definedon = key, skeleton=True, deformation=self.X)\
-                    + self.params['gamma']*alpha/h*value*test[1]*ds(definedon = key, skeleton = True, deformation=self.X)
-        if self.params['neu_mu']:
-            for key, value in self.params['neu_mu'].items():
-                rhs += -value*n*test[0]*ds(definedon = key, deformation=self.X)
-            
+        rhs = CF(0)*test[0]*dx(deformation = solverdata.ale.deformation)
+        if self.rhs_c():
+            rhs += self.rhs_c()*test[0]*dx(deformation = solverdata.ale.deformation)
+        if self.rhs_p():
+            rhs += self.rhs_p()*test[1]*dx(deformation = solverdata.ale.deformation)
             
         return rhs
 
-    def GetMass(self, data, trial, test):
-        mass = 1/data.dt*trial[0]*test[0]*dx(deformation=self.X)
+    def GetMass(self, solverdata, trial, test):
+
+        mass = 1/solverdata.dt*trial[0]*test[0]*dx(deformation = solverdata.ale.deformation)
         return mass
 
-    def GetNL(self, data, trial, test):
+    def GetNL(self, solverdata, trial, test):
 
-        nonlin = -1*self.params['epsilon']*(trial[0]**3 - trial[0])*test[1]*dx(deformation=self.X)
+        nonlin = -1/self.gamma()*(trial[0]**3 - trial[0])*test[1]*dx(deformation = solverdata.ale.deformation)
                     
         return nonlin
     
-    def PreProcess(self, data):
+    def PostProcess(self, solverdata):
 
-        pass
-    
-    def PostProcess(self, data):
+        super().PostProcess(solverdata)
 
-        if self.params['BP'] and not self.params['MP']:
+        if self.BP and not self.MP:
 
-            gfu_vec = self.gfu_comp[0].vec.Copy().FV().NumPy()
-            gfu_new = MandBP(gfu_vec, BP = self.params['BP'])
-            self.gfu_comp[0].vec.data = gfu_new
+            gfu_vec = self.phase.vec.Copy().FV().NumPy()
+            gfu_new = MandBP(gfu_vec, BP = self.BP)
+            self.phase.vec.data = gfu_new
 
-        elif self.params['MP']:
+        elif self.MP:
 
-            if hasattr(data, 'dt'):
-                dt = data.dt.Get()
+            if hasattr(solverdata, 'dt'):
+                dt = solverdata.dt.Get()
             else:
                 raise Exception('A time-dependent simulation is needed to impose conservative mass!')
 
-            if data.mesh.dim == 2:
+            if solverdata.mesh.dim == 2:
                 ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-                dx_lumped = dx(intrules = { TRIG : ir }, deformation=self.X)
-            elif data.mesh.dim == 3:
+                dx_lumped = dx(intrules = { TRIG : ir }, deformation=solverdata.ale.deformation)
+            elif solverdata.mesh.dim == 3:
                 raise Exception('Not yet implemented!')
                 ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-                dx_lumped = dx(intrules = { TRIG : ir })
-            A = BilinearForm(self.gfu_comp[0].space, symmetric = True)
-            u, v = self.gfu_comp[0].space.TnT()
+                dx_lumped = dx(intrules = { TRIG : ir }, deformation=solverdata.ale.deformation)
+            A = BilinearForm(self.phase.space, symmetric = True)
+            u, v = self.phase.space.TnT()
             A += u*v*dx_lumped
             A.Assemble()
             rows,cols,vals = A.mat.COO()
             weights = sp.csr_matrix((vals,(rows,cols))).diagonal()
-            gfu_vec = self.gfu_comp[0].vec.Copy().FV().NumPy()
+            gfu_vec = self.phase.vec.Copy().FV().NumPy()
 
-            if self.params['BP']:
-                BP = self.params['BP']
+            if self.BP:
+                BP = self.BP
             else:
                 BP = [-np.inf, np.inf]
 
             gfu_new = MandBP(gfu_vec, weights=weights, BP=BP,
-                                MP=self.params['MP'], mass0 =self.mass0, dt = dt)
+                                MP=self.MP, mass0 =self.mass0, dt = dt)
 
-            self.gfu_comp[0].vec.data = gfu_new
+            self.phase.vec.data = gfu_new
 
-    def Update(self, data):
+    def get_error(self, solverdata, ex_sol, norm):
 
-        data.mesh.SetDeformation(self.X)
-
-        self.gfu_old.vec.data = self.gfu.vec.data
-
-        for save in self.save_error:
-            save.Save(data, self)
-
-        for save in self.save_solution:
-            save.Save(data, self)
-
-        data.mesh.UnsetDeformation()
-
-    def get_error(self, data, ex_sol, norm):
-
-        err1 = compute_error(data=data, gfu = self.gfu_comp[0], u_ex=ex_sol[0],
+        err1 = compute_error(data=solverdata, gfu = self.phase, u_ex=ex_sol[0],
                             norm = norm, domain = self.domain, 
                             VorB = VOL)
         
-        err2 = compute_error(data=data, gfu = self.gfu_comp[1], u_ex=ex_sol[1],
+        err2 = compute_error(data=solverdata, gfu = self.gfu_comp[1], u_ex=ex_sol[1],
                             norm = norm, domain = self.domain, 
                             VorB = VOL)
         
         return [err1, err2]
-
-    def set_solution(self, value):
-
-        self.gfu.Set(value, definedon=self.domain)
-        self.gfu_old.Set(value, definedon=self.domain)
-
-    def get_solution(self):
-
-        return self.gfu
 
     def print_info(self):
 

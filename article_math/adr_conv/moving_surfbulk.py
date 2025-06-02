@@ -1,6 +1,6 @@
 # %%
-from cosmos.solvers.solver_unsteady import UnsteadySolver
-from cosmos.solvers.schemes import BDF1
+from cosmos.solvers.solvers import Dynamic
+from cosmos.solvers.time_schemes import BDF2, CN
 from cosmos.pdes.pde_adr_vol import VolADR
 from cosmos.pdes.pde_adr_vol_ad import AdVolADR
 from cosmos.pdes.pde_adr_bnd import BndADR
@@ -73,17 +73,17 @@ def solve_moving_surfbulk_adr(mesh, dt, folderpath, filename):
                     filename = filename + 'surf')
     adr2.SaveErr(err_save)
 
-    cpl = StrongCoupling()
+    cpl = StrongCoupling(time_scheme=BDF2())
     cpl.AddPDEs(adr1, adr2)
-    def f0(data, trial, test,ale):
-        return trial[0]**3*test[0]*dx(deformation=ale.deformation)
+    def f0(solverdata, trial, test):
+        return trial[0]**3*test[0]*dx(deformation=solverdata.ale.deformation)
     cpl.AddCoupling(f = f0)
-    def f1(data, trial, test, ale):
-        return trial[0]*sin(trial[1]**2)*test[1]*ds(deformation=ale.deformation)
+    def f1(solverdata, trial, test):
+        return trial[0]*sin(trial[1]**2)*test[1]*ds(deformation=solverdata.ale.deformation)
     cpl.AddCoupling(f = f1)
 
-    solver = UnsteadySolver(mesh = mesh, dt=dt, T=T, t=t)
-    solver.AddPDE(cpl, BDF1())
-    solver.ale.SetMeshDeformation(displ_ex)
+    solver = Dynamic(mesh = mesh, dt=dt, T=T, t=t)
+    solver.ale.deformation_field = displ_ex
+    solver.AddPDE(cpl)
 
     solver.Solve()

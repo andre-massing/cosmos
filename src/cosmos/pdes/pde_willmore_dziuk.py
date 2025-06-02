@@ -7,21 +7,24 @@ from cosmos.solvers.time_schemes import BDF1, BDF2, CN, Steady
 
 class WillmoreDziuk(BaseMC):
 
-    def __init__(self, rhs = Field(), clamped_bnd = None, clamped_f = Field(),
+    def __init__(self, rhs = None, clamped_bnd = None, clamped_f = None,
                  domain:str = '.*', name = ['displacement', 'mean_curvature'],
-                 sp_curv = Field(cf=CF(0)), mc_autoupdate = False, mc0 = Field(),
+                 sp_curv = None, mc_autoupdate = False, mc0 = None,
                  time_scheme = BDF1(), ale = False, postprocess = False):
 
         super().__init__()
 
-        self.rhs = rhs
+        self.rhs = Field(rhs)
         self.clamped_bnd = clamped_bnd
-        self.clamped_f = clamped_f
+        self.clamped_f = Field(clamped_f)
         self.domain = domain
         self.name = name
-        self.sp_curv = sp_curv
+        if not sp_curv:
+            self.sp_curv = Field(0.0)
+        else:
+            self.sp_curv = sp_curv
         self.mc_autoupdate = mc_autoupdate
-        self.mc0 = mc0
+        self.mc0 = Field(mc0)
         self.time_scheme = time_scheme
         self.ale = ale
         self.postprocess = postprocess

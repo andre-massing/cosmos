@@ -9,18 +9,18 @@ from cosmos.solvers.fields import Field
 
 class AdBndADR(BaseADR):
 
-    def __init__(self, b = Field(), c = Field(), d = Field(), u0 = Field(), rhs = Field(),
+    def __init__(self, b = None, c = None, d = None, u0 = None, rhs = None,
                  neu_d = {}, neu_b = {}, dir_d = {}, dir_b = {}, Fneu_b = {},
                  domain:str = '.*', name:str = 'surface_adr', periodic :bool = False,
                  MP:bool = False, BP:bool = False, time_scheme = BDF1()):
 
         super().__init__()
 
-        self.b = b
-        self.c = c
-        self.d = d
-        self.u0 = u0
-        self.rhs = rhs
+        self.b = Field(b)
+        self.c = Field(c)
+        self.d = Field(d)
+        self.u0 = Field(u0)
+        self.rhs = Field(rhs)
         self.neu_d = neu_d
         self.neu_b = neu_b
         self.dir_d = dir_d
@@ -96,21 +96,28 @@ class AdBndADR(BaseADR):
         for save in self.save_solution:
             save.Initialize(solverdata, self)
 
-    def GetLHS(self, solverdata, trial, test):
-
-        ns = specialcf.normal(solverdata.mesh.dim)
-        Ps = Id(solverdata.mesh.dim) - OuterProduct(ns, ns) 
+        self.ns = specialcf.normal(solverdata.mesh.dim)
+        self.Ps = Id(solverdata.mesh.dim) - OuterProduct(self.ns, self.ns)
         tE = specialcf.tangential(solverdata.mesh.dim)
-        h = specialcf.mesh_size
         if solverdata.mesh.dim == 2:
-            nE = tE
+            self.nE = tE
         else:
-            nE = Cross(ns, tE)
+            self.nE = Cross(self.ns, tE)
 
         if solverdata.mesh.dim == 2:
-            facet_space = H1(solverdata.mesh, order = 1, definedon=self.domain)
+            self.facet_space = V
         else:
-            facet_space = FacetSurface(solverdata.mesh, order = 0, definedon=self.domain)
+            self.facet_space = FacetSurface(solverdata.mesh, order = 0)
+
+        dim = solverdata.mesh.dim
+        J = specialcf.JacobianMatrix(dim, dim-1) 
+        if dim == 3:
+            area = sqrt(Det(J.trans*J))/2
+            self.h_f = sqrt(area/pi)
+        elif dim == 2:
+            self.h_f = Norm(J[:, 0])
+
+    def GetLHS(self, solverdata, trial, test):
 
         if self.c():
             lhs = self.c()*trial[0]*test[0]*ds(deformation = solverdata.ale.deformation)
@@ -123,64 +130,73 @@ class AdBndADR(BaseADR):
             if self.dir_d:
 
                 dir_d = {}
-
                 alpha = 5 * self.fes_order * (self.fes_order+1)
                 for i, (key, field) in enumerate(self.dir_d.items()):
-
-                    dir_d[str(i)] = GridFunction(facet_space)
+                    dir_d[str(i)] = GridFunction(self.facet_space)
                     dir_d[str(i)].Set(1, definedon=solverdata.mesh.BBoundaries(key))
-                    lhs += - self.d()*InnerProduct(nE, grad(trial[0]).Trace())*dir_d[str(i)]*test[0]*ds(element_boundary=True, deformation = solverdata.ale.deformation) \
-                            - self.d()*InnerProduct(nE, grad(test[0]).Trace())*dir_d[str(i)]*trial[0]*ds(element_boundary=True, deformation = solverdata.ale.deformation)\
-                            + self.d()*alpha/h*trial[0]*test[0]*dir_d[str(i)]*ds(element_boundary=True, deformation = solverdata.ale.deformation)
+                    lhs += - self.d()*InnerProduct(self.nE, grad(trial[0]).Trace())*dir_d[str(i)]*test[0]*ds(element_boundary=True, deformation = solverdata.ale.deformation) \
+                            - self.d()*InnerProduct(self.nE, grad(test[0]).Trace())*dir_d[str(i)]*trial[0]*ds(element_boundary=True, deformation = solverdata.ale.deformation)\
+                            + self.d()*alpha/self.h_f*trial[0]*test[0]*dir_d[str(i)]*ds(element_boundary=True, deformation = solverdata.ale.deformation)
 
         if self.b():
-            b = Ps*self.b()
+            b = self.Ps*self.b()
             lhs += -b*grad(test[0]).Trace() * trial[0] *ds(deformation = solverdata.ale.deformation)
 
-            if self.neu_b:
+            boundaries = ''
 
+            if self.neu_b:
                 neu_b = {}
                 for i, (key, field) in enumerate(self.neu_b.items()):
-                    neu_b[str(i)] = GridFunction(facet_space)
+                    boundaries += key + '|'
+                    neu_b[str(i)] = GridFunction(self.facet_space)
                     neu_b[str(i)].Set(1, definedon=solverdata.mesh.BBoundaries(key))
-                    lhs += IfPos(InnerProduct(nE, b), 
-                                    InnerProduct(nE, b)*trial[0], 0)\
+                    lhs += IfPos(InnerProduct(self.nE, b), 
+                                    InnerProduct(self.nE, b)*trial[0], 0)\
                                         *neu_b[str(i)]*test[0]*ds(element_boundary=True, deformation = solverdata.ale.deformation)
             
             if self.Fneu_b:
-
                 Fneu_b = {}
                 for i, (key, field) in enumerate(self.Fneu_b.items()):
-                    Fneu_b[str(i)] = GridFunction(facet_space)
+                    boundaries += key + '|'
+                    Fneu_b[str(i)] = GridFunction(self.facet_space)
                     Fneu_b[str(i)].Set(1, definedon=solverdata.mesh.BBoundaries('.*') - solverdata.mesh.BBoundaries(key))
-                    lhs += IfPos(InnerProduct(nE, b), 
-                                    InnerProduct(nE, b)*trial[0], CF(0))\
+                    lhs += IfPos(InnerProduct(self.nE, b), 
+                                    InnerProduct(self.nE, b)*trial[0], CF(0))\
                                         *Fneu_b[str(i)]*test[0]*ds(element_boundary=True, deformation = solverdata.ale.deformation)
                     
             if self.dir_b:
-
                 dir_b = {}
                 for i, (key, field) in enumerate(self.dir_b.items()):
-                    dir_b[str(i)] = GridFunction(facet_space)
+                    boundaries += key + '|'
+                    dir_b[str(i)] = GridFunction(self.facet_space)
                     dir_b[str(i)].Set(1, definedon=solverdata.mesh.BBoundaries(key))
-                    lhs += IfPos(InnerProduct(nE, b), 
-                                    InnerProduct(nE, b)*trial[0], 0)\
+                    lhs += IfPos(InnerProduct(self.nE, b), 
+                                    InnerProduct(self.nE, b)*trial[0], 0)\
                                         *dir_b[str(i)]*test[0]*ds(element_boundary=True, deformation = solverdata.ale.deformation)
-                    
-            stab = IfPos(Norm(self.b())-1, Norm(self.b()), 1)
+            
+            if hasattr(solverdata, 'dt'):
+                max_bc = GridFunction(H1(solverdata.mesh, definedon = self.domain))
+                max_bc.Set(Norm(self.h_f*Norm(b) + 1/solverdata.dt), definedon=self.domain)
+                max_bc = np.max(max_bc.vec)
+                stab = self.h_f**3/max_bc
+            else:
+                max_bc = GridFunction(H1(solverdata.mesh, definedon = self.domain))
+                max_bc.Set(Norm(self.h_f*Norm(b) + Norm(self.c)), definedon=self.domain)
+                max_bc = np.max(max_bc.vec)
+                stab = self.h_f**3/max_bc
             if solverdata.mesh.dim == 2:
-                tEc = CF((-ns[1], ns[0]))
-                jump_dudn = (trial[0].Trace().Deriv() - trial[1]*tEc)*nE
-                jump_dvdn = (test[0].Trace().Deriv() - test[1]*tEc)*nE
+                tEc = CF((-self.ns[1], self.ns[0]))
+                jump_dudn = (trial[0].Trace().Deriv() - trial[1]*tEc)*self.nE
+                jump_dvdn = (test[0].Trace().Deriv() - test[1]*tEc)*self.nE
             elif solverdata.mesh.dim == 3:
-                jump_dudn = (trial[0].Trace().Deriv() - trial[1].Trace())*nE
-                jump_dvdn = (test[0].Trace().Deriv() - test[1].Trace())*nE
+                jump_dudn = (trial[0].Trace().Deriv() - trial[1].Trace())*self.nE
+                jump_dvdn = (test[0].Trace().Deriv() - test[1].Trace())*self.nE
 
-            gfFone = GridFunction(facet_space)
+            gfFone = GridFunction(self.facet_space)
             gfFone.Set(1, definedon=self.domain, dual = True)
-            gfFBB = GridFunction(facet_space)
-            gfFBB.Set(1, definedon=solverdata.mesh.BBoundaries('.*'))
-            lhs +=  h**2/stab*(gfFone - gfFBB)*InnerProduct(jump_dudn,jump_dvdn)\
+            gfFBB = GridFunction(self.facet_space)
+            gfFBB.Set(1, definedon=solverdata.mesh.BBoundaries(boundaries))
+            lhs +=  stab*(gfFone - gfFBB)*InnerProduct(jump_dudn,jump_dvdn)\
                 *ds(element_boundary=True, deformation = solverdata.ale.deformation)
             
             if solverdata.mesh.dim == 2:
@@ -193,73 +209,54 @@ class AdBndADR(BaseADR):
 
     def GetRHS(self, solverdata, test):
 
-        ns = specialcf.normal(solverdata.mesh.dim)
-        Ps = Id(solverdata.mesh.dim) - OuterProduct(ns, ns)
-        tE = specialcf.tangential(solverdata.mesh.dim)
-        h = specialcf.mesh_size
-        if solverdata.mesh.dim == 2:
-            nE = tE
-        else:
-            nE = Cross(ns, tE)
-
-        if solverdata.mesh.dim == 2:
-            facet_space = H1(solverdata.mesh, order = 1, definedon=self.domain)
-        else:
-            facet_space = FacetSurface(solverdata.mesh, order = 0)
-
         if self.rhs():
             rhs =  self.rhs()*test[0]*ds(deformation = solverdata.ale.deformation)
         else:
             rhs =  CF(0)*test[0]*ds(deformation = solverdata.ale.deformation)
 
         if self.neu_d:
-
             neu_d = {}
             for i, (key, field) in enumerate(self.neu_d.items()):                
-                neu_d[str(i)] = GridFunction(facet_space)
+                neu_d[str(i)] = GridFunction(self.facet_space)
                 neu_d[str(i)].Set(1, definedon=solverdata.mesh.BBoundaries(key))
-                rhs += -InnerProduct(nE, field())*neu_d[str(i)]*test[0]*ds(element_boundary=True, deformation = solverdata.ale.deformation)
+                rhs += -InnerProduct(self.nE, field)*neu_d[str(i)]*test[0]*ds(element_boundary=True, deformation = solverdata.ale.deformation)
 
         if self.neu_b:
-
-            b = Ps*self.b()
+            b = self.Ps*self.b()
             neu_b = {}
             for i, (key, field) in enumerate(self.neu_b.items()):
-                neu_b[str(i)] = GridFunction(facet_space)
+                neu_b[str(i)] = GridFunction(self.facet_space)
                 neu_b[str(i)].Set(1, definedon=solverdata.mesh.BBoundaries(key))
-                rhs += -IfPos(InnerProduct(nE, b), 0,
-                            InnerProduct(nE, field()))*neu_b[str(i)]*test[0]\
+                rhs += -IfPos(InnerProduct(self.nE, b), 0,
+                            InnerProduct(self.nE, field))*neu_b[str(i)]*test[0]\
                                 *ds(element_boundary=True, deformation = solverdata.ale.deformation)
             
         if self.Fneu_b:
-
             Fneu_b = {}
             for i, (key, field) in enumerate(self.Fneu_b.items()):
-                Fneu_b[str(i)] = GridFunction(facet_space)
+                Fneu_b[str(i)] = GridFunction(self.facet_space)
                 Fneu_b[str(i)].Set(1, definedon=solverdata.mesh.BBoundaries(key))
-                rhs += -InnerProduct(nE, field())*Fneu_b[str(i)]*test[0]\
+                rhs += -InnerProduct(self.nE, field)*Fneu_b[str(i)]*test[0]\
                                 *ds(element_boundary=True, deformation = solverdata.ale.deformation)
                 
         if self.dir_d:
-
             alpha = 5 * self.fes_order * (self.fes_order+1)
             dir_d = {}
             for i, (key, field) in enumerate(self.dir_d.items()):
-                dir_d[str(i)] = GridFunction(facet_space)
+                dir_d[str(i)] = GridFunction(self.facet_space)
                 dir_d[str(i)].Set(1, definedon=solverdata.mesh.BBoundaries(key))
-                rhs += self.d()*alpha/h*field()*test[0]*dir_d[str(i)]*ds(element_boundary=True, deformation = solverdata.ale.deformation) \
-                    - self.d()*InnerProduct(nE, grad(test[0]).Trace())*dir_d[str(i)]*field()*ds(element_boundary=True, deformation = solverdata.ale.deformation)
+                rhs += self.d()*alpha/self.h_f*field*test[0]*dir_d[str(i)]*ds(element_boundary=True, deformation = solverdata.ale.deformation) \
+                    - self.d()*InnerProduct(self.nE, grad(test[0]).Trace())*dir_d[str(i)]*field*ds(element_boundary=True, deformation = solverdata.ale.deformation)
                 
                 
         if self.dir_b:
-
-            b = Ps*self.b()
+            b = self.Ps*self.b()
             dir_b = {}
             for i, (key, field) in enumerate(self.dir_b.items()):
-                dir_b[str(i)] = GridFunction(facet_space)
+                dir_b[str(i)] = GridFunction(self.facet_space)
                 dir_b[str(i)].Set(1, definedon=solverdata.mesh.BBoundaries(key))
-                rhs += -IfPos(InnerProduct(nE, b), 0,
-                            InnerProduct(nE, b*field()))*dir_b[str(i)]*test[0]\
+                rhs += -IfPos(InnerProduct(self.nE, b), 0,
+                            InnerProduct(self.nE, b*field))*dir_b[str(i)]*test[0]\
                                 *ds(element_boundary=True, deformation = solverdata.ale.deformation)         
                 
         return rhs

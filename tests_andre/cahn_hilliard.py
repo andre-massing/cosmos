@@ -1,55 +1,73 @@
 # %%
 
-from ngsolve import*
-from cosmos.solvers.solvers import BackwardEuler
-from cosmos.pdes.container import Container
-from cosmos.pdes.pde_adr_vol import VolADR
-from netgen.occ import *
+from ngsolve import *
+from cosmos.solvers.solvers import Dynamic
+from cosmos.solvers.time_schemes import BDF1, BDF2
+from cosmos.pdes.pde_ch_bnd import CahnHilliardBnd
 import numpy as np
+from cosmos.utils.generate_surface_meshes import generate_half_sphere
+from ngsolve.webgui import Draw
 
-shape = Rectangle(1,1).Face()
-right=shape.edges.Max(X)
-right.name="right"
-shape.edges.Min(X).Identify(right,name="left")
-top=shape.edges.Max(Y)
-top.name="top"
-shape.edges.Min(Y).Identify(top,name="bottom")
-geom = OCCGeometry(shape, dim=2)
-mesh = Mesh(geom.GenerateMesh(maxh=0.05))
+mesh, _ = generate_half_sphere(maxh = 0.1)
 
-M = 1
-gamma = 1
-epsilon = 1e-3
+theta = 0.001
+gamma = 0.02
+
+dt = Parameter(1e-2)
+t = Parameter(0.0)
+T = 10
+
+ch = CahnHilliardBnd(c0 = sin(1e7*(x+y*y)), theta = theta, gamma=gamma,
+                     time_scheme = BDF2(), MP = True, BP = [-1, 1])
+
+solver = Dynamic(mesh = mesh, dt=dt, T=T, t=t)
+solver.AddPDE(ch)
+
+scene = Draw(ch.phase, mesh)
+for sol in solver():
+    scene.Redraw()
+
+# %%
+
+from ngsolve import *
+from cosmos.solvers.solvers import Dynamic
+from cosmos.solvers.time_schemes import BDF1, BDF2
+from cosmos.pdes.pde_ch_vol import CahnHilliardVol
+import numpy as np
+from ngsolve.webgui import Draw
+
+# mesh = Mesh(unit_square.GenerateMesh(maxh=0.05))
+
+from netgen.geom2d import *
+periodic = SplineGeometry()
+pnts = [ (0,0), (1,0), (1,1), (0,1) ]
+pnums = [periodic.AppendPoint(*p) for p in pnts]
+
+periodic.Append ( ["line", pnums[0], pnums[1]],bc="outer")
+# This should be our master edge so we need to save its number.
+lright = periodic.Append ( ["line", pnums[1], pnums[2]], bc="periodic")
+periodic.Append ( ["line", pnums[2], pnums[3]], bc="outer")
+# Minion boundaries must be defined in the same direction as master ones,
+# this is why the the point numbers of this spline are defined in the reverse direction,
+# leftdomain and rightdomain must therefore be switched as well!
+# We use the master number as the copy argument to create a slave edge.
+periodic.Append ( ["line", pnums[0], pnums[3]], leftdomain=0, rightdomain=1, copy=lright, bc="periodic")
+
+mesh = Mesh(periodic.GenerateMesh(maxh=0.05))
+
+theta = 1
+gamma = 1e-2
 
 dt = Parameter(1e-2)
 t = Parameter(0.0)
 T = 1
 
-adr1 = VolADR(u0 = 0.5*sin(1e7*(x+y*y)) + 0.3, periodic = True,
-              MP = True, BP = [-1, 1])
-adr2 = VolADR(c = 1, periodic = True, stationary = True)
+ch = CahnHilliardVol(c0 = sin(1e7*(x+y*y)), theta = theta, gamma=gamma,
+                     time_scheme = BDF2())
 
-adr1.SaveSolution(folderpath = './ch_results/', filename = 'ch_2a', n_samples = 1)
-adr2.SaveSolution(folderpath = './ch_results/', filename = 'ch_2b', n_samples = 1)
+solver = Dynamic(mesh = mesh, dt=dt, T=T, t=t)
+solver.AddPDE(ch)
 
-cnt = Container()
-cnt.AddPDEs(adr1, adr2)
-
-def f1(trials):
-    return M*grad(trials[1])
-cnt.AddNonlinearity(marker0 = 0, markers = [0, 1], f = f1, grad = True)
-
-def f2_1(trials):
-    return - epsilon*grad(trials[0])
-cnt.AddNonlinearity(marker0 = 1, markers = [0, 1], f = f2_1, grad = True)
-
-def f2_2(trials):
-    return - gamma*(4*trials[0]**3 - 6*trials[0]**2 + 2*trials[0])
-cnt.AddNonlinearity(marker0 = 1, markers = [0, 1], f = f2_2)
-
-solver = BackwardEuler(t = t, dt = dt, T = T, mesh = mesh, verbose = 1)
-solver.AddPDEs(cnt)
-
-solver.Solve()
-print('\n Computed solution')
-adr1.draw_solution(solver.mesh_data)
+scene = Draw(ch.phase, mesh)
+for sol in solver():
+    scene.Redraw()

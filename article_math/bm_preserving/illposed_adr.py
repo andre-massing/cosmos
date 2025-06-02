@@ -1,6 +1,6 @@
 # %%
-from cosmos.solvers.solver_unsteady import UnsteadySolver
-from cosmos.solvers.schemes import BDF1
+from cosmos.solvers.solvers import Dynamic
+from cosmos.solvers.time_schemes import BDF1
 from cosmos.pdes.pde_adr_bnd import BndADR
 from cosmos.pdes.pde_adr_bnd_ad import AdBndADR
 from cosmos.pdes.pde_tools import SaveError, SaveSolution
@@ -32,33 +32,33 @@ def solve_illposed_adr(mesh, dt, folderpath, filename, option):
 
     ############# Manufactured solution
     u_ex = exp(-3*(x**2 + y**2))
-    b = P_ex*CF((z,0,-x))*(1-exp(-1000*z))
-    neub = {'.*': CF((0, 0, 0))}
+    b = CF((z,0,-x))*(1-exp(-10*z))
+    neub = {'bottom': CF((0, 0, 0))}
 
 
     ############# Boundary conditions type and solver solution
     if option == 0:
         pde = BndADR(b = b, neu_b = neub,
-                     u0=u_ex, name = filename)
+                     u0=u_ex, name = filename, time_scheme = BDF1())
     elif option == 1:
         pde = AdBndADR(b = b, neu_b = neub,
-                     u0=u_ex, name = filename)
+                     u0=u_ex, name = filename, time_scheme = BDF1())
     elif option == 2:
         pde = AdBndADR(b = b, neu_b = neub,
                      u0=u_ex, name = filename,
-                     BP = [0, 1e5])
+                     BP = [0, 1e5], time_scheme = BDF1())
     elif option == 3:
         pde = AdBndADR(b = b, neu_b = neub,
                      u0=u_ex, name = filename,
-                     BP = [0, 1e5], MP = True)
+                     BP = [0, 1e5], MP = True, time_scheme = BDF1())
     sol_save = SaveSolution(folderpath = folderpath,
                         filename = filename,
                         sample_rate = 1)
     pde.SaveSol(sol_save)
 
-    solver = UnsteadySolver(mesh = mesh, dt=dt, T=T, t=t)
-    solver.AddPDE(pde, BDF1())
-    solver.ale.SetMeshDeformation(displ_ex)
+    solver = Dynamic(mesh = mesh, dt=dt, T=T, t=t)
+    solver.AddPDE(pde)
+    solver.ale.deformation_field = displ_ex
 
     gfu = GridFunction(H1(mesh))
     gfu.Set(u_ex)

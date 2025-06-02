@@ -1,6 +1,6 @@
 # %%
-from cosmos.solvers.solver_unsteady import UnsteadySolver
-from cosmos.solvers.schemes import BDF1, BDF2
+from cosmos.solvers.solvers import Dynamic
+from cosmos.solvers.time_schemes import BDF1, BDF2
 from cosmos.pdes.pde_willmore_dziuk_stab import WillmoreDziukStab
 from cosmos.utils.generate_surface_meshes import generate_torus
 from ngsolve import *
@@ -27,7 +27,7 @@ def willmore_dziuk_closed(mesh, dt, folderpath, filename):
 
     # With boundary conditions
     willmore = WillmoreDziukStab(name = [filename + 'dX', filename + 'mc'],
-                           postprocess = False)
+                           time_scheme=BDF1())
 
     from cosmos.pdes.pde_tools import SaveError
     err_save = SaveError(ex_sol = [dX_ex, H_ex], 
@@ -36,9 +36,9 @@ def willmore_dziuk_closed(mesh, dt, folderpath, filename):
                     filename = filename)
     willmore.SaveErr(err_save)
 
-    solver = UnsteadySolver(mesh = mesh, dt=dt, T=T, t=t)
-    solver.AddPDE(willmore, BDF1(conservative=False))
-    solver.ale.SetMeshDeformation(willmore.gfu.components[0])
+    solver = Dynamic(mesh = mesh, dt=dt, T=T, t=t)
+    solver.AddPDE(willmore)
+    solver.ale.deformation_field = willmore.gfu.components[0]
 
     solver.Solve()
 

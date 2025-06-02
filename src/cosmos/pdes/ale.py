@@ -15,18 +15,44 @@ class ale:
         else:
             self.domain = self.solverdata.mesh.Materials('.*')
 
-        self.V = VectorH1(self.solverdata.mesh, order=self.solverdata.mesh.GetCurveOrder(),
+        self.fes = VectorH1(self.solverdata.mesh, order=self.solverdata.mesh.GetCurveOrder(),
                     definedon=self.domain)
         
-        self.deformation = GridFunction(self.V)
-        self.velocity = GridFunction(self.V)
-        self.velocity_correction = GridFunction(self.V)
-        self.deformation_field = Field(cf = CF((0,)*self.dim))
-        self.velocity_field = Field(cf = CF((0,)*self.dim))
+        self.deformation = GridFunction(self.fes)
+        self.velocity = GridFunction(self.fes)
+        self.velocity_correction = GridFunction(self.fes)
+        self._deformation_field = Field(CF((0,)*self.dim))
+        self._velocity_field = Field(CF((0,)*self.dim))
 
     def update_ale(self):
-        self.deformation.Set(self.deformation_field(), definedon = self.domain)
-        self.velocity.Set(self.velocity_field(), definedon = self.domain)
+        self.deformation.Set(self._deformation_field(), definedon = self.domain)
+        self.velocity.Set(self._velocity_field(), definedon = self.domain)
+
+    @property
+    def deformation_field(self):
+        return self._deformation_field
+
+    @deformation_field.setter
+    def deformation_field(self, new_value):
+        if isinstance(new_value, GridFunction) or isinstance(new_value, CoefficientFunction):
+            self._deformation_field.value = new_value
+        elif callable(new_value):
+            self._deformation_field.value = new_value
+        else:
+            raise TypeError(f"Unsupported type for Field: {type(new_value)}")
+        
+    @property
+    def velocity_field(self):
+        return self._velocity_field
+
+    @velocity_field.setter
+    def velocity_field(self, new_value):
+        if isinstance(new_value, GridFunction) or isinstance(new_value, CoefficientFunction):
+            self._velocity_field.value = new_value
+        elif callable(new_value):
+            self._velocity_field.value = new_value
+        else:
+            raise TypeError(f"Unsupported type for Field: {type(self._obj)}")
 
 class alePDE(BasePDE):
 

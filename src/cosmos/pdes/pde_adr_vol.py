@@ -9,18 +9,18 @@ from cosmos.solvers.fields import Field
 
 class VolADR(BaseADR):
 
-    def __init__(self, b = Field(), c = Field(), d = Field(), u0 = Field(), rhs = Field(),
+    def __init__(self, b = None, c = None, d = None, u0 = None, rhs = None,
                  neu_d = {}, neu_b = {}, dir_d = {}, dir_b = {}, Fneu_b = {},
                  domain:str = '.*', name:str = 'volume_adr', periodic :bool = False,
                  MP:bool = False, BP:bool = False, time_scheme = BDF1()):
 
         super().__init__()
 
-        self.b = b
-        self.c = c
-        self.d = d
-        self.u0 = u0
-        self.rhs = rhs
+        self.b = Field(b)
+        self.c = Field(c)
+        self.d = Field(d)
+        self.u0 = Field(u0)
+        self.rhs = Field(rhs)
         self.neu_d = neu_d
         self.neu_b = neu_b
         self.dir_d = dir_d
@@ -143,22 +143,22 @@ class VolADR(BaseADR):
         if self.dir_d:
             alpha = 5 * self.fes_order * (self.fes_order+1)
             for key, field in self.dir_d.items():
-                rhs += self.d()*alpha/h*field()*test[0]*ds(definedon = key, skeleton = True, deformation = solverdata.ale.deformation)\
-                    - self.d()*InnerProduct(n, grad(test[0]))*field()*ds(definedon = key, skeleton=True, deformation = solverdata.ale.deformation)
+                rhs += self.d()*alpha/h*field*test[0]*ds(definedon = key, skeleton = True, deformation = solverdata.ale.deformation)\
+                    - self.d()*InnerProduct(n, grad(test[0]))*field*ds(definedon = key, skeleton=True, deformation = solverdata.ale.deformation)
         if self.neu_d:
             for key, field in self.neu_d.items():
-                rhs += -field()*n*test[0]*ds(definedon = key, deformation = solverdata.ale.deformation)
+                rhs += -field*n*test[0]*ds(definedon = key, deformation = solverdata.ale.deformation)
 
         if self.dir_b:
             for key, field in self.dir_b.items():
-                rhs += -IfPos(self.b()*n, CF(0), self.b()*n*field())*test[0]*ds(definedon = key, deformation = solverdata.ale.deformation)
+                rhs += -IfPos(self.b()*n, CF(0), self.b()*n*field)*test[0]*ds(definedon = key, deformation = solverdata.ale.deformation)
         if self.neu_b:
             for key, field in self.neu_b.items():
-                rhs += -IfPos(self.b()*n, CF(0), field()*n)*test[0]*ds(definedon = key, deformation = solverdata.ale.deformation)
+                rhs += -IfPos(self.b()*n, CF(0), field*n)*test[0]*ds(definedon = key, deformation = solverdata.ale.deformation)
 
         if self.Fneu_b:
             for key, field in self.Fneu_b.items():
-                rhs += -field()*n*test[0]*ds(definedon = solverdata.mesh.Boundaries(key), deformation = solverdata.ale.deformation)
+                rhs += -field*n*test[0]*ds(definedon = solverdata.mesh.Boundaries(key), deformation = solverdata.ale.deformation)
             
         return rhs
 
