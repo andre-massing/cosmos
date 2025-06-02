@@ -1,6 +1,6 @@
 # %%
 
-from cosmos.utils.generate_surface_meshes import generate_torus, generate_sphere
+from cosmos.utils.generate_surface_meshes import generate_torus, generate_sphere, generate_circle
 from ngsolve import *
 from ngsolve.webgui import Draw
 import numpy as np
@@ -78,9 +78,6 @@ def ComputeStabMC(mesh, gfu, params):
         nE = Cross(ns, tE)
     Ps = Id(mesh.dim) - OuterProduct(ns, ns)
 
-    Idh = GridFunction(gfu.space)
-    Idh.Set(CF((x,y,z)), definedon=mesh.Boundaries(".*"))
-
     fes0 = gfu.space*dV
     gfu0 = GridFunction(fes0)
     (kappa0, dkappa0), (eta0, deta0) = fes0.TnT()
@@ -92,16 +89,14 @@ def ComputeStabMC(mesh, gfu, params):
         jump_detadn0 = (grad(eta0).Trace()*nE-deta0.Trace())
     A0 = BilinearForm(fes0)
     F0 = LinearForm(fes0)
-    A0 += kappa0*eta0*ds
+    A0 += kappa0*eta0*ds_lumped
 
     J = specialcf.JacobianMatrix(mesh.dim, mesh.dim-1)
     area = sqrt(Det(J.trans*J))/2
     length = sqrt(area/pi)
-    length1 = ComputeH(J)
+    length1 = ComputeH(J, mesh.dim)
 
-    Draw(length/length1, mesh)
-
-    A0 += params['stab']*length1*InnerProduct(jump_dkappadn0,jump_detadn0)\
+    A0 += params['stab']*length*InnerProduct(jump_dkappadn0,jump_detadn0)\
         *ds(element_boundary=True)
     A0.Assemble()
     F0 += -InnerProduct(Ps, grad(eta0).Trace())*ds
@@ -151,15 +146,10 @@ def ComputeModMC(mesh, gfu, params):
         nE = Cross(ns, tE)
     Ps = Id(mesh.dim) - OuterProduct(ns, ns)
 
-    Idh = GridFunction(gfu.space)
-    Idh.Set(CF((x,y,z)), definedon=mesh.Boundaries(".*"))
-
     fes0 = gfu.space*dV
     gfu0 = GridFunction(fes0)
     (kappa0, dkappa0), (eta0, deta0) = fes0.TnT()
     if mesh.dim == 2:
-        dkappa0 = dkappa0*tE
-        deta0 = deta0*tE
         jump_dkappadn0 = (kappa0.Trace().Deriv()*nE-dkappa0*tEc)
         jump_detadn0 = (eta0.Trace().Deriv()*nE-deta0*tEc)
     elif mesh.dim == 3:
@@ -190,14 +180,25 @@ def ComputeModMC(mesh, gfu, params):
     gfu0.vec.data = A0.mat.Inverse(fes0.FreeDofs())*F0.vec
     gfu.vec.data = gfu0.components[0].vec.data
 
-def ComputeH(J):
+def ComputeH(J, dim):
 
-    a = Norm(J[:,0])
-    b = Norm(J[:,1])
-    c = Norm(J[:,0] - J[:,1])
+    if dim == 3:
+        a = Norm(J[:,0])
+        b = Norm(J[:,1])
+        c = Norm(J[:,0] - J[:,1])
 
-    # max = IfPos(IfPos(a-b, a, b) - c, IfPos(a-b, a, b), c)
-    max = IfPos(IfPos(a-b, b, a) - c, c, IfPos(a-b, b, a))
+        max = IfPos(IfPos(a-b, a, b) - c, IfPos(a-b, a, b), c)
+    else:
+        max = Norm(J)
+
+    return max
+
+def ComputeH2(J, t, dim):
+
+    if dim == 3:
+        max = Norm(J)
+    else:
+        max = Norm(J)
 
     return max
 
@@ -211,39 +212,39 @@ def ComputeError(mesh, u_h, u_ex):
     
     return err
 
-print('-'*10, 'Torus')
-R = sqrt(2)
-r =1
-n = CF((x,y,z))/r-R*CF((x,0,z))/r/sqrt(x**2+z**2)
-cosv = (sqrt(x**2+z**2)-R)/r
-H = 2*(R+2*r*cosv)/(2*r*(R+r*cosv))
-H_ex = -n*H
+# print('-'*10, 'Torus')
+# R = sqrt(2)
+# r =1
+# n = CF((x,y,z))/r-R*CF((x,0,z))/r/sqrt(x**2+z**2)
+# cosv = (sqrt(x**2+z**2)-R)/r
+# H = 2*(R+2*r*cosv)/(2*r*(R+r*cosv))
+# H_ex = -n*H
 
-power = 2
-nref = 3
-hs = 0.2/np.power(power, range(nref))
-ERRS = np.zeros((len(hs), 3))
-for i, h in enumerate(hs):
+# power = 2
+# nref = 3
+# hs = 0.2/np.power(power, range(nref))
+# ERRS = np.zeros((len(hs), 3))
+# for i, h in enumerate(hs):
 
-    mesh, _ = generate_torus(R=R, r=r, maxh = h)
-    kappa_h = GridFunction(VectorH1(mesh))
+#     mesh, _ = generate_torus(R=R, r=r, maxh = h)
+#     kappa_h = GridFunction(VectorH1(mesh))
 
-    ComputeMC(mesh, kappa_h, {'clamped_bnd': None})
-    err1 = ComputeError(mesh, kappa_h, H_ex)
+#     ComputeMC(mesh, kappa_h, {'clamped_bnd': None})
+#     err1 = ComputeError(mesh, kappa_h, H_ex)
 
-    ComputeStabMC(mesh, kappa_h, {'stab': 1e-3, 'clamped_bnd': None})
-    err2 = ComputeError(mesh, kappa_h, H_ex)
+#     ComputeStabMC(mesh, kappa_h, {'stab': 1e-3, 'clamped_bnd': None})
+#     err2 = ComputeError(mesh, kappa_h, H_ex)
 
-    ComputeModMC(mesh, kappa_h, {'stab': 1e-3, 'clamped_bnd': None})
-    err3 = ComputeError(mesh, kappa_h, H_ex)
+#     ComputeModMC(mesh, kappa_h, {'stab': 1e-3, 'clamped_bnd': None})
+#     err3 = ComputeError(mesh, kappa_h, H_ex)
 
-    print(err1, err2, err3)
+#     print(err1, err2, err3)
 
-    ERRS[i, 0] = err1
-    ERRS[i, 1] = err2
-    ERRS[i, 2] = err3
+#     ERRS[i, 0] = err1
+#     ERRS[i, 1] = err2
+#     ERRS[i, 2] = err3
 
-print(np.log(ERRS[:-1, :]/ERRS[1:, :])/np.log(power))
+# print(np.log(ERRS[:-1, :]/ERRS[1:, :])/np.log(power))
 
 print('-'*10, 'Sphere')
 R = 1
@@ -276,4 +277,33 @@ for i, h in enumerate(hs):
 
 print(np.log(ERRS[:-1, :]/ERRS[1:, :])/np.log(power))
 
+print('-'*10, 'Circle')
+R = 1
+n = CF((x,y))/Norm( CF((x,y)))
+H_ex = -n
 
+power = 2
+nref = 4
+hs = 0.2/np.power(power, range(nref))
+ERRS = np.zeros((len(hs), 3))
+for i, h in enumerate(hs):
+
+    mesh, _ = generate_circle(R=1, maxh = h)
+    kappa_h = GridFunction(VectorH1(mesh, definedon = mesh.Boundaries('.*')))
+
+    ComputeMC(mesh, kappa_h, {'clamped_bnd': None})
+    err1 = ComputeError(mesh, kappa_h, H_ex)
+
+    ComputeStabMC(mesh, kappa_h, {'stab': 1e-3, 'clamped_bnd': None})
+    err2 = ComputeError(mesh, kappa_h, H_ex)
+
+    ComputeModMC(mesh, kappa_h, {'stab': 1e-3, 'clamped_bnd': None})
+    err3 = ComputeError(mesh, kappa_h, H_ex)
+
+    print(err1, err2, err3)
+
+    ERRS[i, 0] = err1
+    ERRS[i, 1] = err2
+    ERRS[i, 2] = err3
+
+print(np.log(ERRS[:-1, :]/ERRS[1:, :])/np.log(power))

@@ -1,6 +1,6 @@
 # %%
-from cosmos.solvers.solver_unsteady import UnsteadySolver
-from cosmos.solvers.schemes import BDF1
+from cosmos.solvers.solvers import Dynamic
+from cosmos.solvers.time_schemes import CN
 from cosmos.pdes.pde_adr_bnd import BndADR
 from cosmos.pdes.pde_adr_bnd_ad import AdBndADR
 from cosmos.pdes.pde_tools import SaveError
@@ -38,7 +38,7 @@ def solve_moving_surf_closed_adr(mesh, timestep, folderpath, filename):
 
     ############# Boundary conditions type and solver solution
     pde = AdBndADR(c = c, b = b,
-                    rhs = rhs, u0 = u_ex, name = filename)
+                    rhs = rhs, u0 = u_ex, name = filename, time_scheme=CN())
 
     err_save = SaveError(ex_sol = u_ex, 
                     norm = 'L2', 
@@ -46,8 +46,8 @@ def solve_moving_surf_closed_adr(mesh, timestep, folderpath, filename):
                     filename = filename)
     pde.SaveErr(err_save)
 
-    solver = UnsteadySolver(mesh = mesh, dt=dt, T=T, t=t)
-    solver.AddPDE(pde, BDF1())
-    solver.ale.SetMeshDeformation(displ_ex)
+    solver = Dynamic(mesh = mesh, dt=dt, T=T, t=t)
+    solver.AddPDE(pde)
+    solver.ale.deformation_field = displ_ex
 
     solver.Solve()

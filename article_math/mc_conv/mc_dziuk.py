@@ -1,6 +1,6 @@
 # %%
-from cosmos.solvers.solver_unsteady import UnsteadySolver
-from cosmos.solvers.schemes import BDF1, BDF2
+from cosmos.solvers.solvers import Dynamic
+from cosmos.solvers.time_schemes import BDF1, BDF2
 from cosmos.pdes.pde_mc_dziuk import MCDziuk
 from cosmos.utils.generate_surface_meshes import generate_sphere
 from ngsolve import *
@@ -24,8 +24,7 @@ def mc_dziuk(mesh, dt, folderpath, filename):
     H_ex = -2/R_ex*n_ex
 
     # With boundary conditions
-    mc = MCDziuk(name = filename + 'dX',
-                           postprocess = False)
+    mc = MCDziuk(name = filename + 'dX', time_scheme=BDF1())
 
     from cosmos.pdes.pde_tools import SaveError
     err_save = SaveError(ex_sol = dX_ex, 
@@ -34,9 +33,9 @@ def mc_dziuk(mesh, dt, folderpath, filename):
                     filename = filename)
     mc.SaveErr(err_save)
 
-    solver = UnsteadySolver(mesh = mesh, dt=dt, T=T, t=t)
-    solver.AddPDE(mc, BDF1(conservative=False))
-    solver.ale.SetMeshDeformation(mc.gfu)
+    solver = Dynamic(mesh = mesh, dt=dt, T=T, t=t)
+    solver.AddPDE(mc)
+    solver.ale.deformation_field = mc.gfu
 
     solver.Solve()
 

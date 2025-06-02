@@ -2,21 +2,21 @@ from ngsolve import *
 from ngsolve .solvers import *
 import numpy as np
 
-def params_check(params = {}, accepted_keys=[], defaults=[]):
+# def params_check(params = {}, accepted_keys=[], defaults=[]):
         
-    wrong = [key for key in params.keys() if key not in accepted_keys]
+#     wrong = [key for key in params.keys() if key not in accepted_keys]
 
-    if wrong:
+#     if wrong:
 
-        print("The following keys are unknown parameters:\n", wrong)
+#         print("The following keys are unknown parameters:\n", wrong)
 
-        print("The accepted keys are:\n", accepted_keys)
+#         print("The accepted keys are:\n", accepted_keys)
 
-        raise ValueError
+#         raise ValueError
     
-    for i, key in enumerate(accepted_keys):
+#     for i, key in enumerate(accepted_keys):
 
-        params[key] = params.get(key, defaults[i])
+#         params[key] = params.get(key, defaults[i])
 
 def compute_stab_mc(data, gfu, params):
 

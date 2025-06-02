@@ -1,6 +1,6 @@
 # %%
-from cosmos.solvers.solver_unsteady import UnsteadySolver
-from cosmos.solvers.schemes import BDF1
+from cosmos.solvers.solvers import Dynamic
+from cosmos.solvers.time_schemes import BDF1
 from cosmos.pdes.pde_adr_bnd import BndADR
 from cosmos.pdes.pde_adr_bnd_ad import AdBndADR
 from cosmos.pdes.pde_tools import SaveError
@@ -41,12 +41,12 @@ def solve_moving_surf_bmp_adr(mesh, dt, folderpath, filename):
         dir_b = {'.*': u_ex}
         pde = AdBndADR(b = b, dir_b = dir_b,
                      rhs = rhs, u0=u_ex, name = filename,
-                     BP = [0, 1])
+                     BP = [0, 1], time_scheme = BDF1())
     else:
         neu_b = {'.*': flux_b} 
         pde = AdBndADR(b = b, neu_b = neu_b,
                      rhs = rhs, u0 = u_ex, name = filename,
-                     BP = [0, 1])
+                     BP = [0, 1], time_scheme = BDF1())
 
     err_save = SaveError(ex_sol = u_ex, 
                     norm = 'L2', 
@@ -54,8 +54,8 @@ def solve_moving_surf_bmp_adr(mesh, dt, folderpath, filename):
                     filename = filename)
     pde.SaveErr(err_save)
 
-    solver = UnsteadySolver(mesh = mesh, dt=dt, T=T, t=t)
-    solver.AddPDE(pde, BDF1())
-    solver.ale.SetMeshDeformation(displ_ex)
+    solver = Dynamic(mesh = mesh, dt=dt, T=T, t=t)
+    solver.AddPDE(pde)
+    solver.ale.deformation_field = displ_ex
 
     solver.Solve()

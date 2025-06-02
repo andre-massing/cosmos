@@ -1,6 +1,6 @@
 # %%
-from cosmos.solvers.solver_unsteady import UnsteadySolver
-from cosmos.solvers.schemes import BDF1
+from cosmos.solvers.solvers import Dynamic
+from cosmos.solvers.time_schemes import BDF1, CN, BDF2
 from cosmos.pdes.pde_adr_vol import VolADR
 from cosmos.pdes.pde_adr_vol_ad import AdVolADR
 from cosmos.pdes.pde_tools import SaveError
@@ -41,12 +41,12 @@ def solve_moving_bulk_adr(mesh, dt, folderpath, filename):
         # dir_d = {'.*': u_ex}
         dir_b = {'.*': u_ex}
         pde = AdVolADR(c = c, b = b, dir_b = dir_b, 
-                     rhs = rhs, u0=u_ex, name = filename)
+                     rhs = rhs, u0=u_ex, name = filename, time_scheme=CN())
     else:
         # neu_d = {'.*': flux_d} 
         neu_b = {'.*': flux_b} 
         pde = AdVolADR(c = c, b = b, neu_b = neu_b,
-                     rhs = rhs, u0=u_ex, name = filename)
+                     rhs = rhs, u0=u_ex, name = filename, time_scheme=CN())
 
     err_save = SaveError(ex_sol = u_ex, 
                     norm = 'L2', 
@@ -54,8 +54,8 @@ def solve_moving_bulk_adr(mesh, dt, folderpath, filename):
                     filename = filename)
     pde.SaveErr(err_save)
 
-    solver = UnsteadySolver(mesh = mesh, dt=dt, T=T, t=t)
-    solver.AddPDE(pde, BDF1())
-    solver.ale.SetMeshDeformation(displ_ex)
+    solver = Dynamic(mesh = mesh, dt=dt, T=T, t=t)
+    solver.AddPDE(pde)
+    solver.ale.deformation_field = displ_ex
 
     solver.Solve()
