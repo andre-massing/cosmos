@@ -45,7 +45,6 @@ class BaseMC(BasePDE):
             res += resMold
             A += self.GetMass(solverdata, self.get_trial(), self.get_test())
             
-
         elif isinstance(self.time_scheme, BDF2):
 
             ale_curr = ale(solverdata)

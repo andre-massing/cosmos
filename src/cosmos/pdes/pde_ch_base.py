@@ -43,9 +43,11 @@ class BaseCH(BasePDE):
             ale_curr = ale(solverdata)
             ale_curr.deformation.vec.data = solverdata.ale.deformation.vec.data
             ale_curr.velocity.vec.data = solverdata.ale.velocity.vec.data
+            ale_curr.material_velocity.vec.data = solverdata.ale.material_velocity.vec.data
 
             solverdata.ale.deformation.vec.data = solverdata.prev_def[-1].data
             solverdata.ale.velocity.vec.data = solverdata.prev_vel[-1].data
+            solverdata.ale.material_velocity.vec.data = solverdata.prev_mat_vel[-1].data
 
             M = BilinearForm(self.fes)
             M += self.GetMass(solverdata, self.get_trial(), self.get_test())
@@ -70,9 +72,11 @@ class BaseCH(BasePDE):
             ale_curr = ale(solverdata)
             ale_curr.deformation.vec.data = solverdata.ale.deformation.vec.data
             ale_curr.velocity.vec.data = solverdata.ale.velocity.vec.data
+            ale_curr.material_velocity.vec.data = solverdata.ale.material_velocity.vec.data
 
             solverdata.ale.deformation.vec.data = 2*solverdata.prev_def[-1].data - 1*solverdata.prev_def[-2].data
             solverdata.ale.velocity.vec.data = 2*solverdata.prev_vel[-1].data - 1*solverdata.prev_vel[-2].data
+            solverdata.ale.material_velocity.vec.data = 2*solverdata.prev_mat_vel[-1].data - 1*solverdata.prev_mat_vel[-2].data
 
             M = BilinearForm(self.fes)
             M += self.GetMass(solverdata, self.get_trial(), self.get_test())
@@ -105,6 +109,7 @@ class BaseCH(BasePDE):
         solverdata.t.Set(solverdata.t.Get() - solverdata.dt.Get())
         solverdata.ale.deformation.vec.data = ale_curr.deformation.vec.data
         solverdata.ale.velocity.vec.data = ale_curr.velocity.vec.data
+        solverdata.ale.material_velocity.vec.data = ale_curr.velocity.vec.data
 
     def Update(self, solverdata):
 

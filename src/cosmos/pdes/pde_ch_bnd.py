@@ -9,7 +9,7 @@ from ngsolve.webgui import Draw
 
 class CahnHilliardBnd(BaseCH):
 
-    def __init__(self, theta = None, gamma = None, c0 = None, phi0 = None, rhs_c = None,
+    def __init__(self, theta = None, gamma = None, sigma = None, c0 = None, phi0 = None, rhs_c = None,
                  rhs_p = None, domain:str = '.*', name = ['phase', 'potential'], periodic:bool = False,
                  MP:bool = False, BP:bool = None, time_scheme = BDF1()):
 
@@ -23,6 +23,10 @@ class CahnHilliardBnd(BaseCH):
             self.gamma = Field(gamma)
         else:
             self.gamma = Field(1.0)
+        if sigma:
+            self.sigma = Field(sigma)
+        else:
+            self.sigma = Field(1.0)
         self.c0 = Field(c0)
         self.phi0 = Field(phi0)
         self.rhs_c = Field(rhs_c)
@@ -99,7 +103,9 @@ class CahnHilliardBnd(BaseCH):
 
         lhs = self.theta()*grad(trial[1]).Trace()*grad(test[0]).Trace()*ds(deformation = solverdata.ale.deformation)
         lhs += trial[1]*test[1]*ds(deformation = solverdata.ale.deformation)
-        lhs += -1*self.gamma()*grad(trial[0]).Trace()*grad(test[1]).Trace()*ds(deformation = solverdata.ale.deformation)
+        lhs += -1*self.sigma()*self.gamma()*grad(trial[0]).Trace()*grad(test[1]).Trace()*ds(deformation = solverdata.ale.deformation)
+        
+        lhs += (solverdata.ale.material_velocity - solverdata.ale.velocity)*grad(trial[0]).Trace()*test[0]*ds(deformation = solverdata.ale.deformation)
                     
         return lhs
 
@@ -120,7 +126,7 @@ class CahnHilliardBnd(BaseCH):
 
     def GetNL(self, solverdata, trial, test):
 
-        nonlin = -1/self.gamma()*(trial[0]**3 - trial[0])*test[1]*ds(deformation = solverdata.ale.deformation)
+        nonlin = -self.sigma()/self.gamma()*(trial[0]**3 - trial[0])*test[1]*ds(deformation = solverdata.ale.deformation)
                     
         return nonlin
     
