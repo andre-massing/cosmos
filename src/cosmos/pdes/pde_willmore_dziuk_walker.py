@@ -8,21 +8,20 @@ from ngsolve.webgui import Draw
 
 class WillmoreDziukWalker(BaseMC):
 
-    def __init__(self, rhs = Field(), clamped_bnd = None, clamped_f = Field(),
+    def __init__(self, rhs = None, clamped_bnd = None, clamped_f = None,
                  domain:str = '.*', name = ['displacement', 'mean_curvature'],
-                 mc0 = Field(),
-                 time_scheme = BDF1(), ale = False, postprocess = False):
+                 mc0 = None,
+                 time_scheme = BDF1(), postprocess = False):
 
         super().__init__()
 
-        self.rhs = rhs
+        self.rhs = Field(rhs)
         self.clamped_bnd = clamped_bnd
-        self.clamped_f = clamped_f
+        self.clamped_f = Field(clamped_f)
         self.domain = domain
         self.name = name
-        self.mc0 = mc0
+        self.mc0 = Field(mc0)
         self.time_scheme = time_scheme
-        self.ale = ale
         self.postprocess = postprocess
 
         self.nfields = 2
@@ -44,7 +43,7 @@ class WillmoreDziukWalker(BaseMC):
         else:
             self.V1 = Compress(VectorH1(solverdata.mesh, order=self.fes_order,
                         definedon=self.domain))
-        self.V2 = Compress(VectorH1(solverdata.mesh, order=self.fes_order,
+        self.V2 = Compress(H1(solverdata.mesh, order=self.fes_order,
                     definedon=self.domain))
             
         self.fes = self.V1*self.V2
@@ -58,12 +57,13 @@ class WillmoreDziukWalker(BaseMC):
         ns = specialcf.normal(solverdata.mesh.dim)
         if not self.mc0():
             self.Wein = ComputeW(solverdata)
-            self.mean_curvature.Set(Trace(self.Wein)*ns, definedon = self.domain)
+            self.mean_curvature.Set(Trace(self.Wein), definedon = self.domain)
         else:
             self.mean_curvature.Set(self.mc0(), definedon = self.domain)
             
-        V_vol = VectorH1(solverdata.mesh, order = self.fes_order)
-        self.gfu_save = list(GridFunction(CompressCompound(V_vol*V_vol)).components)
+        V1_vol = VectorH1(solverdata.mesh, order = self.fes_order)
+        V2_vol = H1(solverdata.mesh, order = self.fes_order)
+        self.gfu_save = list(GridFunction(CompressCompound(V1_vol*V2_vol)).components)
         self.dX_save, self.kappa_save = self.gfu_save[0], self.gfu_save[1]
         self.dX_save.Set(self.displacement, definedon = self.domain)
         self.kappa_save.Set(self.mean_curvature, definedon = self.domain)
@@ -73,6 +73,7 @@ class WillmoreDziukWalker(BaseMC):
             self.X0.Set(CF((x,y)), definedon=self.domain)
         elif solverdata.mesh.dim == 3:
             self.X0.Set(CF((x, y, z)), definedon=self.domain)
+        self.displacement_tot = GridFunction(self.V1)
 
         for save in self.save_error:
             save.Initialize(solverdata, self)
@@ -92,17 +93,19 @@ class WillmoreDziukWalker(BaseMC):
             ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
             ds_lumped = ds(intrules = { TRIG : ir }, deformation = solverdata.ale.deformation)
 
-        lhs = -InnerProduct(grad(trial[1]).Trace(), grad(test[0]).Trace())*ds(deformation = solverdata.ale.deformation)
-        lhs += InnerProduct(trial[1], test[1])*ds_lumped
-        lhs += InnerProduct(grad(trial[0]).Trace(), grad(test[1]).Trace())*ds(deformation = solverdata.ale.deformation)
+        lhs = 1/solverdata.dt*trial[0]*test[0]*ds_lumped
+        lhs += -InnerProduct(grad(trial[1]).Trace(), grad(test[1]).Trace())*ds(deformation = solverdata.ale.deformation)
+        lhs += InnerProduct(trial[1]*ns, test[0])*ds_lumped
+        lhs += InnerProduct(grad(trial[0]).Trace(), grad(test[0]).Trace())*ds(deformation = solverdata.ale.deformation)
 
-        lhs += -0.5*InnerProduct(InnerProduct(self.mean_curvature, self.mean_curvature)*trial[1],test[0])*ds_lumped
+        lhs += -0.5*InnerProduct(InnerProduct(self.mean_curvature, self.mean_curvature)*trial[1],test[1])*ds_lumped
         
         return lhs
         
     def GetRHS(self, solverdata, test):
 
         ns = specialcf.normal(solverdata.mesh.dim)
+        Ps = Id(solverdata.mesh.dim) - OuterProduct(ns, ns)
 
         if solverdata.mesh.dim == 2:
             ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
@@ -111,10 +114,10 @@ class WillmoreDziukWalker(BaseMC):
             ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
             ds_lumped = ds(intrules = { TRIG : ir }, deformation = solverdata.ale.deformation)
 
-        rhs = -InnerProduct(grad(self.X0).Trace(), grad(test[1]).Trace())*ds(deformation = solverdata.ale.deformation)
+        rhs = -InnerProduct(Ps, grad(test[0]).Trace())*ds(deformation = solverdata.ale.deformation)
         if self.rhs():
-            rhs += InnerProduct(self.rhs(), test[0])*ds(deformation = solverdata.ale.deformation)
-        rhs +=  - InnerProduct(InnerProduct(self.Wein, self.Wein)*self.mean_curvature, test[0])*ds_lumped
+            rhs += InnerProduct(self.rhs(), test[1])*ds(deformation = solverdata.ale.deformation)
+        rhs +=  - InnerProduct(InnerProduct(self.Wein, self.Wein)*self.mean_curvature, test[1])*ds_lumped
 
         tE = specialcf.tangential(solverdata.mesh.dim)
         if solverdata.mesh.dim == 2:
@@ -138,14 +141,7 @@ class WillmoreDziukWalker(BaseMC):
 
     def GetMass(self, solverdata, trial, test):
 
-        if solverdata.mesh.dim == 2:
-            ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
-            ds_lumped = ds(intrules = { SEGM : ir }, deformation = solverdata.ale.deformation)
-        elif solverdata.mesh.dim == 3:
-            ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-            ds_lumped = ds(intrules = { TRIG : ir }, deformation = solverdata.ale.deformation)
-
-        mass = InnerProduct(trial[0], test[0])/solverdata.dt*ds_lumped
+        mass = CF(0)*ds
 
         return mass
     
@@ -158,7 +154,7 @@ class WillmoreDziukWalker(BaseMC):
         ns = specialcf.normal(solverdata.mesh.dim)
         solverdata.mesh.SetDeformation(solverdata.ale.deformation)
         self.Wein = ComputeW(solverdata)
-        self.mean_curvature.Set(Trace(self.Wein)*ns, definedon = self.domain)
+        self.mean_curvature.Set(Trace(self.Wein), definedon = self.domain)
         solverdata.mesh.UnsetDeformation()
     
     def PostProcess(self, solverdata):
@@ -168,35 +164,33 @@ class WillmoreDziukWalker(BaseMC):
         if self.postprocess:
 
             ns = specialcf.normal(solverdata.mesh.dim)
-            n_h = GridFunction(self.V2)
-            solverdata.mesh.SetDeformation(self.displacement)
+            n_h = GridFunction(VectorH1(solverdata.mesh, order=self.fes_order,
+                        definedon=self.domain))
+            solverdata.mesh.SetDeformation(self.displacement_tot)
             n_h.Set(ns, definedon=self.domain)
             solverdata.mesh.UnsetDeformation()
 
-            V3 = Compress(H1(solverdata.mesh, order=self.fes_order,
-                        definedon=self.domain))
+            V3 = H1(solverdata.mesh, order=self.fes_order,
+                        definedon=self.domain)
             
             fes = self.V1*V3
             w_h = GridFunction(fes)
             A = BilinearForm(fes)
             (w, kappa), (eta, mu) = fes.TnT()
-            ds_duanli = ds
-            A += InnerProduct(grad(w).Trace(), grad(eta).Trace())*ds_duanli
-            A += -1*InnerProduct(kappa*n_h, eta)*ds_duanli
-            A += InnerProduct(w, mu*n_h)*ds_duanli
+            A += InnerProduct(grad(w).Trace(), grad(eta).Trace())*ds
+            A += -1*InnerProduct(kappa*n_h, eta)*ds
+            A += 1*InnerProduct(w, mu*n_h)*ds
             F = LinearForm(fes)
-            F += -1*InnerProduct(grad(self.X0).Trace(), grad(eta).Trace())*ds_duanli
-            F += -1*InnerProduct(grad(self.displacement).Trace(), grad(eta).Trace())*ds_duanli
+            F += -1*InnerProduct(grad(self.X0).Trace(), grad(eta).Trace())*ds
+            F += -1*InnerProduct(grad(self.displacement_tot).Trace(), grad(eta).Trace())*ds
             A.Assemble()
             F.Assemble()
-
             w_h.vec.data = A.mat.Inverse(freedofs = fes.FreeDofs())*F.vec
             self.displacement.vec.data += w_h.components[0].vec.data
+            self.displacement_tot.vec.data += w_h.components[0].vec.data
         
     def Update(self, solverdata):
 
-        if self.ale:
-            self.gfu.Set(solverdata.ale.deformation, definedon=self.domain)
         solverdata.mesh.SetDeformation(solverdata.ale.deformation)
 
         self.dX_save.Set(self.displacement, definedon = self.domain)

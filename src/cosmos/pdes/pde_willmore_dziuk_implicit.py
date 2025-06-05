@@ -9,7 +9,7 @@ class WillmoreDziukImplicit(BaseMC):
 
     def __init__(self, rhs = None, clamped_bnd = None, clamped_f = None,
                  domain:str = '.*', name = ['displacement', 'mean_curvature'],
-                 mc_autoupdate = False, mc0 = None,
+                 mc_autoupdate = False, mc0 = None, kappa = None,
                  time_scheme = BDF1(), ale = False, postprocess = False):
 
         super().__init__()
@@ -21,6 +21,10 @@ class WillmoreDziukImplicit(BaseMC):
         self.name = name
         self.mc_autoupdate = mc_autoupdate
         self.mc0 = Field(mc0)
+        if not kappa:
+            self.kappa= Field(1.0)
+        else:
+            self.kappa = Field(kappa)
         self.time_scheme = time_scheme
         self.ale = ale
         self.postprocess = postprocess
@@ -87,8 +91,9 @@ class WillmoreDziukImplicit(BaseMC):
         def D_s(chi, Ps):
             sym = 0.5*Ps*(grad(chi).Trace()+grad(chi).Trace().trans)*Ps
             return sym
-
-        lhs = -InnerProduct(grad(trial[1]).Trace(), grad(test[0]).Trace())*ds(deformation = solverdata.ale.deformation)
+        
+        lhs = 1/solverdata.dt*trial[0]*test[0]*ds(deformation=solverdata.ale.deformation)
+        lhs += -InnerProduct(grad(trial[1]).Trace(), grad(test[0]).Trace())*ds(deformation = solverdata.ale.deformation)
         lhs += InnerProduct(trial[1], test[1])*ds(deformation = solverdata.ale.deformation)
         lhs += InnerProduct(grad(trial[0]).Trace(), grad(test[1]).Trace())*ds(deformation = solverdata.ale.deformation)
 
@@ -106,7 +111,7 @@ class WillmoreDziukImplicit(BaseMC):
         ns = specialcf.normal(solverdata.mesh.dim)
         Ps = Id(solverdata.mesh.dim) - OuterProduct(ns, ns)
 
-        rhs = -InnerProduct(grad(self.X0).Trace(), grad(test[1]).Trace())*ds(deformation = solverdata.ale.deformation)
+        rhs = -InnerProduct(Ps, grad(test[1]).Trace())*ds(deformation = solverdata.ale.deformation)
         if self.rhs():
             rhs += InnerProduct(self.rhs(), test[0])*ds(deformation = solverdata.ale.deformation)
         rhs +=  0.5*InnerProduct(InnerProduct(self.mean_curvature, self.mean_curvature)*grad(self.X0).Trace(),grad(test[0]).Trace())*ds(deformation = solverdata.ale.deformation)
@@ -133,7 +138,7 @@ class WillmoreDziukImplicit(BaseMC):
 
     def GetMass(self, solverdata, trial, test):
 
-        mass = InnerProduct(trial[0], test[0])/solverdata.dt*ds(deformation = solverdata.ale.deformation)
+        mass = CF(0)*ds
 
         return mass
     
@@ -156,29 +161,28 @@ class WillmoreDziukImplicit(BaseMC):
 
             ns = specialcf.normal(solverdata.mesh.dim)
             n_h = GridFunction(self.V2)
-            solverdata.mesh.SetDeformation(self.displacement)
+            solverdata.mesh.SetDeformation(self.displacement_tot)
             n_h.Set(ns, definedon=self.domain)
             solverdata.mesh.UnsetDeformation()
 
-            V3 = Compress(H1(solverdata.mesh, order=self.fes_order,
-                        definedon=self.domain))
+            V3 = H1(solverdata.mesh, order=self.fes_order,
+                        definedon=self.domain)
             
             fes = self.V1*V3
             w_h = GridFunction(fes)
             A = BilinearForm(fes)
             (w, kappa), (eta, mu) = fes.TnT()
-            ds_duanli = ds
-            A += InnerProduct(grad(w).Trace(), grad(eta).Trace())*ds_duanli
-            A += -1*InnerProduct(kappa*n_h, eta)*ds_duanli
-            A += InnerProduct(w, mu*n_h)*ds_duanli
+            A += InnerProduct(grad(w).Trace(), grad(eta).Trace())*ds
+            A += -1*InnerProduct(kappa*n_h, eta)*ds
+            A += 1*InnerProduct(w, mu*n_h)*ds
             F = LinearForm(fes)
-            F += -1*InnerProduct(grad(self.X0).Trace(), grad(eta).Trace())*ds_duanli
-            F += -1*InnerProduct(grad(self.displacement).Trace(), grad(eta).Trace())*ds_duanli
+            F += -1*InnerProduct(grad(self.X0).Trace(), grad(eta).Trace())*ds
+            F += -1*InnerProduct(grad(self.displacement_tot).Trace(), grad(eta).Trace())*ds
             A.Assemble()
             F.Assemble()
-
             w_h.vec.data = A.mat.Inverse(freedofs = fes.FreeDofs())*F.vec
             self.displacement.vec.data += w_h.components[0].vec.data
+            self.displacement_tot.vec.data += w_h.components[0].vec.data
         
     def Update(self, solverdata):
 
