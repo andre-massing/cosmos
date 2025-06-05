@@ -19,14 +19,19 @@ class ale:
                     definedon=self.domain)
         
         self.deformation = GridFunction(self.fes)
+        self.deformation_old = GridFunction(self.fes)
         self.velocity = GridFunction(self.fes)
-        self.velocity_correction = GridFunction(self.fes)
+        self.material_velocity = GridFunction(self.fes)
         self._deformation_field = Field(CF((0,)*self.dim))
         self._velocity_field = Field(CF((0,)*self.dim))
+        self._material_velocity_field = Field(CF((0,)*self.dim))
 
     def update_ale(self):
-        self.deformation.Set(self._deformation_field(), definedon = self.domain)
+        self.solverdata.mesh.SetDeformation(self.deformation_old)
+        self.deformation.Set(self._deformation_field() + self.deformation_old, definedon = self.domain)
         self.velocity.Set(self._velocity_field(), definedon = self.domain)
+        self.material_velocity.Set(self._material_velocity_field(), definedon = self.domain)
+        self.solverdata.mesh.UnsetDeformation()
 
     @property
     def deformation_field(self):
@@ -51,6 +56,19 @@ class ale:
             self._velocity_field.value = new_value
         elif callable(new_value):
             self._velocity_field.value = new_value
+        else:
+            raise TypeError(f"Unsupported type for Field: {type(self._obj)}")
+        
+    @property
+    def mat_velocity_field(self):
+        return self._material_velocity_field
+
+    @mat_velocity_field.setter
+    def mat_velocity_field(self, new_value):
+        if isinstance(new_value, GridFunction) or isinstance(new_value, CoefficientFunction):
+            self._material_velocity_field.value = new_value
+        elif callable(new_value):
+            self._material_velocity_field.value = new_value
         else:
             raise TypeError(f"Unsupported type for Field: {type(self._obj)}")
 
