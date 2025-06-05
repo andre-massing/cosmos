@@ -93,8 +93,14 @@ def ComputeStabMC(mesh, gfu, params):
 
     J = specialcf.JacobianMatrix(mesh.dim, mesh.dim-1)
     area = sqrt(Det(J.trans*J))/2
-    length = sqrt(area/pi)
-    length1 = ComputeH(J, mesh.dim)
+    F = specialcf.JacobianMatrix(mesh.dim)
+    tau = specialcf.tangential(mesh.dim)
+    myh = Norm(F*tau)
+
+    if mesh.dim == 3:
+        length = area*2/myh
+    else:
+        length = myh
 
     A0 += params['stab']*length*InnerProduct(jump_dkappadn0,jump_detadn0)\
         *ds(element_boundary=True)
@@ -179,28 +185,6 @@ def ComputeModMC(mesh, gfu, params):
     F0.Assemble()
     gfu0.vec.data = A0.mat.Inverse(fes0.FreeDofs())*F0.vec
     gfu.vec.data = gfu0.components[0].vec.data
-
-def ComputeH(J, dim):
-
-    if dim == 3:
-        a = Norm(J[:,0])
-        b = Norm(J[:,1])
-        c = Norm(J[:,0] - J[:,1])
-
-        max = IfPos(IfPos(a-b, a, b) - c, IfPos(a-b, a, b), c)
-    else:
-        max = Norm(J)
-
-    return max
-
-def ComputeH2(J, t, dim):
-
-    if dim == 3:
-        max = Norm(J)
-    else:
-        max = Norm(J)
-
-    return max
 
 def ComputeError(mesh, u_h, u_ex):
 
