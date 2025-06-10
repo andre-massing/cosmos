@@ -129,7 +129,7 @@ class SaveError():
 
 class SaveSolution():
 
-    def __init__(self, filename = 'sol', folderpath = '.', sample_rate = 1, subdivision = 1):
+    def __init__(self, filename = 'sol', folderpath = '.', sample_rate = 1, subdivision = 0):
 
         self.filename = filename
         self.folderpath = folderpath

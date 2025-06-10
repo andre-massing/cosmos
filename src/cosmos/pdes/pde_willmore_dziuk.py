@@ -10,7 +10,8 @@ class WillmoreDziuk(BaseMC):
     def __init__(self, rhs = None, clamped_bnd = None, clamped_f = None,
                  domain:str = '.*', name = ['displacement', 'mean_curvature'],
                  sp_curv = None, kappa = None, mc_autoupdate = False, mc0 = None,
-                 time_scheme = BDF1(), ale = False, postprocess = False):
+                 time_scheme = BDF1(), ale = False, postprocess = False,
+                 volume_preserving = False):
 
         super().__init__()
 
@@ -32,6 +33,7 @@ class WillmoreDziuk(BaseMC):
         self.time_scheme = time_scheme
         self.ale = ale
         self.postprocess = postprocess
+        self.vp = volume_preserving
 
         self.nfields = 2
         self.displacement = self.gfu
@@ -154,6 +156,34 @@ class WillmoreDziuk(BaseMC):
                 rhs += InnerProduct(self.clamped_f(), test[1]) * gfF * ds_el_lumped
             else:
                 rhs += InnerProduct(nE, test[1]) * gfF * ds_el_lumped
+
+        if self.vp:
+
+            Q = NumberSpace(solverdata.mesh)
+            lam, mu = Q.TnT()
+            lambda_h = GridFunction(Q)
+            A = BilinearForm(Q)
+            A += InnerProduct(self.mean_curvature, self.mean_curvature)*lam*mu*ds_lumped
+
+            F = LinearForm(Q)
+            if self.rhs():
+                F += -InnerProduct(self.rhs(), self.mean_curvature)*mu*ds_lumped
+            F += -InnerProduct(grad(self.Y_h).Trace(), grad(self.mean_curvature).Trace())*mu*ds(deformation = solverdata.ale.deformation)
+            if solverdata.mesh.dim == 3:
+                F += -InnerProduct(Trace(grad(self.Y_h).Trace()),Trace(grad(self.mean_curvature).Trace()))*mu*ds(deformation = solverdata.ale.deformation)
+                F += 2*InnerProduct(grad(self.Y_h).Trace().trans, D_s(self.mean_curvature, Ps)*Ps.trans)*mu*ds(deformation = solverdata.ale.deformation)
+                F += self.kappa()*InnerProduct(self.sp_curv()*self.mean_curvature, grad(self.mean_curvature).Trace().trans*ns)*mu*ds_lumped
+                F += 0.5*InnerProduct(self.kappa()*(Norm(self.mean_curvature - self.sp_curv()*ns)**2)*Ps,grad(self.mean_curvature).Trace())*mu*ds_lumped
+                F += -InnerProduct(InnerProduct(self.Y_h, self.mean_curvature)*Ps,grad(self.mean_curvature).Trace())*mu*ds_lumped
+            elif solverdata.mesh.dim == 2 :
+                F += -InnerProduct(InnerProduct(self.Y_h, self.mean_curvature)*Ps,grad(self.mean_curvature).Trace())*mu*ds_lumped
+
+            A.Assemble()
+            F.Assemble()
+
+            lambda_h.vec.data = A.mat.Inverse(freedofs = Q.FreeDofs())*F.vec
+
+            rhs += InnerProduct(lambda_h*self.mean_curvature, test[0])*ds_lumped
 
         return rhs
 
