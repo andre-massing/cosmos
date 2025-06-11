@@ -157,34 +157,6 @@ class WillmoreDziuk(BaseMC):
             else:
                 rhs += InnerProduct(nE, test[1]) * gfF * ds_el_lumped
 
-        if self.vp:
-
-            Q = NumberSpace(solverdata.mesh)
-            lam, mu = Q.TnT()
-            lambda_h = GridFunction(Q)
-            A = BilinearForm(Q)
-            A += InnerProduct(self.mean_curvature, self.mean_curvature)*lam*mu*ds_lumped
-
-            F = LinearForm(Q)
-            if self.rhs():
-                F += -InnerProduct(self.rhs(), self.mean_curvature)*mu*ds_lumped
-            F += -InnerProduct(grad(self.Y_h).Trace(), grad(self.mean_curvature).Trace())*mu*ds(deformation = solverdata.ale.deformation)
-            if solverdata.mesh.dim == 3:
-                F += -InnerProduct(Trace(grad(self.Y_h).Trace()),Trace(grad(self.mean_curvature).Trace()))*mu*ds(deformation = solverdata.ale.deformation)
-                F += 2*InnerProduct(grad(self.Y_h).Trace().trans, D_s(self.mean_curvature, Ps)*Ps.trans)*mu*ds(deformation = solverdata.ale.deformation)
-                F += self.kappa()*InnerProduct(self.sp_curv()*self.mean_curvature, grad(self.mean_curvature).Trace().trans*ns)*mu*ds_lumped
-                F += 0.5*InnerProduct(self.kappa()*(Norm(self.mean_curvature - self.sp_curv()*ns)**2)*Ps,grad(self.mean_curvature).Trace())*mu*ds_lumped
-                F += -InnerProduct(InnerProduct(self.Y_h, self.mean_curvature)*Ps,grad(self.mean_curvature).Trace())*mu*ds_lumped
-            elif solverdata.mesh.dim == 2 :
-                F += -InnerProduct(InnerProduct(self.Y_h, self.mean_curvature)*Ps,grad(self.mean_curvature).Trace())*mu*ds_lumped
-
-            A.Assemble()
-            F.Assemble()
-
-            lambda_h.vec.data = A.mat.Inverse(freedofs = Q.FreeDofs())*F.vec
-
-            rhs += InnerProduct(lambda_h*self.mean_curvature, test[0])*ds_lumped
-
         return rhs
 
     def GetMass(self, solverdata, trial, test):
