@@ -10,8 +10,7 @@ class WillmoreDziuk(BaseMC):
     def __init__(self, rhs = None, clamped_bnd = None, clamped_f = None,
                  domain:str = '.*', name = ['displacement', 'mean_curvature'],
                  sp_curv = None, kappa = None, mc_autoupdate = False, mc0 = None,
-                 time_scheme = BDF1(), ale = False, postprocess = False,
-                 volume_preserving = False):
+                 time_scheme = BDF1(), ale = False, postprocess = False):
 
         super().__init__()
 
@@ -33,7 +32,6 @@ class WillmoreDziuk(BaseMC):
         self.time_scheme = time_scheme
         self.ale = ale
         self.postprocess = postprocess
-        self.vp = volume_preserving
 
         self.nfields = 2
         self.displacement = self.gfu
@@ -48,16 +46,16 @@ class WillmoreDziuk(BaseMC):
         self.domain = solverdata.mesh.Boundaries(self.domain)
         
         if self.clamped_bnd:
-            self.V1 = Compress(VectorH1(solverdata.mesh, order=self.fes_order,
+            self.V1 = VectorH1(solverdata.mesh, order=self.fes_order,
                         definedon=self.domain,
-                        dirichlet_bbnd = solverdata.mesh.BBoundaries(self.clamped_bnd)))
+                        dirichlet_bbnd = solverdata.mesh.BBoundaries(self.clamped_bnd))
         else:
-            self.V1 = Compress(VectorH1(solverdata.mesh, order=self.fes_order,
-                        definedon=self.domain))
-        self.V2 = Compress(VectorH1(solverdata.mesh, order=self.fes_order,
-                    definedon=self.domain))
+            self.V1 = VectorH1(solverdata.mesh, order=self.fes_order,
+                        definedon=self.domain)
+        self.V2 = VectorH1(solverdata.mesh, order=self.fes_order,
+                    definedon=self.domain)
             
-        self.fes = self.V1*self.V2
+        self.fes = CompressCompound(self.V1*self.V2)
 
         self.trial = self.fes.TrialFunction()
         self.test = self.fes.TestFunction()
@@ -67,23 +65,27 @@ class WillmoreDziuk(BaseMC):
         self.displacement, self.Y_h = self.gfu.components 
         self.mean_curvature = GridFunction(self.V2)
         if not self.mc0():
-            ComputeMC(solverdata, self.mean_curvature, self.clamped_bnd)
+            ComputeMC(solverdata, self.mean_curvature, self.clamped_bnd, self.clamped_f)
         else:
-            self.mean_curvature.Set(self.mc0(), definedon = self.domain)
+            self.mean_curvature.Set(self.mc0(), dual = True, definedon = self.domain)
         ns = specialcf.normal(solverdata.mesh.dim)
-        self.Y_h.Set(self.kappa()*(self.mean_curvature - self.sp_curv()*ns), definedon = self.domain)
+        self.n_h = GridFunction(self.V2)
+        self.n_aux = GridFunction(self.V2)
+        self.n_aux.Set(ns, dual = True, definedon=self.domain)
+        self.n_h.Set(Normalize(self.n_aux), dual = True, definedon=self.domain)
+        self.Y_h.Set(self.kappa()*(self.mean_curvature - self.sp_curv()*self.n_h), dual = True, definedon = self.domain)
             
         V_vol = VectorH1(solverdata.mesh, order = self.fes_order)
         self.gfu_save = list(GridFunction(CompressCompound(V_vol*V_vol)).components)
         self.dX_save, self.kappa_save = self.gfu_save[0], self.gfu_save[1]
-        self.dX_save.Set(self.displacement, definedon = self.domain)
-        self.kappa_save.Set(self.mean_curvature, definedon = self.domain)
+        self.dX_save.Set(self.displacement, dual = True, definedon = self.domain)
+        self.kappa_save.Set(self.mean_curvature, dual = True, definedon = self.domain)
 
         self.X0 = GridFunction(self.V1)
         if solverdata.mesh.dim == 2:
-            self.X0.Set(CF((x,y)), definedon=self.domain)
+            self.X0.Set(CF((x,y)), dual = True, definedon=self.domain)
         elif solverdata.mesh.dim == 3:
-            self.X0.Set(CF((x, y, z)), definedon=self.domain)
+            self.X0.Set(CF((x, y, z)), dual = True, definedon=self.domain)
         self.displacement_tot = GridFunction(self.V1)
 
         for save in self.save_error:
@@ -172,56 +174,110 @@ class WillmoreDziuk(BaseMC):
             self.prev_gfu.pop(0)
 
         ns = specialcf.normal(solverdata.mesh.dim)
+        solverdata.mesh.SetDeformation(solverdata.ale.deformation)
+        self.n_aux.Set(ns, dual = True, definedon=self.domain)
+        self.n_h.Set(Normalize(self.n_aux), dual = True, definedon=self.domain) 
         if self.mc_autoupdate:
-            solverdata.mesh.SetDeformation(solverdata.ale.deformation)
-            ComputeMC(solverdata, self.mean_curvature, self.clamped_bnd)
-            self.Y_h.Set(self.kappa()*(self.mean_curvature - self.sp_curv()*ns), definedon = self.domain)
-            solverdata.mesh.UnsetDeformation()
+            ComputeMC(solverdata, self.mean_curvature, self.clamped_bnd, self.clamped_f)
+            self.Y_h.Set(self.kappa()*(self.mean_curvature - self.sp_curv()*self.n_h), dual = True, definedon = self.domain)
+        solverdata.mesh.UnsetDeformation()
     
     def PostProcess(self, solverdata):
 
         super().PostProcess(solverdata)
 
         ns = specialcf.normal(solverdata.mesh.dim)
-        solverdata.mesh.SetDeformation(solverdata.ale.deformation)
-        self.mean_curvature.Set(1/self.kappa()*self.Y_h + self.sp_curv()*ns, definedon = self.domain)
-        solverdata.mesh.UnsetDeformation()
-        self.displacement_tot.Set(self.displacement+solverdata.ale.deformation_old, definedon = self.domain)
+        Ps = Id(solverdata.mesh.dim) - OuterProduct(ns, ns)
+        self.displacement_tot.Set(self.displacement+solverdata.ale.deformation_old, dual = True, definedon = self.domain)
+
+        # if self.postprocess:
+
+        #     ns = specialcf.normal(solverdata.mesh.dim)
+        #     n_h = GridFunction(self.V2)
+        #     solverdata.mesh.SetDeformation(self.displacement_tot)
+        #     n_h.Set(ns, definedon=self.domain)
+        #     solverdata.mesh.UnsetDeformation()
+
+        #     V3 = Compress(H1(solverdata.mesh, order=self.fes_order,
+        #                 definedon=self.domain))
+            
+        #     fes = self.V1*V3
+        #     w_h = GridFunction(fes)
+        #     A = BilinearForm(fes)
+        #     (w, kappa), (eta, mu) = fes.TnT()
+        #     A += InnerProduct(grad(w).Trace(), grad(eta).Trace())*ds
+        #     A += -1*InnerProduct(kappa*n_h, eta)*ds
+        #     A += InnerProduct(w, mu*n_h)*ds
+        #     F = LinearForm(fes)
+        #     F += -1*InnerProduct(grad(self.X0).Trace(), grad(eta).Trace())*ds
+        #     F += -1*InnerProduct(grad(self.displacement_tot).Trace(), grad(eta).Trace())*ds
+        #     A.Assemble()
+        #     F.Assemble()
+
+        #     w_h.vec.data = A.mat.Inverse(freedofs = fes.FreeDofs())*F.vec
+        #     self.displacement.vec.data += w_h.components[0].vec.data
+        #     self.displacement_tot.vec.data += w_h.components[0].vec.data
 
         if self.postprocess:
 
-            ns = specialcf.normal(solverdata.mesh.dim)
-            n_h = GridFunction(self.V2)
             solverdata.mesh.SetDeformation(self.displacement_tot)
-            n_h.Set(ns, definedon=self.domain)
+            self.n_aux.Set(ns, dual = True, definedon=self.domain)
+            self.n_h.Set(Normalize(self.n_aux), dual = True, definedon=self.domain)
             solverdata.mesh.UnsetDeformation()
 
             V3 = Compress(H1(solverdata.mesh, order=self.fes_order,
-                        definedon=self.domain))
-            
+                            definedon=self.domain))
             fes = self.V1*V3
             w_h = GridFunction(fes)
             A = BilinearForm(fes)
-            (w, kappa), (eta, mu) = fes.TnT()
-            A += InnerProduct(grad(w).Trace(), grad(eta).Trace())*ds
-            A += -1*InnerProduct(kappa*n_h, eta)*ds
-            A += InnerProduct(w, mu*n_h)*ds
             F = LinearForm(fes)
-            F += -1*InnerProduct(grad(self.X0).Trace(), grad(eta).Trace())*ds
-            F += -1*InnerProduct(grad(self.displacement_tot).Trace(), grad(eta).Trace())*ds
+            (w, kappa), (eta, mu) = fes.TnT()
+
+            switch = 'ref'
+
+            if switch == 'ref':
+
+                A += InnerProduct(grad(w).Trace(), grad(eta).Trace())*ds
+                A += -1*InnerProduct(kappa*self.n_h, eta)*ds
+                A += -1*InnerProduct(w, mu*self.n_h)*ds
+                F += -1*InnerProduct(Ps, grad(eta).Trace())*ds
+                F += -1*InnerProduct(grad(self.displacement_tot).Trace(), grad(eta).Trace())*ds
+
+            else:
+                
+                A += InnerProduct(grad(w).Trace(), grad(eta).Trace())*ds(deformation = solverdata.ale.deformation)
+                A += -1*InnerProduct(kappa*self.n_h, eta)*ds(deformation = solverdata.ale.deformation)
+                A += -1*InnerProduct(w, mu*self.n_h)*ds(deformation = solverdata.ale.deformation)
+                F += -1*InnerProduct(Ps, grad(eta).Trace())*ds(deformation = solverdata.ale.deformation)
+                F += -1*InnerProduct(grad(self.displacement).Trace(), grad(eta).Trace())*ds(deformation = solverdata.ale.deformation)
+
             A.Assemble()
             F.Assemble()
 
             w_h.vec.data = A.mat.Inverse(freedofs = fes.FreeDofs())*F.vec
             self.displacement.vec.data += w_h.components[0].vec.data
             self.displacement_tot.vec.data += w_h.components[0].vec.data
+
+            solverdata.mesh.SetDeformation(self.displacement_tot)
+            self.n_aux.Set(ns, dual = True, definedon=self.domain)
+            self.n_h.Set(Normalize(self.n_aux), dual = True, definedon=self.domain)
+            ComputeMC(solverdata, self.mean_curvature, self.clamped_bnd, self.clamped_f)
+            self.Y_h.Set(self.kappa()*(self.mean_curvature - self.sp_curv()*self.n_h), dual = True, definedon = self.domain)
+            solverdata.mesh.UnsetDeformation()
+
+        else:
+
+            solverdata.mesh.SetDeformation(solverdata.ale.deformation)
+            self.energy = Integrate(0.5/self.kappa()*Norm(self.Y_h)**2, solverdata.mesh, VOL_or_BND=BND)
+            self.mean_curvature.Set(1/self.kappa()*self.Y_h + self.sp_curv()*self.n_h, dual = True, definedon = self.domain)
+            solverdata.mesh.UnsetDeformation()
         
     def Update(self, solverdata):
 
         solverdata.mesh.SetDeformation(solverdata.ale.deformation)
 
-        self.dX_save.Set(self.displacement, definedon = self.domain)
-        self.kappa_save.Set(self.mean_curvature, definedon = self.domain)
+        self.dX_save.Set(self.displacement, dual = True, definedon = self.domain)
+        self.kappa_save.Set(self.mean_curvature, dual = True, definedon = self.domain)
 
         for save in self.save_error:
             save.Save(solverdata, self)
@@ -230,6 +286,23 @@ class WillmoreDziuk(BaseMC):
             save.Save(solverdata, self)
 
         solverdata.mesh.UnsetDeformation()
+
+    def GetEnergy(self, solverdata):
+
+        if solverdata.mesh.dim == 2:
+            ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
+            ds_lumped = ds(intrules = { SEGM : ir }, deformation = solverdata.ale.deformation)
+        elif solverdata.mesh.dim == 3:
+            ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
+            ds_lumped = ds(intrules = { TRIG : ir }, deformation = solverdata.ale.deformation)
+
+        ns = specialcf.normal(solverdata.mesh.dim)
+        a = BilinearForm(self.V2)
+        u = self.V2.TrialFunction()
+        a += Variation(0.5*self.kappa()*Norm((u - self.sp_curv()*ns))**2*ds_lumped)
+        energy = a.Energy(self.mean_curvature.vec)
+
+        return energy
 
     def get_error(self, solverdata, ex_sol, norm):
 
@@ -246,8 +319,8 @@ class WillmoreDziuk(BaseMC):
     
     def set_solution(self, value):
 
-        self.displacement.Set(value[0], definedon=self.domain)
-        self.mean_curvature.Set(value[1], definedon=self.domain)
+        self.displacement.Set(value[0], dual = True, definedon=self.domain)
+        self.mean_curvature.Set(value[1], dual = True, definedon=self.domain)
 
     def get_solution(self):
 
@@ -269,7 +342,7 @@ class WillmoreDziuk(BaseMC):
 
         # print(60*'-', '\n')
 
-def ComputeMC(solverdata, gfu, clamped_bnd=None):
+def ComputeMC(solverdata, gfu, clamped_bnd=None, clamped_f = None):
 
     if solverdata.mesh.dim == 2:
         ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
@@ -282,10 +355,13 @@ def ComputeMC(solverdata, gfu, clamped_bnd=None):
 
     ns = specialcf.normal(solverdata.mesh.dim)
     tE = specialcf.tangential(solverdata.mesh.dim)
-    if solverdata.mesh.dim == 2:
-        nE = tE
+    if clamped_f():
+        nE = clamped_f()
     else:
-        nE = Cross(ns, tE)
+        if solverdata.mesh.dim == 2:
+            nE = tE
+        else:
+            nE = Cross(ns, tE)
     Ps = Id(solverdata.mesh.dim) - OuterProduct(ns, ns)
 
     fes0 = gfu.space

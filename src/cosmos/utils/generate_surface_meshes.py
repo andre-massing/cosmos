@@ -27,6 +27,7 @@ __all__ = [
     'generate_torus',
     'generate_half_torus', 
     'generate_box',
+    'generate_sigar',
     'import_stl_mesh'
 ]
 
@@ -136,6 +137,26 @@ def generate_sphere(maxh=0.1, order_g = 1, center=csg.Pnt(0,0,0), R = 1.0, geo_o
     geo          = csg.CSGeometry()
     sphere       = csg.Sphere(center, R)
     geo.Add(sphere)
+    
+    if geo_only:
+        return geo
+    else:
+        mesh = Mesh(geo.GenerateMesh(maxh=maxh, optsteps2d=3, perfstepsend=MeshingStep.MESHSURFACE))
+        mesh.Curve(order_g)
+        return mesh, geo
+    
+'''
+Sigar
+NOTE: no vol_or_bnd option here, since explicitly requesting for a surface
+'''
+def generate_sigar(maxh=0.1, order_g = 1, center=csg.Pnt(0,0,0), r = 1.0, h= 2, geo_only = False):
+
+    cyl = occ.Cylinder((0,-h/2,0), occ.Y, r=r, h=h)
+    sphere1 = occ.Sphere( (0,h/2,0), r)
+    sphere2 = occ.Sphere( (0,-h/2,0), r)
+    fused = cyl + sphere1 + sphere2
+
+    geo = occ.OCCGeometry(fused)
     
     if geo_only:
         return geo

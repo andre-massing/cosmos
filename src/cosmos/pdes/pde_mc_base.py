@@ -16,10 +16,14 @@ class BaseMC(BasePDE):
 
     def SystemSolve(self, solverdata):
 
+        import time
+
         if isinstance(self.time_scheme, CN):
             raise Exception('Crack-Nicholson scheme not implemented for this solver')
         
         if len(solverdata.prev_def) == 1 or isinstance(self.time_scheme, BDF1):
+
+            t1 = time.time()
 
             ale_curr = ale(solverdata)
             ale_curr.deformation.vec.data = solverdata.ale.deformation.vec.data
@@ -28,6 +32,8 @@ class BaseMC(BasePDE):
             solverdata.ale.deformation.vec.data = solverdata.prev_def[-1].data
             solverdata.ale.velocity.vec.data = solverdata.prev_vel[-1].data
 
+            t2 = time.time()
+
             M = BilinearForm(self.fes)
             M += self.GetMass(solverdata, self.get_trial(), self.get_test())
             M.Assemble()
@@ -35,10 +41,14 @@ class BaseMC(BasePDE):
 
             solverdata.t.Set(solverdata.t.Get() + solverdata.dt.Get())
 
+            t3 = time.time()
+
             A = BilinearForm(self.fes)
             F = LinearForm(self.fes)
             F += self.GetRHS(solverdata, self.get_test())
             F.Assemble()
+
+            t4 = time.time()
 
             A += self.GetLHS(solverdata, self.get_trial(), self.get_test())
             res = F.vec
@@ -62,7 +72,7 @@ class BaseMC(BasePDE):
 
             solverdata.t.Set(solverdata.t.Get() + solverdata.dt.Get())
 
-            A = BilinearForm(self.fes)
+            A = BilinearForm(self.fes, condense = True)
             F = LinearForm(self.fes)
             F += self.GetRHS(solverdata, self.get_test())
             F.Assemble()
@@ -80,7 +90,18 @@ class BaseMC(BasePDE):
             raise Exception('Time integration not known for this solver')
         
         A.Assemble()
+
+        t5 = time.time()
+
         self.gfu.vec.data = A.mat.Inverse(freedofs = self.fes.FreeDofs())*res
+
+        t6 = time.time()
+
+        print('ale update:', t2-t1)
+        print('mass assembly: ', t3-t2)
+        print('rhs assembly: ', t4-t3)
+        print('lhs assembly: ', t5-t4)
+        print('solution: ', t6-t5)
 
         solverdata.t.Set(solverdata.t.Get() - solverdata.dt.Get())
         solverdata.ale.deformation.vec.data = ale_curr.deformation.vec.data

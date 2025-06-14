@@ -4,6 +4,7 @@ from cosmos.solvers.tools import print_mesh_info
 from collections import Counter
 from tqdm import tqdm
 from cosmos.pdes.ale import ale
+import time
 
 class BaseSolver():
 

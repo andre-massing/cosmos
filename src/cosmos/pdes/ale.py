@@ -12,25 +12,38 @@ class ale:
         self.dim = self.solverdata.mesh.dim
         if self.solverdata.mesh.ne == 0:
             self.domain = self.solverdata.mesh.Boundaries('.*')
+            V1 = VectorH1(self.solverdata.mesh, order=self.solverdata.mesh.GetCurveOrder(),
+                    definedon=self.solverdata.mesh.Boundaries('.*'))
+            V2 = V1
         else:
             self.domain = self.solverdata.mesh.Materials('.*')
-
-        self.fes = VectorH1(self.solverdata.mesh, order=self.solverdata.mesh.GetCurveOrder(),
-                    definedon=self.domain)
+            V1 = VectorH1(self.solverdata.mesh, order=self.solverdata.mesh.GetCurveOrder(),
+                    definedon=self.solverdata.mesh.Materials('.*'))
+            V2 = VectorH1(self.solverdata.mesh, order=self.solverdata.mesh.GetCurveOrder(),
+                    definedon=self.solverdata.mesh.Boundaries('.*'))
+            V3 = H1(self.solverdata.mesh, order=self.solverdata.mesh.GetCurveOrder(),
+                    definedon=self.solverdata.mesh.Boundaries('.*'))
         
-        self.deformation = GridFunction(self.fes)
-        self.deformation_old = GridFunction(self.fes)
-        self.velocity = GridFunction(self.fes)
-        self.material_velocity = GridFunction(self.fes)
+        
+        self.deformation = GridFunction(V1)
+        self.deformation_old = GridFunction(V1)
+        self.velocity = GridFunction(V1)
+        self.material_velocity = GridFunction(V1)
         self._deformation_field = Field(CF((0,)*self.dim))
         self._velocity_field = Field(CF((0,)*self.dim))
         self._material_velocity_field = Field(CF((0,)*self.dim))
 
+        self.X0 = GridFunction(V1)
+        self.n_h = GridFunction(V2)
+        self.H_h = GridFunction(V2)
+        self.Hn_h = GridFunction(V2)
+        self.W_h = GridFunction(V2)
+
     def update_ale(self):
         self.solverdata.mesh.SetDeformation(self.deformation_old)
-        self.deformation.Set(self._deformation_field() + self.deformation_old, definedon = self.domain)
-        self.velocity.Set(self._velocity_field(), definedon = self.domain)
-        self.material_velocity.Set(self._material_velocity_field(), definedon = self.domain)
+        self.deformation.Set(self._deformation_field() + self.deformation_old, dual = True, definedon = self.domain)
+        self.velocity.Set(self._velocity_field(), dual = True, definedon = self.domain)
+        self.material_velocity.Set(self._material_velocity_field(), dual = True, definedon = self.domain)
         self.solverdata.mesh.UnsetDeformation()
 
     @property
@@ -71,6 +84,40 @@ class ale:
             self._material_velocity_field.value = new_value
         else:
             raise TypeError(f"Unsupported type for Field: {type(self._obj)}")
+        
+def ComputeW(solverdata):
+
+    mesh = solverdata.mesh
+    order = solverdata.mesh.GetCurveOrder()
+
+    n = specialcf.normal(3)
+    t = specialcf.tangential(3)
+    mu = Cross(n,t)
+    
+    # Average normal vector
+    gfF = GridFunction(VectorFacetSurface(mesh,order=order-1))
+    gfF.Set(n, dual=True, definedon=mesh.Boundaries(".*"))
+    
+    fes = HDivDivSurface(mesh,order=order-1)
+    sigma,tau = fes.TnT()
+    sigma,tau = sigma.Trace(),tau.Trace()
+    
+    a = BilinearForm(fes, symmetric=True)
+    a += InnerProduct(sigma,tau)*ds
+    
+    # Grad(n) = specialcf.Weingarten(3)
+    f = LinearForm(fes)
+    f += -1*(InnerProduct(Grad(n),tau))*ds \
+            + -1*((pi/2-acos(Normalize(gfF)*mu))*tau*mu*mu)*ds(element_boundary=True)
+    
+    gflift = GridFunction(fes)
+    
+    with TaskManager():
+        a.Assemble()
+        f.Assemble()
+        gflift.vec.data = a.mat.Inverse(fes.FreeDofs(),inverse="sparsecholesky")*f.vec
+        
+    return gflift
 
 class alePDE(BasePDE):
 
