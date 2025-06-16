@@ -109,13 +109,7 @@ class AdBndADR(BaseADR):
         else:
             self.facet_space = FacetSurface(solverdata.mesh, order = 0)
 
-        dim = solverdata.mesh.dim
-        J = specialcf.JacobianMatrix(dim, dim-1) 
-        if dim == 3:
-            area = sqrt(Det(J.trans*J))/2
-            self.h_f = sqrt(area/pi)
-        elif dim == 2:
-            self.h_f = Norm(J[:, 0])
+        self.h_f = specialcf.mesh_size
 
     def GetLHS(self, solverdata, trial, test):
 
