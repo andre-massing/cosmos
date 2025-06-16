@@ -97,12 +97,6 @@ class BaseMC(BasePDE):
 
         t6 = time.time()
 
-        print('ale update:', t2-t1)
-        print('mass assembly: ', t3-t2)
-        print('rhs assembly: ', t4-t3)
-        print('lhs assembly: ', t5-t4)
-        print('solution: ', t6-t5)
-
         solverdata.t.Set(solverdata.t.Get() - solverdata.dt.Get())
         solverdata.ale.deformation.vec.data = ale_curr.deformation.vec.data
         solverdata.ale.velocity.vec.data = ale_curr.velocity.vec.data

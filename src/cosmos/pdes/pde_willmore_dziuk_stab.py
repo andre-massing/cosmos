@@ -106,15 +106,16 @@ class WillmoreDziukStab(BaseMC):
         for save in self.save_solution:
             save.Initialize(solverdata, self)
 
+        h = specialcf.mesh_size
         J = specialcf.JacobianMatrix(solverdata.mesh.dim, solverdata.mesh.dim-1)
         area = sqrt(Det(J.trans*J))/2
         F = specialcf.JacobianMatrix(solverdata.mesh.dim)
         tau = specialcf.tangential(solverdata.mesh.dim)
         myh = Norm(F*tau)
         if solverdata.mesh.dim == 3:
-            self.h_f = area*2/myh
+            self.h_f = h
         else:
-            self.h_f = myh
+            self.h_f = h
 
         tE = specialcf.tangential(solverdata.mesh.dim)
         ns = specialcf.normal(solverdata.mesh.dim)
@@ -428,11 +429,12 @@ def ComputeStabMC(solverdata, gfu, clamped_bnd, stab, domain, clamped_f = None):
     Ps = Id(solverdata.mesh.dim) - OuterProduct(ns, ns)
     dim = solverdata.mesh.dim
     J = specialcf.JacobianMatrix(dim, dim-1) 
+    h = specialcf.mesh_size
     if dim == 3:
         area = sqrt(Det(J.trans*J))/2
-        h_f = sqrt(area/pi)
+        h_f = h
     elif dim == 2:
-        h_f = Norm(J[:, 0])
+        h_f = h
 
     fes0 = gfu.space*dV
     gfu0 = GridFunction(fes0)

@@ -125,7 +125,7 @@ class WillmoreDziuk(BaseMC):
             ds_el_lumped = ds(element_boundary=True, intrules = { TRIG : ir })
 
         rhs = -InnerProduct(Ps, grad(test[1]).Trace())*ds(deformation = solverdata.ale.deformation)
-        rhs += -self.sp_curv()*InnerProduct(ns, test[1])*ds_lumped
+        rhs += -self.sp_curv()*InnerProduct(self.n_h, test[1])*ds_lumped
         if self.rhs():
             rhs += InnerProduct(self.rhs(), test[0])*ds_lumped
 
