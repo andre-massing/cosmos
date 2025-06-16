@@ -14,13 +14,13 @@ class BaseMC(BasePDE):
         t1 = time.time()
         self.PreProcess(solverdata)
         t2 = time.time()
-        print('Preprocess time: ', t2-t1)
+        # print('Preprocess time: ', t2-t1)
         self.SystemSolve(solverdata)
         t3 = time.time()
-        print('System solve time: ', t3-t2)
+        # print('System solve time: ', t3-t2)
         self.PostProcess(solverdata)
         t4 = time.time()
-        print('Postprocess time: ', t4-t3)
+        # print('Postprocess time: ', t4-t3)
 
     def SystemSolve(self, solverdata):
 
@@ -41,17 +41,17 @@ class BaseMC(BasePDE):
         t1 = time.time()
         self.A.Assemble()
         t2 = time.time()
-        print('Assembly of A: ', t2-t1)
+        # print('Assembly of A: ', t2-t1)
         self.F.Assemble()
         t3 = time.time()
-        print('Assembly of F: ', t3-t2)
+        # print('Assembly of F: ', t3-t2)
         self.invA.Update()
         t4 = time.time()
-        print('Update of invA: ', t4-t3)
+        # print('Update of invA: ', t4-t3)
 
         self.gfu.vec.data = self.invA*self.F.vec
         t5 = time.time()
-        print('Solution: ', t5-t4)
+        # print('Solution: ', t5-t4)
 
         solverdata.t.Set(solverdata.t.Get() - solverdata.dt.Get())
         solverdata.ale.deformation.vec.data = ale_curr.deformation.vec.data

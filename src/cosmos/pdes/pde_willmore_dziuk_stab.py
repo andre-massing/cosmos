@@ -3,7 +3,7 @@ from cosmos.pdes.pde_mc_base import BaseMC
 from cosmos.pdes.pde_tools import compute_error
 import numpy as np
 from cosmos.solvers.fields import Field
-from cosmos.solvers.time_schemes import BDF1, BDF2, CN, Steady
+from cosmos.solvers.time_schemes import BDF1
 
 class WillmoreDziukStab(BaseMC):
 
@@ -31,7 +31,6 @@ class WillmoreDziukStab(BaseMC):
         self.mc0 = Field(mc0)
         self.stab = stab
         self.time_scheme = time_scheme
-        self.ale = ale
         self.postprocess = postprocess
 
         self.nfields = 3
@@ -39,7 +38,7 @@ class WillmoreDziukStab(BaseMC):
 
     def Initialize(self, solverdata):
 
-        true_compile = True
+        true_compile = False
 
         if self.initialized:
             return
@@ -70,16 +69,6 @@ class WillmoreDziukStab(BaseMC):
             definedon=self.domain)
         
         h = specialcf.mesh_size
-        J = specialcf.JacobianMatrix(solverdata.mesh.dim, solverdata.mesh.dim-1)
-        area = sqrt(Det(J.trans*J))/2
-        F = specialcf.JacobianMatrix(solverdata.mesh.dim)
-        tau = specialcf.tangential(solverdata.mesh.dim)
-        myh = Norm(F*tau)
-        if solverdata.mesh.dim == 3:
-            self.h_f = h
-        else:
-            self.h_f = h
-
         tE = specialcf.tangential(solverdata.mesh.dim)
         ns = specialcf.normal(solverdata.mesh.dim)
         Ps = Id(solverdata.mesh.dim) - OuterProduct(ns, ns)
@@ -122,7 +111,7 @@ class WillmoreDziukStab(BaseMC):
             gfFone.Set(1, definedon=self.domain, dual = True)
             gfFBB = GridFunction(facet_space)
             gfFBB.Set(1, definedon=solverdata.mesh.BBoundaries(self.clamped_bnd), dual = True)
-            self.A0 += self.stab*(gfFone-gfFBB)*self.h_f*InnerProduct(jump_dkappadn0,jump_detadn0)\
+            self.A0 += self.stab*(gfFone-gfFBB)*h*InnerProduct(jump_dkappadn0,jump_detadn0)\
                     *ds(element_boundary=True)
             if solverdata.mesh.dim == 2:
                 self.A0 +=  gfFBB*InnerProduct(dkappa0, deta0)\
@@ -132,7 +121,7 @@ class WillmoreDziukStab(BaseMC):
                 self.A0 +=  gfFBB*dkappa0.Trace()*deta0.Trace()*ds(element_boundary=True)
                 self.F0 += InnerProduct(nE, eta0) * gfFBB * ds_el_lumped
         else:
-            self.A0 += (self.stab*self.h_f*InnerProduct(jump_dkappadn0,jump_detadn0)).Compile(true_compile, True)\
+            self.A0 += (self.stab*h*InnerProduct(jump_dkappadn0,jump_detadn0)).Compile(true_compile, True)\
                     *ds(element_boundary=True)
             
         self.A0.Assemble()
@@ -195,7 +184,7 @@ class WillmoreDziukStab(BaseMC):
         self.F = LinearForm(self.fes)
 
         self.F += -InnerProduct(Ps, grad(self.test[1]).Trace())*ds(deformation = solverdata.ale.deformation)
-        self.F += -self.gf_sp_curv*InnerProduct(ns, self.test[1])*ds_lumped
+        self.F += -self.gf_sp_curv*InnerProduct(self.n_h, self.test[1])*ds_lumped
         self.F += InnerProduct(self.gf_rhs, self.test[0])*ds_lumped
 
         def D_s(chi, Ps):
@@ -211,7 +200,7 @@ class WillmoreDziukStab(BaseMC):
             self.F += InnerProduct(InnerProduct(self.Y_h, self.mean_curvature)*Ps,grad(self.test[0]).Trace())*ds_lumped
 
         if self.clamped_bnd:
-            self.A += (self.stab*(gfFone - gfFBB)*self.h_f*InnerProduct(jump_dkappadn,jump_detadn)).Compile(true_compile, True)\
+            self.A += (self.stab*(gfFone - gfFBB)*h*InnerProduct(jump_dkappadn,jump_detadn)).Compile(true_compile, True)\
             *ds(element_boundary=True, deformation = solverdata.ale.deformation)
             if solverdata.mesh.dim == 2:
                 self.A +=  (gfFBB*InnerProduct(self.trial[2],self.test[2])).Compile(true_compile, True)\
@@ -223,7 +212,7 @@ class WillmoreDziukStab(BaseMC):
             else:
                 self.F += InnerProduct(nE, self.test[1]) * gfFBB * ds_el_lumped
         else:
-            self.A += (self.stab*self.h_f*InnerProduct(jump_dkappadn,jump_detadn)).Compile(true_compile, True)\
+            self.A += (self.stab*h*InnerProduct(jump_dkappadn,jump_detadn)).Compile(true_compile, True)\
             *ds(element_boundary=True, deformation = solverdata.ale.deformation)
 
         self.A.Assemble()
@@ -265,9 +254,8 @@ class WillmoreDziukStab(BaseMC):
     
     def PreProcess(self, solverdata):
 
-        self.prev_gfu.append(self.gfu.vec.Copy())      
-        if len(self.prev_gfu)>6:
-            self.prev_gfu.pop(0)
+        super().PreProcess(solverdata)
+        self.UpdateParams(solverdata)
     
     def PostProcess(self, solverdata):
 
@@ -275,7 +263,7 @@ class WillmoreDziukStab(BaseMC):
 
         ns = specialcf.normal(solverdata.mesh.dim)
         Ps = Id(solverdata.mesh.dim) - OuterProduct(ns, ns)
-        self.displacement_tot.Set(self.displacement+solverdata.ale.deformation_old, dual = True, definedon = self.domain)
+        self.displacement_tot.Set(self.displacement+solverdata.ale.deformation, dual = True, definedon = self.domain)
 
         if self.postprocess:
 
@@ -283,10 +271,6 @@ class WillmoreDziukStab(BaseMC):
             self.n_aux.Set(ns, dual = True, definedon=self.domain)
             self.n_h.Set(Normalize(self.n_aux), dual = True, definedon=self.domain)
             solverdata.mesh.UnsetDeformation()
-
-            import time
-
-            t1 = time.time()
 
             self.A_pp.Assemble()
             self.invA_pp.Update()
@@ -296,19 +280,12 @@ class WillmoreDziukStab(BaseMC):
             self.displacement.vec.data += self.w_h.components[0].vec.data
             self.displacement_tot.vec.data += self.w_h.components[0].vec.data
 
-            t2 = time.time()
-
             solverdata.mesh.SetDeformation(self.displacement_tot)
             self.n_aux.Set(ns, dual = True, definedon=self.domain)
             self.n_h.Set(Normalize(self.n_aux), dual = True, definedon=self.domain)
             self.ComputeStabMC()
             self.Y_h.Set(self.gf_kappa*(self.mean_curvature - self.gf_sp_curv*self.n_h), dual = True, definedon = self.domain)
             solverdata.mesh.UnsetDeformation()
-
-            t3 = time.time()
-
-            print('Mesh moving:', t2-t1)
-            print('MC update: ', t3-t2)
 
         else:
 
@@ -389,20 +366,9 @@ class WillmoreDziukStab(BaseMC):
 
     def ComputeStabMC(self):
 
-        import time
-        t1 = time.time()
         self.A0.Assemble()
-        t2 = time.time()
         self.invA0.Update()
-        t3 = time.time()
         self.F0.Assemble()
-        t4 = time.time()
 
         self.gfu0.vec.data = self.invA0*self.F0.vec
-        t5 = time.time()
         self.mean_curvature.vec.data = self.gfu0.components[0].vec.data
-
-        print('Assembly of A0: ', t2-t1)
-        print('Update of invA0: ', t3-t2)
-        print('Assembly of F0: ', t4-t3)
-        print('MC update: ', t5-t4)
