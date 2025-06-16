@@ -126,14 +126,6 @@ class Dynamic(Static):
     def __call__(self):
         return self.__generator__()
     
-    def PreProcess(self):
-
-        self.prev_dt.append(self.dt.Get())    
-        if len(self.prev_dt)>6:
-            self.prev_dt.pop(0)
-        self.ale.deformation_old.vec.data = self.ale.deformation.vec.data
-        self.ale.update_ale()
-
     def Initialize(self):
 
         self.prev_def.append(self.ale.deformation.vec.Copy())
@@ -141,6 +133,14 @@ class Dynamic(Static):
         self.prev_mat_vel.append(self.ale.material_velocity.vec.Copy())
         for pde in self.PDEs:
             pde.Update(self)
+    
+    def PreProcess(self):
+
+        self.prev_dt.append(self.dt.Get())    
+        if len(self.prev_dt)>6:
+            self.prev_dt.pop(0)
+        self.ale.deformation_old.vec.data = self.ale.deformation.vec.data
+        self.ale.update_ale()
 
     def Solve(self):
 
