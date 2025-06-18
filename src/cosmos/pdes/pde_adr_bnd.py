@@ -249,10 +249,10 @@ class BndADR(BaseADR):
 
             if solverdata.mesh.dim == 2:
                 ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
-                ds_lumped = ds(intrules = { SEGM : ir }, deformation=solverdata.ale.deformation)
+                ds_lumped = ds(intrules = { SEGM : ir }, deformation=solverdata.ale.deformation_new)
             elif solverdata.mesh.dim == 3:
                 ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-                ds_lumped = ds(intrules = { TRIG : ir }, deformation=solverdata.ale.deformation)
+                ds_lumped = ds(intrules = { TRIG : ir }, deformation=solverdata.ale.deformation_new)
             A = BilinearForm(self.gfu.space, symmetric = True)
             u, v = self.gfu.space.TnT()
             A += u*v*ds_lumped

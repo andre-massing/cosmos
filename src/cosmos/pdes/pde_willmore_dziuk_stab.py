@@ -84,12 +84,12 @@ class WillmoreDziukStab(BaseMC):
         if solverdata.mesh.dim == 2:
             ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
             ds0_lumped = ds(intrules = { SEGM : ir })
-            ds_lumped = ds(intrules = { SEGM : ir }, deformation = solverdata.ale.deformation_old)
+            ds_lumped = ds(intrules = { SEGM : ir }, deformation = solverdata.ale.deformation)
             ds_el_lumped = ds(element_boundary=True, intrules = { SEGM : ir })
         elif solverdata.mesh.dim == 3:
             ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
             ds0_lumped = ds(intrules = { TRIG : ir })
-            ds_lumped = ds(intrules = { TRIG : ir }, deformation = solverdata.ale.deformation_old)
+            ds_lumped = ds(intrules = { TRIG : ir }, deformation = solverdata.ale.deformation)
             ds_el_lumped = ds(element_boundary=True, intrules = { TRIG : ir })
 
         fes0 = V2*dV
@@ -182,13 +182,13 @@ class WillmoreDziukStab(BaseMC):
             jump_detadn = (self.test[1].Trace().Deriv()*nE-self.test[2].Trace())
 
         self.A += (1/solverdata.dt*self.trial[0]*self.test[0]).Compile(true_compile, True)*ds_lumped
-        self.A += (-InnerProduct(grad(self.trial[1]).Trace(), grad(self.test[0]).Trace())).Compile(true_compile, True)*ds(deformation = solverdata.ale.deformation_old)
+        self.A += (-InnerProduct(grad(self.trial[1]).Trace(), grad(self.test[0]).Trace())).Compile(true_compile, True)*ds(deformation = solverdata.ale.deformation)
         self.A += (1/self.gf_kappa*InnerProduct(self.trial[1], self.test[1])).Compile(true_compile, True)*ds_lumped
-        self.A += (InnerProduct(grad(self.trial[0]).Trace(), grad(self.test[1]).Trace())).Compile(true_compile, True)*ds(deformation = solverdata.ale.deformation_old)
+        self.A += (InnerProduct(grad(self.trial[0]).Trace(), grad(self.test[1]).Trace())).Compile(true_compile, True)*ds(deformation = solverdata.ale.deformation)
 
         self.F = LinearForm(self.fes)
 
-        self.F += -InnerProduct(Ps, grad(self.test[1]).Trace())*ds(deformation = solverdata.ale.deformation_old)
+        self.F += -InnerProduct(Ps, grad(self.test[1]).Trace())*ds(deformation = solverdata.ale.deformation)
         self.F += -self.gf_sp_curv*InnerProduct(self.n_h, self.test[1])*ds_lumped
         self.F += InnerProduct(self.gf_rhs, self.test[0])*ds_lumped
 
@@ -196,8 +196,8 @@ class WillmoreDziukStab(BaseMC):
             sym = 0.5*Ps*(grad(chi).Trace()+grad(chi).Trace().trans)*Ps
             return sym
         if solverdata.mesh.dim == 3:
-            self.F += InnerProduct(Trace(grad(self.Y_h).Trace()),Trace(grad(self.test[0]).Trace()))*ds(deformation = solverdata.ale.deformation_old)
-            self.F += -2*InnerProduct(grad(self.Y_h).Trace().trans, D_s(self.test[0], Ps)*Ps.trans)*ds(deformation = solverdata.ale.deformation_old)
+            self.F += InnerProduct(Trace(grad(self.Y_h).Trace()),Trace(grad(self.test[0]).Trace()))*ds(deformation = solverdata.ale.deformation)
+            self.F += -2*InnerProduct(grad(self.Y_h).Trace().trans, D_s(self.test[0], Ps)*Ps.trans)*ds(deformation = solverdata.ale.deformation)
             self.F += -self.gf_kappa*InnerProduct(self.gf_sp_curv*self.mean_curvature, grad(self.test[0]).Trace().trans*ns)*ds_lumped
             self.F += -0.5*InnerProduct(self.gf_kappa*(Norm(self.mean_curvature - self.gf_sp_curv*ns)**2)*Ps,grad(self.test[0]).Trace())*ds_lumped
             self.F += InnerProduct(InnerProduct(self.Y_h, self.mean_curvature)*Ps,grad(self.test[0]).Trace())*ds_lumped
@@ -206,19 +206,19 @@ class WillmoreDziukStab(BaseMC):
 
         if self.clamped_bnd:
             self.A += (self.stab*(gfFone - gfFBB)*h*InnerProduct(jump_dkappadn,jump_detadn)).Compile(true_compile, True)\
-            *ds(element_boundary=True, deformation = solverdata.ale.deformation_old)
+            *ds(element_boundary=True, deformation = solverdata.ale.deformation)
             if solverdata.mesh.dim == 2:
                 self.A +=  (gfFBB*InnerProduct(self.trial[2],self.test[2])).Compile(true_compile, True)\
-                            *ds(element_boundary=True, deformation = solverdata.ale.deformation_old)
+                            *ds(element_boundary=True, deformation = solverdata.ale.deformation)
             elif solverdata.mesh.dim == 3:
-                self.A +=  (gfFBB*self.trial[2].Trace()*self.test[2].Trace()).Compile(true_compile, True)*ds(element_boundary=True, deformation = solverdata.ale.deformation_old)
+                self.A +=  (gfFBB*self.trial[2].Trace()*self.test[2].Trace()).Compile(true_compile, True)*ds(element_boundary=True, deformation = solverdata.ale.deformation)
             if self.clamped_f():
                 self.F += InnerProduct(self.clamped_f(), self.test[1]) * gfFBB * ds_el_lumped
             else:
                 self.F += InnerProduct(nE, self.test[1]) * gfFBB * ds_el_lumped
         else:
             self.A += (self.stab*h*InnerProduct(jump_dkappadn,jump_detadn)).Compile(true_compile, True)\
-            *ds(element_boundary=True, deformation = solverdata.ale.deformation_old)
+            *ds(element_boundary=True, deformation = solverdata.ale.deformation)
 
         self.A.Assemble()
         self.invA = self.A.mat.Inverse(freedofs = self.fes.FreeDofs())
@@ -242,7 +242,7 @@ class WillmoreDziukStab(BaseMC):
 
     def UpdateParams(self, solverdata, init = False):
 
-        solverdata.mesh.SetDeformation(solverdata.ale.deformation_old)
+        solverdata.mesh.SetDeformation(solverdata.ale.deformation)
         ns = specialcf.normal(solverdata.mesh.dim)
         self.n_aux.Set(ns, dual = True, definedon=self.domain)
         self.n_h.Set(Normalize(self.n_aux), dual = True, definedon=self.domain)
@@ -267,7 +267,7 @@ class WillmoreDziukStab(BaseMC):
         super().PostProcess(solverdata)
 
         self.mean_curvature.Set(1/self.gf_kappa*self.Y_h + self.gf_sp_curv*self.n_h, dual = True, definedon = self.domain)
-        self.displacement_tot.Set(self.displacement+solverdata.ale.deformation_old, dual = True, definedon = self.domain)
+        self.displacement_tot.Set(self.displacement+solverdata.ale.deformation, dual = True, definedon = self.domain)
 
         if self.postprocess:
 
@@ -307,7 +307,7 @@ class WillmoreDziukStab(BaseMC):
     def GetEnergy(self, solverdata):
 
         ns = specialcf.normal(solverdata.mesh.dim)
-        solverdata.mesh.SetDeformation(solverdata.ale.deformation_old)
+        solverdata.mesh.SetDeformation(solverdata.ale.deformation)
         energy = 0.5*Integrate(Norm(self.mean_curvature - self.gf_sp_curv*ns)**2, mesh=solverdata.mesh, VOL_or_BND=BND)
         solverdata.mesh.UnsetDeformation()
 

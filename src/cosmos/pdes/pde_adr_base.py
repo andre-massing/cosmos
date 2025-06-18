@@ -18,7 +18,6 @@ class BaseADR(BasePDE):
 
             ale_curr = ale(solverdata)
             ale_curr.deformation.vec.data = solverdata.ale.deformation.vec.data
-            ale_curr.velocity.vec.data = solverdata.ale.velocity.vec.data
 
             if isinstance(self.time_scheme, BDF2) and len(self.prev_gfu)>1:
 
@@ -29,8 +28,7 @@ class BaseADR(BasePDE):
                 Moldold.Assemble()
                 resMoldold = Moldold.mat*self.prev_gfu[-2]
 
-            solverdata.ale.deformation.vec.data = solverdata.prev_def[-1].data
-            solverdata.ale.velocity.vec.data = solverdata.prev_vel[-1].data
+            solverdata.ale.deformation.vec.data = ale_curr.deformation.vec.data
 
             if isinstance(self.time_scheme, CN):
 
@@ -49,8 +47,7 @@ class BaseADR(BasePDE):
             resMold = Mold.mat*self.prev_gfu[-1]
 
         solverdata.t.Set(solverdata.t.Get() + solverdata.dt.Get())
-        solverdata.ale.deformation.vec.data = ale_curr.deformation.vec.data
-        solverdata.ale.velocity.vec.data = ale_curr.velocity.vec.data
+        solverdata.ale.deformation.vec.data = solverdata.ale.deformation_new.vec.data
 
         A = BilinearForm(self.fes)
         F = LinearForm(self.fes)
@@ -81,6 +78,7 @@ class BaseADR(BasePDE):
         self.gfu.vec.data = A.mat.Inverse(freedofs = self.fes.FreeDofs())*res
 
         solverdata.t.Set(solverdata.t.Get() - solverdata.dt.Get())
+        solverdata.ale.deformation.vec.data = ale_curr.deformation.vec.data
 
     def Update(self, solverdata):
 

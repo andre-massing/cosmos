@@ -44,7 +44,7 @@ class WeakCoupling(BasePDE):
 
         for i, pde in enumerate(self.PDEs):
             pde.Solve(solverdata)
-            solverdata.ale.update_ale()
+            solverdata.ale.compute_new_def()
             gfus_old[i] = pde.gfu.vec.Copy()
 
         if self.type == 'implicit':
@@ -52,7 +52,7 @@ class WeakCoupling(BasePDE):
                 for i, pde in enumerate(self.PDEs):
                     pde.SystemSolve(solverdata)
                     pde.PostProcess(solverdata)
-                    solverdata.ale.update_ale()
+                    solverdata.ale.compute_new_def()
                     gfus_new[i] = pde.gfu.vec.Copy()
                     errors[i] = Norm(gfus_new[i] - gfus_old[i])/Norm(gfus_old[i])
                     gfus_old[i] = gfus_new[i]
