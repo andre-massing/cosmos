@@ -187,12 +187,12 @@ class WillmoreDziuk(BaseMC):
             (w, kappa), (eta, mu) = fes_pp.TnT()
 
             self.A_pp += (InnerProduct(grad(w).Trace(), grad(eta).Trace())).Compile(true_compile, True)*ds
-            self.A_pp += (-1*InnerProduct(kappa*self.n_h, eta)).Compile(true_compile, True)*ds
-            self.A_pp += (-1*InnerProduct(w, mu*self.n_h)).Compile(true_compile, True)*ds
+            self.A_pp += (-1*InnerProduct(kappa*self.n_h, eta)).Compile(true_compile, True)*ds(deformation=self.displacement_tot)
+            self.A_pp += (-1*InnerProduct(w, mu*self.n_h)).Compile(true_compile, True)*ds(deformation=self.displacement_tot)
             self.A_pp.Assemble()
             self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
 
-            self.F_pp += -1*InnerProduct(Ps, grad(eta).Trace())*ds
+            # self.F_pp += -1*InnerProduct(Ps, grad(eta).Trace())*ds
             self.F_pp += -1*InnerProduct(grad(self.displacement_tot).Trace(), grad(eta).Trace())*ds
     
     def UpdateParams(self, solverdata, init = False):

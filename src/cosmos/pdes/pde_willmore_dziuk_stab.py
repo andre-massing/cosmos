@@ -237,7 +237,7 @@ class WillmoreDziukStab(BaseMC):
             self.A_pp.Assemble()
             self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
 
-            self.F_pp += -1*InnerProduct(Ps, grad(eta).Trace())*ds
+            # self.F_pp += -1*InnerProduct(Ps, grad(eta).Trace())*ds
             self.F_pp += -1*InnerProduct(grad(self.displacement_tot).Trace(), grad(eta).Trace())*ds
 
     def UpdateParams(self, solverdata, init = False):
