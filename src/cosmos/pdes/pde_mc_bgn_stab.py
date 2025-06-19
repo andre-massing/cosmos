@@ -3,26 +3,35 @@ from cosmos.pdes.pde_mc_base import BaseMC
 from cosmos.pdes.pde_tools import compute_error
 import numpy as np
 from cosmos.solvers.fields import Field
-from cosmos.solvers.time_schemes import BDF1, BDF2, CN, Steady
+from cosmos.solvers.time_schemes import BDF1
 
 class MCBGNStab(BaseMC):
 
-    def __init__(self, rhs = None, domain:str = '.*', name = ['displacement', 'mean_curvature'],
-                 mc0 = None, stab = 1e-3, time_scheme = BDF1()):
+    def __init__(self, rhs = None,
+                 domain:str = '.*', name = ['displacement', 'mean_curvature'],
+                 kappa = None,  mc0 = None,
+                 time_scheme = BDF1(), stab = 1e-3, postprocess = False):
 
         super().__init__()
 
         self.rhs = Field(rhs)
         self.domain = domain
         self.name = name
+        if not kappa:
+            self.kappa= Field(1.0)
+        else:
+            self.kappa = Field(kappa)
         self.mc0 = Field(mc0)
-        self.time_scheme = time_scheme
         self.stab = stab
+        self.time_scheme = time_scheme
+        self.postprocess = postprocess
 
         self.nfields = 3
         self.displacement = self.gfu
 
     def Initialize(self, solverdata):
+
+        true_compile = False
 
         if self.initialized:
             return
@@ -30,117 +39,153 @@ class MCBGNStab(BaseMC):
             self.initialized = True
 
         self.domain = solverdata.mesh.Boundaries(self.domain)
+
+        V1 = VectorH1(solverdata.mesh, order=self.fes_order,
+                definedon=self.domain)
+        V2 = VectorH1(solverdata.mesh, order=self.fes_order,
+            definedon=self.domain)
+        if solverdata.mesh.dim == 2:
+            dV = H1(solverdata.mesh, order=1,definedon = self.domain)
+        elif solverdata.mesh.dim == 3:
+            dV = NormalFacetSurface(solverdata.mesh, order=0,\
+                    definedon = self.domain)
+        V3 = H1(solverdata.mesh, order=self.fes_order,
+            definedon=self.domain)
         
-        V1 = Compress(VectorH1(solverdata.mesh, order=self.fes_order,
-                    definedon=self.domain))
-            
-        V2 = Compress(VectorH1(solverdata.mesh, order=self.fes_order,
-                    definedon=self.domain))
+
+        h = specialcf.mesh_size
+        tE = specialcf.tangential(solverdata.mesh.dim)
+        ns = specialcf.normal(solverdata.mesh.dim)
+        Ps = Id(solverdata.mesh.dim) - OuterProduct(ns, ns)
+        if solverdata.mesh.dim == 2:
+            nE = tE
+            tEc = CF((-ns[1], ns[0]))
+        else:
+            nE = Cross(ns, tE)
         
         if solverdata.mesh.dim == 2:
-            dV = Compress(H1(solverdata.mesh, order=1,\
-                     definedon = self.domain))
+            ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
+            ds_lumped = ds(intrules = { SEGM : ir }, deformation = solverdata.ale.deformation)
         elif solverdata.mesh.dim == 3:
-            dV = Compress(NormalFacetSurface(solverdata.mesh, order=0,\
-                    definedon = self.domain))
+            ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
+            ds_lumped = ds(intrules = { TRIG : ir }, deformation = solverdata.ale.deformation)
 
-        self.fes = V1*V2*dV
-
+                
+        self.fes = CompressCompound(V1*V2*dV)
         self.trial = self.fes.TrialFunction()
         self.test = self.fes.TestFunction()
-
         self.gfu = GridFunction(self.fes)
 
-        self.displacement, self.mean_curvature, _ = self.gfu.components 
+        self.displacement, self.mean_curvature, _ = self.gfu.components
+        self.n_h = GridFunction(V2)
+        self.n_aux = GridFunction(V2)
+        self.gf_kappa = GridFunction(V3)
+        self.gf_rhs = GridFunction(V2)
+
+        self.UpdateParams(solverdata, init=True)
         if self.mc0():
-            self.mean_curvature.Set(self.mc0(), definedon = self.domain)
+            self.mean_curvature.Set(self.mc0(), dual = True, definedon = self.domain)
             
         V_vol = VectorH1(solverdata.mesh, order = self.fes_order)
         self.gfu_save = list(GridFunction(CompressCompound(V_vol*V_vol)).components)
         self.dX_save, self.kappa_save = self.gfu_save[0], self.gfu_save[1]
-        self.dX_save.Set(self.displacement, definedon = self.domain)
-        self.kappa_save.Set(self.mean_curvature, definedon = self.domain)
+        self.dX_save.Set(self.displacement, dual = True, definedon = self.domain)
+        self.kappa_save.Set(self.mean_curvature, dual = True, definedon = self.domain)
 
         self.X0 = GridFunction(V1)
         if solverdata.mesh.dim == 2:
-            self.X0.Set(CF((x,y)), definedon=self.domain)
+            self.X0.Set(CF((x,y)), dual = True, definedon=self.domain)
         elif solverdata.mesh.dim == 3:
-            self.X0.Set(CF((x, y, z)), definedon=self.domain)
+            self.X0.Set(CF((x, y, z)), dual = True, definedon=self.domain)
+        self.displacement_tot = GridFunction(V1)
 
         for save in self.save_error:
             save.Initialize(solverdata, self)
-
         for save in self.save_solution:
             save.Initialize(solverdata, self)
 
-        dim = solverdata.mesh.dim
-        J = specialcf.JacobianMatrix(dim, dim-1) 
-        if dim == 3:
-            area = sqrt(Det(J.trans*J))/2
-            self.h_f = sqrt(area/pi)
-        elif dim == 2:
-            self.h_f = Norm(J[:, 0])
-
-        tE = specialcf.tangential(solverdata.mesh.dim)
-        ns = specialcf.normal(solverdata.mesh.dim)
+        self.A = BilinearForm(self.fes)
+        
         if solverdata.mesh.dim == 2:
-            self.nE = tE
-            self.tEc = CF((-ns[1], ns[0]))
-        else:
-            self.nE = Cross(ns, tE)
-            
-    def GetLHS(self, solverdata, trial, test):
-
-        if solverdata.mesh.dim == 2:
-            ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
-            ds_lumped = ds(intrules = { SEGM : ir }, deformation = solverdata.ale.deformation)
+            dkappa = self.trial[2]*tEc
+            deta = self.test[2]*tEc
+            jump_dkappadn = (self.trial[1].Trace().Deriv()*nE-dkappa)
+            jump_detadn = (self.test[1].Trace().Deriv()*nE-deta)
         elif solverdata.mesh.dim == 3:
-            ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-            ds_lumped = ds(intrules = { TRIG : ir }, deformation = solverdata.ale.deformation)
+            jump_dkappadn = (self.trial[1].Trace().Deriv()*nE-self.trial[2].Trace())
+            jump_detadn = (self.test[1].Trace().Deriv()*nE-self.test[2].Trace())
 
-        lhs = -InnerProduct(trial[1], test[0])*ds_lumped
-        lhs += InnerProduct(trial[1], test[1])*ds_lumped
-        lhs += (InnerProduct(grad(trial[0]).Trace(), grad(test[1]).Trace()))*ds(deformation = solverdata.ale.deformation)
+        self.A += (1/solverdata.dt*self.trial[0]*self.test[0]).Compile(true_compile, True)*ds_lumped
+        self.A += (-self.gf_kappa*InnerProduct(self.trial[1], self.test[0])).Compile(true_compile, True)*ds_lumped
+        self.A += (InnerProduct(self.trial[1], self.test[1])).Compile(true_compile, True)*ds_lumped
+        self.A += (InnerProduct(grad(self.trial[0]).Trace(), grad(self.test[1]).Trace())).Compile(true_compile, True)*ds(deformation = solverdata.ale.deformation)
 
-        if solverdata.mesh.dim == 2:
-            jump_dkappadn = (trial[1].Trace().Deriv()*self.nE-trial[2]*self.tEc)
-            jump_detadn = (test[1].Trace().Deriv()*self.nE-test[2]*self.tEc)
-        elif solverdata.mesh.dim == 3:
-            jump_dkappadn = (trial[1].Trace().Deriv()*self.nE-trial[2].Trace())
-            jump_detadn = (test[1].Trace().Deriv()*self.nE-test[2].Trace())
+        self.F = LinearForm(self.fes)
 
-        lhs += self.stab*self.h_f*InnerProduct(jump_dkappadn,jump_detadn)\
+        self.F += -InnerProduct(Ps, grad(self.test[1]).Trace())*ds(deformation = solverdata.ale.deformation)
+        self.F += InnerProduct(self.gf_rhs, self.test[0])*ds_lumped
+
+        self.A += (self.stab*h*InnerProduct(jump_dkappadn,jump_detadn)).Compile(true_compile, True)\
             *ds(element_boundary=True, deformation = solverdata.ale.deformation)
-        
-        return lhs
-        
-    def GetRHS(self, solverdata, test):
 
-        rhs = -InnerProduct(grad(self.X0).Trace(), grad(test[1]).Trace())*ds(deformation = solverdata.ale.deformation)
+        self.A.Assemble()
+        self.invA = self.A.mat.Inverse(freedofs = self.fes.FreeDofs())
+
+        if self.postprocess:
+
+            fes_pp = V1*V3
+            self.A_pp = BilinearForm(fes_pp, symmetric = True)
+            self.F_pp = LinearForm(fes_pp)
+            self.w_h = GridFunction(fes_pp)
+            (w, kappa), (eta, mu) = fes_pp.TnT()
+
+            self.A_pp += (InnerProduct(grad(w).Trace(), grad(eta).Trace())).Compile(true_compile, True)*ds
+            self.A_pp += (-1*InnerProduct(kappa*self.n_h, eta)).Compile(true_compile, True)*ds
+            self.A_pp += (-1*InnerProduct(w, mu*self.n_h)).Compile(true_compile, True)*ds
+            self.A_pp.Assemble()
+            self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
+
+            self.F_pp += -1*InnerProduct(Ps, grad(eta).Trace())*ds
+            self.F_pp += -1*InnerProduct(grad(self.displacement_tot).Trace(), grad(eta).Trace())*ds
+
+    def UpdateParams(self, solverdata, init = False):
+
+        solverdata.mesh.SetDeformation(solverdata.ale.deformation)
+        ns = specialcf.normal(solverdata.mesh.dim)
+        self.n_aux.Set(ns, dual = True, definedon=self.domain)
+        self.n_h.Set(Normalize(self.n_aux), dual = True, definedon=self.domain)
+        self.gf_kappa.Set(self.kappa(), dual = True, definedon = self.domain)
         if self.rhs():
-            rhs += InnerProduct(self.rhs(), test[0])*ds(deformation = solverdata.ale.deformation)
+            self.gf_rhs.Set(self.rhs(), dual = True, definedon = self.domain)
+        solverdata.mesh.UnsetDeformation()
+    
+    def PostProcess(self, solverdata):
 
-        return rhs
+        super().PostProcess(solverdata)
+        self.displacement_tot.Set(self.displacement+solverdata.ale.deformation, dual = True, definedon = self.domain)
 
-    def GetMass(self, solverdata, trial, test):
+        if self.postprocess:
 
-        if solverdata.mesh.dim == 2:
-            ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
-            ds_lumped = ds(intrules = { SEGM : ir }, deformation = solverdata.ale.deformation)
-        elif solverdata.mesh.dim == 3:
-            ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-            ds_lumped = ds(intrules = { TRIG : ir }, deformation = solverdata.ale.deformation)
+            ns = specialcf.normal(solverdata.mesh.dim)
+            solverdata.mesh.SetDeformation(self.displacement_tot)
+            self.n_aux.Set(ns, dual = True, definedon=self.domain)
+            self.n_h.Set(Normalize(self.n_aux), dual = True, definedon=self.domain)
+            solverdata.mesh.UnsetDeformation()
 
-        mass = InnerProduct(trial[0], test[0])/solverdata.dt*ds_lumped
+            self.A_pp.Assemble()
+            self.invA_pp.Update()
+            self.F_pp.Assemble()
 
-        return mass
+            self.w_h.vec.data = self.invA_pp*self.F_pp.vec
+            self.displacement.vec.data += self.w_h.components[0].vec.data
+            self.displacement_tot.vec.data += self.w_h.components[0].vec.data
         
     def Update(self, solverdata):
 
         solverdata.mesh.SetDeformation(solverdata.ale.deformation)
 
-        self.dX_save.Set(self.displacement, definedon = self.domain)
-        self.kappa_save.Set(self.mean_curvature, definedon = self.domain)
+        self.dX_save.Set(self.displacement, dual = True, definedon = self.domain)
+        self.kappa_save.Set(self.mean_curvature, dual = True, definedon = self.domain)
 
         for save in self.save_error:
             save.Save(solverdata, self)
@@ -149,6 +194,14 @@ class MCBGNStab(BaseMC):
             save.Save(solverdata, self)
 
         solverdata.mesh.UnsetDeformation()
+
+    def GetEnergy(self, solverdata):
+
+        solverdata.mesh.SetDeformation(solverdata.ale.deformation)
+        energy = Integrate(1, mesh=solverdata.mesh, VOL_or_BND=BND)
+        solverdata.mesh.UnsetDeformation()
+
+        return energy
 
     def get_error(self, solverdata, ex_sol, norm):
 
@@ -165,8 +218,8 @@ class MCBGNStab(BaseMC):
     
     def set_solution(self, value):
 
-        self.displacement.Set(value[0], definedon=self.domain)
-        self.mean_curvature.Set(value[1], definedon=self.domain)
+        self.displacement.Set(value[0], dual = True, definedon=self.domain)
+        self.mean_curvature.Set(value[1], dual = True,  definedon=self.domain)
 
     def get_solution(self):
 
@@ -187,3 +240,12 @@ class MCBGNStab(BaseMC):
         #     print('  -', key, '- with value ', str(value))
 
         # print(60*'-', '\n')
+
+    def ComputeStabMC(self):
+
+        self.A0.Assemble()
+        self.invA0.Update()
+        self.F0.Assemble()
+
+        self.gfu0.vec.data = self.invA0*self.F0.vec
+        self.mean_curvature.vec.data = self.gfu0.components[0].vec.data
