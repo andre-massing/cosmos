@@ -17,6 +17,8 @@ class BaseMC(BasePDE):
 
     def SystemSolve(self, solverdata):
 
+        self.UpdateParams(solverdata)
+
         if isinstance(self.time_scheme, CN):
             raise Exception('Crack-Nicholson scheme not implemented for this solver')
         if isinstance(self.time_scheme, BDF2):

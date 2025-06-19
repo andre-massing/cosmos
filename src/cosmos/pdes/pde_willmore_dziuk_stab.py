@@ -237,7 +237,7 @@ class WillmoreDziukStab(BaseMC):
             self.A_pp.Assemble()
             self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
 
-            # self.F_pp += -1*InnerProduct(Ps, grad(eta).Trace())*ds
+            self.F_pp += -1*InnerProduct(Ps, grad(eta).Trace())*ds
             self.F_pp += -1*InnerProduct(grad(self.displacement_tot).Trace(), grad(eta).Trace())*ds
 
     def UpdateParams(self, solverdata, init = False):
@@ -256,11 +256,6 @@ class WillmoreDziukStab(BaseMC):
         if self.clamped_f():
             self.gf_clamped_f.Set(self.clamped_f(), dual = True, definedon = self.domain)
         solverdata.mesh.UnsetDeformation()
-    
-    def PreProcess(self, solverdata):
-
-        super().PreProcess(solverdata)
-        self.UpdateParams(solverdata)
     
     def PostProcess(self, solverdata):
 
