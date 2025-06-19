@@ -56,10 +56,10 @@ sigma = 3
 aux = IfPos(sin(1e7*(x+y*y))-1, 1, sin(1e7*(x+y*y)))
 c0 = IfPos(-aux-1, -1, aux)
 
-c0 = sinh(x/sqrt(2))/cosh(x/sqrt(2))
+# c0 = sinh(x/sqrt(2))/cosh(x/sqrt(2))
 
 ch = CahnHilliardBnd(c0 = c0, theta = theta, gamma=gamma, sigma = sigma, 
-                     time_scheme = BDF1(), MP = True, BP = [-1, 1])
+                     time_scheme = BDF1(), BP=[-1, 1], MP = True)
 # sol_save = SaveSolution(folderpath = './results',
 #                         filename = 'cahn_hilliard',
 #                         sample_rate = 1)
@@ -67,8 +67,8 @@ ch = CahnHilliardBnd(c0 = c0, theta = theta, gamma=gamma, sigma = sigma,
 
 ###################  WILLMORE  ##################################
 kappa = 0.02
-willmore = WillmoreDziuk(mc_autoupdate = False, time_scheme=BDF1(),
-                         postprocess= False, kappa = kappa)
+willmore = WillmoreDziuk(time_scheme=BDF1(),
+                         postprocess= True, kappa = kappa)
 # willmore = MCBGNStab()
 # sol_save = SaveSolution(folderpath = './results',
 #                         filename = 'willmore',
@@ -81,31 +81,36 @@ T = 1.5
 dt = Parameter(1e-4)
 t = Parameter(0)
 solver = Dynamic(mesh = mesh, t = t, T = T, dt = dt)
-solver.AddPDE(willmore)
 solver.AddPDE(ch)
+solver.AddPDE(willmore)
 
 ###################  ALE  ##################################
 solver.ale.deformation_field = willmore.displacement
 def velocity():
-    return (willmore.displacement - solver.ale.deformation)/solver.dt
-solver.ale.velocity_field = velocity
+    return 
+solver.ale.velocity_field = lambda: willmore.displacement/solver.dt
 def mat_velocity():
     n = specialcf.normal(3)
-    field = InnerProduct((willmore.displacement - solver.ale.deformation)/solver.dt,  n)*n
+    Q = OuterProduct(n,n)
+    P = Id(3) - Q
+    field = Q*willmore.displacement/solver.dt + P*(ch.potential*grad(ch.phase).Trace()) 
     return field
 solver.ale.mat_velocity_field = mat_velocity
 
 ###################  Couplings  ##################################
 def w_rhs():
     n = specialcf.normal(3)
-    solver.mesh.SetDeformation(solver.ale.deformation)
+    solver.mesh.SetDeformation(solver.ale.deformation) # Maybe deformation_old?
     W = ComputeW(solver)
     solver.mesh.UnsetDeformation()
     term1 = - sigma*gamma*InnerProduct(W*grad(ch.phase).Trace(), grad(ch.phase).Trace())*n
     term2 = sigma*willmore.mean_curvature*(gamma/2*InnerProduct(grad(ch.phase).Trace(), grad(ch.phase).Trace())
                                      +1/(4*gamma)*(ch.phase**2-1)**2)
+    solver.mesh.UnsetDeformation()
     return term1 + term2
 willmore.rhs.value = w_rhs
+
+# willmore.sp_curv.value = ch.phase
 
 scene = Draw(ch.phase, mesh, deformation = solver.ale.deformation)
 for i, sol in enumerate(solver()):
