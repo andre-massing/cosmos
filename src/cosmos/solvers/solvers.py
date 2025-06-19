@@ -106,6 +106,9 @@ class Dynamic(Static):
 
             yield
 
+            for pde in self.PDEs:
+                pde.Update(self)
+
             if self.verbose>0:
                 print('-'*10, '\nStarting the simulation...')
             for step in tqdm(range(max_steps), desc="\t Running Simulation...", 
@@ -131,8 +134,6 @@ class Dynamic(Static):
         self.prev_def.append(self.ale.deformation.vec.Copy())
         self.prev_vel.append(self.ale.velocity.vec.Copy())
         self.prev_mat_vel.append(self.ale.material_velocity.vec.Copy())
-        for pde in self.PDEs:
-            pde.Update(self)
     
     def PreProcess(self):
 
