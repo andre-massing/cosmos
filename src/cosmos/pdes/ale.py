@@ -37,6 +37,8 @@ class ale:
 
         self.solverdata.mesh.SetDeformation(self.deformation)
         self.deformation_new.Set(self._deformation_field() + self.deformation, dual = True, definedon = self.domain)
+        self.velocity.Set(self._velocity_field(), dual = True, definedon = self.domain)
+        self.material_velocity.Set(self._material_velocity_field(), dual = True, definedon = self.domain)
         self.solverdata.mesh.UnsetDeformation()
 
     def update_ale(self):
