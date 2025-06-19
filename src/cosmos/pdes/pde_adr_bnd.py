@@ -99,15 +99,7 @@ class BndADR(BaseADR):
         else:
             self.facet_space = FacetSurface(solverdata.mesh, order = 0)
 
-        dim = solverdata.mesh.dim
-        J = specialcf.JacobianMatrix(dim, dim-1) 
-        if dim == 3:
-            a = Norm(J[:,0])
-            b = Norm(J[:,1])
-            c = Norm(J[:,0] - J[:,1])
-            self.h_f = IfPos(IfPos(a-b, a, b) - c, IfPos(a-b, a, b), c)
-        elif dim == 2:
-            self.h_f = Norm(J[:, 0])
+        self.h_f = specialcf.normal(solverdata.mesh.dim)
 
     def GetLHS(self, solverdata, trial, test):
 
@@ -259,7 +251,6 @@ class BndADR(BaseADR):
             A.Assemble()
             rows,cols,vals = A.mat.COO()
             weights = sp.csr_matrix((vals,(rows,cols))).diagonal()
-            print(weights)
             gfu_vec = self.gfu.vec.Copy().FV().NumPy()
 
             if self.BP:
@@ -284,6 +275,14 @@ class BndADR(BaseADR):
             save.Save(solverdata, self)
 
         solverdata.mesh.UnsetDeformation()
+
+    def GetTotMass(self, solverdata): 
+
+        solverdata.mesh.SetDeformation(solverdata.ale.deformation)
+        mass = Integrate(self.solute, solverdata.mesh, VOL_or_BND=BND)
+        solverdata.mesh.UnsetDeformation()
+
+        return mass
 
     def get_error(self, solverdata, ex_sol, norm):
 

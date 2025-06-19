@@ -209,6 +209,14 @@ class VolADR(BaseADR):
 
             self.gfu.vec.data = gfu_new
 
+    def GetTotMass(self, solverdata):
+
+        solverdata.mesh.SetDeformation(solverdata.ale.deformation)
+        mass = Integrate(self.solute, solverdata.mesh, VOL_or_BND=VOL)
+        solverdata.mesh.UnsetDeformation()
+
+        return mass
+
     def get_error(self, solverdata, ex_sol, norm):
 
         err = compute_error(data=solverdata, gfu = self.gfu, u_ex=ex_sol,

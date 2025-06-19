@@ -170,12 +170,12 @@ class AdBndADR(BaseADR):
             
             if hasattr(solverdata, 'dt'):
                 max_bc = GridFunction(H1(solverdata.mesh, definedon = self.domain))
-                max_bc.Set(Norm(self.h_f*Norm(b) + 1/solverdata.dt), definedon=self.domain)
+                max_bc.Set(self.h_f*Norm(b) + self.h_f**2*1/solverdata.dt, definedon=self.domain)
                 max_bc = np.max(max_bc.vec)
                 stab = self.h_f**3/max_bc
             else:
                 max_bc = GridFunction(H1(solverdata.mesh, definedon = self.domain))
-                max_bc.Set(Norm(self.h_f*Norm(b) + Norm(self.c)), definedon=self.domain)
+                max_bc.Set(self.h_f*Norm(b) + self.h_f**2*Norm(self.c), definedon=self.domain)
                 max_bc = np.max(max_bc.vec)
                 stab = self.h_f**3/max_bc
             if solverdata.mesh.dim == 2:
@@ -313,6 +313,14 @@ class AdBndADR(BaseADR):
             save.Save(solverdata, self)
 
         solverdata.mesh.UnsetDeformation()
+
+    def GetTotMass(self, solverdata):
+
+        solverdata.mesh.SetDeformation(solverdata.ale.deformation)
+        mass = Integrate(self.solute, solverdata.mesh, VOL_or_BND=BND)
+        solverdata.mesh.UnsetDeformation()
+
+        return mass
 
     def get_error(self, solverdata, ex_sol, norm):
 
