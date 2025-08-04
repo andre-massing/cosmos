@@ -74,12 +74,9 @@ class CahnHilliardBnd(BaseCH):
 
         if self.MP:
 
-            if solverdata.mesh.dim == 2:
-                ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
-                ds_lumped = ds(intrules = { SEGM : ir })
-            elif solverdata.mesh.dim == 3:
-                ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-                ds_lumped = ds(intrules = { TRIG : ir })
+            ir_segm = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
+            ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
+            ds_lumped = ds(intrules = { SEGM: ir_segm, TRIG : ir_trig })
             A = BilinearForm(self.phase.space, symmetric = True)
             u, v = self.phase.space.TnT()
             A += u*v*ds_lumped
@@ -104,7 +101,7 @@ class CahnHilliardBnd(BaseCH):
         lhs += trial[1]*test[1]*ds(deformation = solverdata.ale.deformation)
         lhs += -1*self.sigma()*self.gamma()*grad(trial[0]).Trace()*grad(test[1]).Trace()*ds(deformation = solverdata.ale.deformation)
         
-        lhs += (solverdata.ale.material_velocity - solverdata.ale.velocity)*grad(trial[0]).Trace()*test[0]*ds(deformation = solverdata.ale.deformation)
+        # lhs += (solverdata.ale.material_velocity - solverdata.ale.velocity)*grad(trial[0]).Trace()*test[0]*ds(deformation = solverdata.ale.deformation)
 
         lhs += -self.sigma()/self.gamma()*(3*self.phase**2 - 1)*trial[0]*test[1]*ds(deformation = solverdata.ale.deformation)
                     
@@ -144,12 +141,10 @@ class CahnHilliardBnd(BaseCH):
             else:
                 raise Exception('A time-dependent simulation is needed to impose conservative mass!')
 
-            if solverdata.mesh.dim == 2:
-                ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
-                ds_lumped = ds(intrules = { SEGM : ir }, deformation=solverdata.ale.deformation_new)
-            elif solverdata.mesh.dim == 3:
-                ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-                ds_lumped = ds(intrules = { TRIG : ir }, deformation=solverdata.ale.deformation_new)
+            
+            ir_segm = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
+            ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
+            ds_lumped = ds(intrules = { SEGM: ir_segm, TRIG : ir_trig }, deformation=solverdata.ale.deformation_new)
             A = BilinearForm(self.phase.space, symmetric = True)
             u, v = self.phase.space.TnT()
             A += u*v*ds_lumped
