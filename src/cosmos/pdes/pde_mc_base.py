@@ -28,6 +28,5 @@ class BaseMC(BasePDE):
         
         self.A.Assemble()
         self.F.Assemble()
-        self.invA.Update()
 
         self.gfu.vec.data = self.invA*self.F.vec
