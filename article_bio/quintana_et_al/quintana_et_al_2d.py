@@ -5,14 +5,13 @@ from netgen.occ import *   # Opencascade for geometry modeling
 import pandas as pd
 import matplotlib.pyplot as plt
 import netgen.occ as occ
-from cosmos.pdes.pde_willmore_bgn import WillmoreBGN
-from cosmos.pdes.pde_willmore_bgn_stab import WillmoreBGNStab
 from cosmos.pdes.pde_willmore_dziuk import WillmoreDziuk
 from cosmos.pdes.pde_willmore_dziuk_stab import WillmoreDziukStab
-from cosmos.solvers.solver_unsteady import UnsteadySolver
-from cosmos.solvers.schemes import Steady, BDF1, BDF2
-from cosmos.pdes.pde_distance_vol import DistanceVol
+from cosmos.solvers.solvers import Dynamic
+from cosmos.solvers.time_schemes import Steady, BDF1, BDF2
+from cosmos.pdes.pde_tools import SaveSolution
 from cosmos.pdes.pde_adr_vol_ad import VolADR
+import numpy as np
 
 def generate_synapse2d(maxh, order_g = 1, external = False):
     wp = occ.WorkPlane()
@@ -73,49 +72,137 @@ def generate_synapse2d(maxh, order_g = 1, external = False):
     mesh.Curve(order_g)
     return mesh, geo
 
-will_sol = [
-    # WillmoreBGN(postprocess = None, mc_autoupdate = True, domain = 'membrane', clamped_bnd = 'membrane_bnd'),
-    # WillmoreBGNStab(postprocess = None, mc_autoupdate = True, domain = 'membrane', clamped_bnd = 'membrane_bnd'),
-    # WillmoreDziuk(postprocess = None, mc_autoupdate = True, domain = 'membrane', clamped_bnd = 'membrane_bnd'),
-    WillmoreDziukStab(postprocess = None, mc_autoupdate = True, domain = 'membrane', clamped_bnd = 'membrane_bnd')
-]
+mesh, _ = generate_synapse2d(maxh=0.02)
+mip = mesh(0.3, 0.7)
 
-for i, willmore in enumerate(will_sol):
+###################  PARAMETERS  ##################################
 
-    mesh, _ = generate_synapse2d(maxh=0.02)
+A0 = 20
+B0 = 3000*3.6
+C0 = 40
+K_A = 0.0013
+K_B = 0.0081
+K_C = 0.0006
+I_A = 0.0255
+I_B = 24.4284
+I_C = 0.0237
+I_SA = 0.0293
+I_SB = 25.6684
+I_SC = 0.4384
+K_nuc = 0.0153
+K_sev = 0.012
+K_n = 0.6
+psi0 = 3.6
+psi1 = 0.02
+N = 3.5
 
-    t = Parameter(0.0)
-    dt = Parameter(1e-3)
-    T = 1
+T = 4*60
+dt = 1e-1
+n = 200
+sample_rate = np.maximum(int(abs(T/dt/n)), 1)
+dt = Parameter(dt)
+t = Parameter(-4*60)
 
-    solver = UnsteadySolver(mesh = mesh, dt=dt, T=T, t=t)
-    solver.AddPDE(willmore, BDF1(conservative=False))
-    # solver.AddPDE(willmore, Steady())
+folderpath = './quintana_2d'
 
-    from cosmos.pdes.pde_neohook import NeoHook
-    from cosmos.pdes.pde_elastic import Elastic
-    bnd_funct = GridFunction(VectorH1(mesh))
-    dir_bnd = {'.*': bnd_funct}
-    ale_ext = Elastic(lam = 1, mu = 1, rho = 1, steady = True, dir=dir_bnd)
-    solver.AddPDE(ale_ext, BDF1())
-    solver.ale.SetMeshDeformation(ale_ext.d_h)
+###################  SURFACE REACTIONS  ##################################
 
-    dist = DistanceVol(dirichlet = 'membrane')
-    solver.AddPDE(dist, Steady())
+### Actin
+A = VolADR(time_scheme=BDF2(), c=K_A, u0 = A0)
+sol_save_A = SaveSolution(folderpath = folderpath,
+                        filename = 'quintana_2d_A',
+                        sample_rate = sample_rate)
+A.SaveSol(sol_save_A)
 
-    u0 = IfPos(y - 0.6, 1, 0)
-    flux_b = {'.*': CF((0, 0))}
-    flux_d = {'.*': CF((0, 0))}
-    actin = VolADR(u0 = u0, b = - dist.X, d = 0.01, domain = 'inner_space', MP = True, BP = [0, 1e5], Fneu_b = flux_b, neu_d = flux_d)
-    solver.AddPDE(actin, BDF1())
+### Barbed ends
+B = VolADR(time_scheme=BDF2(), c = K_B, u0 = B0)
+sol_save_B = SaveSolution(folderpath = folderpath,
+                        filename = 'quintana_2d_B',
+                        sample_rate = sample_rate)
+B.SaveSol(sol_save_B)
 
-    import time
-    scene1 = Draw(bnd_funct, mesh, deformation = solver.ale.deformation)
-    scene2 = Draw(actin.gfu, mesh, deformation = solver.ale.deformation)
-    ns = specialcf.normal(mesh.dim)
-    for sol in solver():
-        actin.params['b'] = - dist.X
-        bnd_funct.Set(willmore.dX_h, definedon=mesh.Boundaries('.*'))
-        scene1.Redraw()
-        scene2.Redraw()
+### Cofilin
+C = VolADR(time_scheme=BDF2(), c = K_C, u0 = C0)
+sol_save_C = SaveSolution(folderpath = folderpath,
+                        filename = 'quintana_2d_C',
+                        sample_rate = sample_rate)
+C.SaveSol(sol_save_C)
+
+# ###################  MEAN CURVATURE FLOW  ##################################
+# willmore = WillmoreDziuk(postprocess = True, domain = 'membrane', clamped_bnd = 'membrane_bnd',
+#                          time_scheme=BDF1())
+# # mc = MCBGN(time_scheme=BDF1(), postprocess=True, alpha=0.01)
+# mc = WillmoreDziuk(time_scheme=BDF1(), postprocess=True, kappa=1)
+# sol_save = SaveSolution(folderpath = folderpath,
+#                         filename = 'quintana_2d_mc',
+#                         sample_rate = sample_rate)
+# mc.SaveSol(sol_save)
+
+###################  Solver  ##################################
+from cosmos.solvers.solvers import Dynamic
+solver = Dynamic(mesh = mesh, t = t, T = T, dt = dt)
+
+###################  ALE  ##################################
+
+###################  Couplings  ##################################
+from cosmos.pdes.coupling_weak import WeakCoupling
+cpl = WeakCoupling(tol = 1e-4, type = 'implicit')
+cpl.AddPDEs(A, B, C)
+solver.AddPDE(cpl)
+
+impulse = IfPos(t, 1, 0)*IfPos(60-t, 1, 0)
+
+def coupA():
+    f_nuc = K_nuc*psi1*A.solute*B.solute
+    f_A = I_A + I_SA*impulse
+    return - f_nuc + f_A
+A.rhs.value = coupA
+
+def coupB():
+    f_nuc = K_nuc*psi1*A.solute*B.solute
+    f_sev = K_sev*C.solute**N/(K_n + C.solute**N)*psi1*B.solute
+    f_B = I_B + I_SB*impulse
+    return psi0*(f_nuc+f_sev+f_B)
+B.rhs.value = coupB
+
+def coupC():
+    f_sev = K_sev*C.solute**N/(K_n + C.solute**N)*psi1*B.solute
+    f_C = I_C + I_SC*impulse
+    return - f_sev + f_C
+C.rhs.value = coupC
+
+# solver.ale.deformation_field = lambda: mc.displacement
+# solver.ale.velocity_field = lambda : mc.displacement/dt
+# solver.ale.mat_velocity_field = lambda : mc.displacement/dt
+
+xdata = []
+ydata = [[], [], []]
+
+# sceneA = Draw(A.solute, mesh)
+# sceneB = Draw(B.solute, mesh)
+# sceneC = Draw(C.solute, mesh)
+for i, sol in enumerate(solver()):
+    # sceneA.Redraw()
+    # sceneB.Redraw()
+    # sceneC.Redraw()
+
+    xdata.append(t.Get()/60)
+    ydata[0].append(A.solute(mip))
+    ydata[1].append(B.solute(mip))
+    ydata[2].append(C.solute(mip))
+
+plt.plot(xdata, ydata[0], label = 'A')
+plt.plot(xdata, ydata[2], label = 'C')
+plt.ylim([0, 0.7])
+plt.legend()
+plt.show()
+
+plt.plot(xdata, np.array(ydata[1])/1e4, label = 'B')
+plt.ylim([1, 2])
+plt.legend()
+plt.show()
+
+print(A.solute(mip))
+print(B.solute(mip))
+print(C.solute(mip))
 # %%
