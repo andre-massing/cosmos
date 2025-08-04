@@ -238,11 +238,17 @@ H_ex = -2*n
 power = 2
 nref = 4
 hs = 0.2/np.power(power, range(nref))
+true_hs = np.zeros((len(hs), 3))
 ERRS = np.zeros((len(hs), 3))
 for i, h in enumerate(hs):
 
     mesh, _ = generate_sphere(R=1, maxh = h)
     kappa_h = GridFunction(VectorH1(mesh))
+
+    true_h = GridFunction(SurfaceL2(mesh, order = 0))
+    true_h.Set(h, definedon = mesh.Boundaries('.*'))
+    true_h = np.max(true_h.vec.data)
+    true_hs[i, :] = true_h
 
     ComputeMC(mesh, kappa_h, {'clamped_bnd': None})
     err1 = ComputeError(mesh, kappa_h, H_ex)
@@ -259,7 +265,7 @@ for i, h in enumerate(hs):
     ERRS[i, 1] = err2
     ERRS[i, 2] = err3
 
-print(np.log(ERRS[:-1, :]/ERRS[1:, :])/np.log(power))
+print(np.log(ERRS[:-1, :]/ERRS[1:, :])/np.log(true_hs[:-1, :]/true_hs[1:, :]))
 
 print('-'*10, 'Circle')
 R = 1
@@ -275,6 +281,11 @@ for i, h in enumerate(hs):
     mesh, _ = generate_circle(R=1, maxh = h)
     kappa_h = GridFunction(VectorH1(mesh, definedon = mesh.Boundaries('.*')))
 
+    true_h = GridFunction(SurfaceL2(mesh, order = 0))
+    true_h.Set(h, definedon = mesh.Boundaries('.*'))
+    true_h = np.max(true_h.vec.data)
+    true_hs[i, :] = true_h
+
     ComputeMC(mesh, kappa_h, {'clamped_bnd': None})
     err1 = ComputeError(mesh, kappa_h, H_ex)
 
@@ -290,4 +301,4 @@ for i, h in enumerate(hs):
     ERRS[i, 1] = err2
     ERRS[i, 2] = err3
 
-print(np.log(ERRS[:-1, :]/ERRS[1:, :])/np.log(power))
+print(np.log(ERRS[:-1, :]/ERRS[1:, :])/np.log(true_hs[:-1, :]/true_hs[1:, :]))
