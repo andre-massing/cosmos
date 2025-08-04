@@ -3,9 +3,18 @@
 from cosmos.utils.generate_surface_meshes import generate_sphere, generate_box
 from ngsolve import *
 from ngsolve.webgui import Draw
+import numpy as np
 
-mesh, _ = generate_sphere(maxh = 0.08, R = 1)
-# mesh, _ = generate_box(maxh = 0.07, vol_or_bnd='BND')
+import os
+folderpath = './prova'
+os.makedirs(folderpath, exist_ok = True)
+
+dt = 2e-4
+T = 1.5
+n = 100
+sample_rate = np.maximum(int(T/dt/n), 1)
+
+mesh, _ = generate_sphere(maxh = 0.07, R = 1)
 
 def ComputeW(solverdata):
 
@@ -46,49 +55,44 @@ from cosmos.pdes.pde_ch_bnd import CahnHilliardBnd
 from cosmos.pdes.pde_willmore_dziuk_stab import WillmoreDziukStab
 from cosmos.pdes.pde_willmore_dziuk import WillmoreDziuk
 from cosmos.solvers.time_schemes import BDF1, BDF2
-from cosmos.pdes.pde_mc_bgn_stab import MCBGNStab
 from cosmos.pdes.pde_tools import SaveSolution
 
 ###################  CAHN-HILLIARD  ##################################
 theta = 0.001
-gamma = 0.02
-sigma = 3
-aux = IfPos(sin(1e7*(x+y*y))-1, 1, sin(1e7*(x+y*y)))
-c0 = IfPos(-aux-1, -1, aux)
-
-# c0 = sinh(x/sqrt(2))/cosh(x/sqrt(2))
-
+gamma = 0.5
+sigma = 2
+c0 = (exp(2*x/sqrt(2))-1)/(exp(2*x/sqrt(2))+1)
 ch = CahnHilliardBnd(c0 = c0, theta = theta, gamma=gamma, sigma = sigma, 
-                     time_scheme = BDF1(), BP=[-1, 1], MP = True)
-# sol_save = SaveSolution(folderpath = './results',
-#                         filename = 'cahn_hilliard',
-#                         sample_rate = 1)
-# ch.SaveSol(sol_save)
+                     time_scheme = BDF2(), BP = [-1, 1], MP = True)
+sol_save = SaveSolution(folderpath = folderpath,
+                        filename = 'cahn_hilliard',
+                        sample_rate = sample_rate)
+ch.SaveSol(sol_save)
 
 ###################  WILLMORE  ##################################
-kappa = 0.02
-willmore = WillmoreDziuk(time_scheme=BDF1(),
-                         postprocess= True, kappa = kappa)
-# willmore = MCBGNStab()
-# sol_save = SaveSolution(folderpath = './results',
-#                         filename = 'willmore',
-#                         sample_rate = 1)
-# willmore.SaveSol(sol_save)
+kappa = 0.2
+willmore = WillmoreDziuk(time_scheme=BDF1(), postprocess=True)
+sol_save = SaveSolution(folderpath = folderpath,
+                        filename = 'willmore',
+                        sample_rate = sample_rate)
+willmore.SaveSol(sol_save)
 
 ###################  Solver  ##################################
 from cosmos.solvers.solvers import Dynamic
-T = 1.5
-dt = Parameter(1e-4)
+dt = Parameter(dt)
 t = Parameter(0)
 solver = Dynamic(mesh = mesh, t = t, T = T, dt = dt)
-solver.AddPDE(ch)
-solver.AddPDE(willmore)
 
 ###################  ALE  ##################################
-solver.ale.deformation_field = willmore.displacement
-def velocity():
-    return 
-solver.ale.velocity_field = lambda: willmore.displacement/solver.dt
+
+###################  Couplings  ##################################
+from cosmos.pdes.coupling_weak import WeakCoupling
+cpl = WeakCoupling(tol = 1e-5, type = 'explicit')
+cpl.AddPDEs(ch, willmore)
+solver.AddPDE(cpl)
+
+solver.ale.deformation_field = lambda: willmore.displacement
+solver.ale.velocity_field = lambda : willmore.displacement/solver.dt
 def mat_velocity():
     n = specialcf.normal(3)
     Q = OuterProduct(n,n)
@@ -97,23 +101,28 @@ def mat_velocity():
     return field
 solver.ale.mat_velocity_field = mat_velocity
 
-###################  Couplings  ##################################
 def w_rhs():
-    n = specialcf.normal(3)
-    solver.mesh.SetDeformation(solver.ale.deformation) # Maybe deformation_old?
+    solver.mesh.SetDeformation(solver.ale.deformation)
     W = ComputeW(solver)
-    solver.mesh.UnsetDeformation()
-    term1 = - sigma*gamma*InnerProduct(W*grad(ch.phase).Trace(), grad(ch.phase).Trace())*n
+    n = specialcf.normal(3)
+    Q = OuterProduct(n,n)
+    P = Id(3) - Q
+    term1 = -1*sigma*gamma*W*grad(ch.phase).Trace()*grad(ch.phase).Trace()*n
     term2 = sigma*willmore.mean_curvature*(gamma/2*InnerProduct(grad(ch.phase).Trace(), grad(ch.phase).Trace())
                                      +1/(4*gamma)*(ch.phase**2-1)**2)
     solver.mesh.UnsetDeformation()
     return term1 + term2
 willmore.rhs.value = w_rhs
+# willmore.sp_curv.value = lambda: ch.phase
 
-# willmore.sp_curv.value = ch.phase
-
+import numpy as np
+np.random.seed(42)
 scene = Draw(ch.phase, mesh, deformation = solver.ale.deformation)
 for i, sol in enumerate(solver()):
+    # if i == 0:
+    #     n = len(ch.phase.vec.data)
+    #     ch.phase.vec.data = np.clip(np.random.normal(0, 0.1, n), -1, 1)
     scene.Redraw()
+# %%
 
 # %%

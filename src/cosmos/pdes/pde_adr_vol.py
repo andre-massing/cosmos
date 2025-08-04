@@ -55,6 +55,7 @@ class VolADR(BaseADR):
         else:
             self.fes = Compress(H1(solverdata.mesh, order = self.fes_order, 
                                    definedon = self.domain))
+        
             
         self.trial = self.fes.TrialFunction()
         self.test = self.fes.TestFunction()
@@ -186,11 +187,11 @@ class VolADR(BaseADR):
 
             if solverdata.mesh.dim == 2:
                 ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-                dx_lumped = dx(intrules = { TRIG : ir }, deformation=solverdata.ale.deformation)
+                dx_lumped = dx(intrules = { TRIG : ir }, deformation=solverdata.ale.deformation_new)
             elif solverdata.mesh.dim == 3:
                 raise Exception('Not yet implemented!')
                 ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-                dx_lumped = dx(intrules = { TRIG : ir }, deformation=solverdata.ale.deformation)
+                dx_lumped = dx(intrules = { TRIG : ir }, deformation=solverdata.ale.deformation_new)
             A = BilinearForm(self.gfu.space, symmetric = True)
             u, v = self.gfu.space.TnT()
             A += u*v*dx_lumped
@@ -208,6 +209,14 @@ class VolADR(BaseADR):
                                 MP=self.MP, mass0 =self.mass0, dt = dt)
 
             self.gfu.vec.data = gfu_new
+
+    def GetTotMass(self, solverdata):
+
+        solverdata.mesh.SetDeformation(solverdata.ale.deformation)
+        mass = Integrate(self.solute, solverdata.mesh, VOL_or_BND=VOL)
+        solverdata.mesh.UnsetDeformation()
+
+        return mass
 
     def get_error(self, solverdata, ex_sol, norm):
 

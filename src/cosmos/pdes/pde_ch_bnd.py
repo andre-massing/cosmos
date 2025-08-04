@@ -39,7 +39,6 @@ class CahnHilliardBnd(BaseCH):
         self.time_scheme = time_scheme
 
         self.fields = 2
-        self.nonlinear = True
 
     def Initialize(self, solverdata):
 
@@ -66,21 +65,18 @@ class CahnHilliardBnd(BaseCH):
         self.gfu_save = list(GridFunction(Compress(H1(solverdata.mesh, order = self.fes_order))**2).components)
 
         if self.c0():
-            self.phase.Set(self.c0(), definedon = self.domain)
+            self.phase.Set(self.c0(), dual = True,  definedon = self.domain)
         if self.phi0():
-            self.potential.Set(self.phi0(), definedon = self.domain)
+            self.potential.Set(self.phi0(), dual = True, definedon = self.domain)
 
         self.gfu_save[0].Set(self.phase, definedon = self.domain)
         self.gfu_save[1].Set(self.potential, definedon = self.domain)
 
         if self.MP:
 
-            if solverdata.mesh.dim == 2:
-                ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
-                ds_lumped = ds(intrules = { SEGM : ir })
-            elif solverdata.mesh.dim == 3:
-                ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-                ds_lumped = ds(intrules = { TRIG : ir })
+            ir_segm = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
+            ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
+            ds_lumped = ds(intrules = { SEGM: ir_segm, TRIG : ir_trig })
             A = BilinearForm(self.phase.space, symmetric = True)
             u, v = self.phase.space.TnT()
             A += u*v*ds_lumped
@@ -105,7 +101,9 @@ class CahnHilliardBnd(BaseCH):
         lhs += trial[1]*test[1]*ds(deformation = solverdata.ale.deformation)
         lhs += -1*self.sigma()*self.gamma()*grad(trial[0]).Trace()*grad(test[1]).Trace()*ds(deformation = solverdata.ale.deformation)
         
-        lhs += (solverdata.ale.material_velocity - solverdata.ale.velocity)*grad(trial[0]).Trace()*test[0]*ds(deformation = solverdata.ale.deformation)
+        # lhs += (solverdata.ale.material_velocity - solverdata.ale.velocity)*grad(trial[0]).Trace()*test[0]*ds(deformation = solverdata.ale.deformation)
+
+        lhs += -self.sigma()/self.gamma()*(3*self.phase**2 - 1)*trial[0]*test[1]*ds(deformation = solverdata.ale.deformation)
                     
         return lhs
 
@@ -116,6 +114,8 @@ class CahnHilliardBnd(BaseCH):
             rhs += self.rhs_c()*test[0]*ds(deformation = solverdata.ale.deformation)
         if self.rhs_p():
             rhs += self.rhs_p()*test[1]*ds(deformation = solverdata.ale.deformation)
+
+        rhs += -2*self.sigma()/self.gamma()*self.phase**3*test[1]*ds(deformation = solverdata.ale.deformation)
             
         return rhs
 
@@ -123,12 +123,6 @@ class CahnHilliardBnd(BaseCH):
 
         mass = 1/solverdata.dt*trial[0]*test[0]*ds(deformation = solverdata.ale.deformation)
         return mass
-
-    def GetNL(self, solverdata, trial, test):
-
-        nonlin = -self.sigma()/self.gamma()*(trial[0]**3 - trial[0])*test[1]*ds(deformation = solverdata.ale.deformation)
-                    
-        return nonlin
     
     def PostProcess(self, solverdata):
 
@@ -147,12 +141,10 @@ class CahnHilliardBnd(BaseCH):
             else:
                 raise Exception('A time-dependent simulation is needed to impose conservative mass!')
 
-            if solverdata.mesh.dim == 2:
-                ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
-                ds_lumped = ds(intrules = { SEGM : ir }, deformation=solverdata.ale.deformation)
-            elif solverdata.mesh.dim == 3:
-                ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-                ds_lumped = ds(intrules = { TRIG : ir }, deformation=solverdata.ale.deformation)
+            
+            ir_segm = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
+            ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
+            ds_lumped = ds(intrules = { SEGM: ir_segm, TRIG : ir_trig }, deformation=solverdata.ale.deformation_new)
             A = BilinearForm(self.phase.space, symmetric = True)
             u, v = self.phase.space.TnT()
             A += u*v*ds_lumped

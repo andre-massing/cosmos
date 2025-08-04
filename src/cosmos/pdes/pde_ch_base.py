@@ -35,81 +35,45 @@ class BaseCH(BasePDE):
 
     def SystemSolve(self, solverdata):
 
-        if isinstance(self.time_scheme, CN):
-            raise Exception('Crack-Nicholson scheme not implemented for this solver')
+        A = BilinearForm(self.fes)
+        F = LinearForm(self.fes)
+
+        if isinstance(self.time_scheme, Steady):
+
+            raise Exception('Steady scheme not implemented for this Cahn-Hilliard solver')
         
-        if len(solverdata.prev_def) == 1 or isinstance(self.time_scheme, BDF1):
-
-            ale_curr = ale(solverdata)
-            ale_curr.deformation.vec.data = solverdata.ale.deformation.vec.data
-            ale_curr.velocity.vec.data = solverdata.ale.velocity.vec.data
-            ale_curr.material_velocity.vec.data = solverdata.ale.material_velocity.vec.data
-
-            solverdata.ale.deformation.vec.data = solverdata.prev_def[-1].data
-            solverdata.ale.velocity.vec.data = solverdata.prev_vel[-1].data
-            solverdata.ale.material_velocity.vec.data = solverdata.prev_mat_vel[-1].data
-
-            M = BilinearForm(self.fes)
-            M += self.GetMass(solverdata, self.get_trial(), self.get_test())
-            M.Assemble()
-            resMold = M.mat*self.prev_gfu[-1]
-
-            solverdata.t.Set(solverdata.t.Get() + solverdata.dt.Get())
-
-            A = BilinearForm(self.fes)
-            F = LinearForm(self.fes)
-            F += self.GetRHS(solverdata, self.get_test())
-            F.Assemble()
-
-            A += self.GetLHS(solverdata, self.get_trial(), self.get_test())
-            A += self.GetNL(solverdata, self.get_trial(), self.get_test())
-            res = F.vec
-            res += resMold
-            A += self.GetMass(solverdata, self.get_trial(), self.get_test())         
-
-        elif isinstance(self.time_scheme, BDF2):
-
-            ale_curr = ale(solverdata)
-            ale_curr.deformation.vec.data = solverdata.ale.deformation.vec.data
-            ale_curr.velocity.vec.data = solverdata.ale.velocity.vec.data
-            ale_curr.material_velocity.vec.data = solverdata.ale.material_velocity.vec.data
-
-            solverdata.ale.deformation.vec.data = 2*solverdata.prev_def[-1].data - 1*solverdata.prev_def[-2].data
-            solverdata.ale.velocity.vec.data = 2*solverdata.prev_vel[-1].data - 1*solverdata.prev_vel[-2].data
-            solverdata.ale.material_velocity.vec.data = 2*solverdata.prev_mat_vel[-1].data - 1*solverdata.prev_mat_vel[-2].data
-
-            M = BilinearForm(self.fes)
-            M += self.GetMass(solverdata, self.get_trial(), self.get_test())
-            M.Assemble()
-            resMoldold = M.mat*self.prev_gfu[-2]
-            resMold = M.mat*self.prev_gfu[-1]
-
-            solverdata.t.Set(solverdata.t.Get() + solverdata.dt.Get())
-
-            A = BilinearForm(self.fes)
-            F = LinearForm(self.fes)
-            F += self.GetRHS(solverdata, self.get_test())
-            F.Assemble()
-
-            A += self.GetLHS(solverdata, self.get_trial(), self.get_test())
-            A += self.GetNL(solverdata, self.get_trial(), self.get_test())
-            res = F.vec
-            res += -0.5*resMoldold
-            res += 2*resMold
-            A += 1.5*self.GetMass(solverdata, self.get_trial(), self.get_test())
-
-        elif isinstance(self.time_scheme, Steady):
-            raise Exception('Steady solver not yet implemented for this solver')
-
         else:
-            raise Exception('Time integration not known for this solver')
-        
-        SimpleNewtonSolve(solverdata, A, res, self.gfu)
 
-        solverdata.t.Set(solverdata.t.Get() - solverdata.dt.Get())
-        solverdata.ale.deformation.vec.data = ale_curr.deformation.vec.data
-        solverdata.ale.velocity.vec.data = ale_curr.velocity.vec.data
-        solverdata.ale.material_velocity.vec.data = ale_curr.velocity.vec.data
+            M = BilinearForm(self.fes)
+            M += self.GetMass(solverdata, self.get_trial(), self.get_test())
+            M.Assemble()
+
+            if isinstance(self.time_scheme, BDF2) and len(self.prev_gfu)==1 or \
+                isinstance(self.time_scheme, BDF1):
+
+                A += self.GetLHS(solverdata, self.get_trial(), self.get_test())
+                A += self.GetMass(solverdata, self.get_trial(), self.get_test())
+                F += self.GetRHS(solverdata, self.get_test())
+                F.Assemble()
+                res = F.vec
+                res += M.mat*self.prev_gfu[-1]
+
+            elif isinstance(self.time_scheme, BDF2) and len(self.prev_gfu)>1:
+
+                A += self.GetLHS(solverdata, self.get_trial(), self.get_test())
+                A += 1.5*self.GetMass(solverdata, self.get_trial(), self.get_test())
+                F += self.GetRHS(solverdata, self.get_test())
+                F.Assemble()
+                res = F.vec
+                res += 2*M.mat*self.prev_gfu[-1]
+                res += -0.5*M.mat*self.prev_gfu[-2]
+
+            else:
+
+                raise Exception('Time scheme not implemented for this Cahn-Hilliard solver')
+
+        A.Assemble()
+        self.gfu.vec.data = A.mat.Inverse(freedofs = self.fes.FreeDofs())*res
 
     def Update(self, solverdata):
 

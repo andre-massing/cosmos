@@ -71,3 +71,38 @@ solver.AddPDE(ch)
 scene = Draw(ch.phase, mesh)
 for sol in solver():
     scene.Redraw()
+
+# %%
+
+from ngsolve import *
+from cosmos.solvers.solvers import Dynamic
+from cosmos.solvers.time_schemes import BDF1, BDF2
+from cosmos.pdes.pde_ch_bnd import CahnHilliardBnd
+import numpy as np
+from cosmos.utils.generate_surface_meshes import generate_sphere
+from ngsolve.webgui import Draw
+
+mesh, _ = generate_sphere(maxh = 0.1)
+
+
+dt = Parameter(1e-2)
+t = Parameter(0.0)
+T = 10
+
+theta = 1
+gamma = 0.5
+sigma = 2
+aux = IfPos(sin(1e7*(x+y*y))-1, 1, sin(1e7*(x+y*y)))
+c0 = IfPos(-aux-1, -1, aux)
+c0 = (exp(2*x/sqrt(2))-1)/(exp(2*x/sqrt(2))+1)
+Draw(c0, mesh)
+ch = CahnHilliardBnd(c0 = c0, theta = theta, gamma=gamma, sigma = sigma, 
+                     time_scheme = BDF2())
+
+
+solver = Dynamic(mesh = mesh, dt=dt, T=T, t=t)
+solver.AddPDE(ch)
+
+scene = Draw(ch.phase, mesh)
+for sol in solver():
+    scene.Redraw()

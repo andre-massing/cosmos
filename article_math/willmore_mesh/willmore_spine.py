@@ -1,7 +1,7 @@
 # %%
 
-from cosmos.solvers.solver_unsteady import UnsteadySolver
-from cosmos.solvers.schemes import BDF1, BDF2
+from cosmos.solvers.solvers import Dynamic
+from cosmos.solvers.time_schemes import BDF1, BDF2
 from cosmos.pdes.pde_willmore_dziuk import WillmoreDziuk
 from cosmos.pdes.pde_willmore_dziuk_stab import WillmoreDziukStab
 from cosmos.pdes.pde_tools import SaveError, SaveSolution
@@ -11,8 +11,8 @@ import numpy as np
 import pandas as pd
 
 will_sol = [
-    WillmoreDziuk(postprocess = None, mc_autoupdate = False),
-    WillmoreDziukStab(postprocess = None, mc_autoupdate = False)
+    WillmoreDziuk(postprocess = None, time_scheme=BDF1()),
+    WillmoreDziukStab(postprocess = None, time_scheme=BDF1())
 ]
 
 for i, sol in enumerate(will_sol):
@@ -28,11 +28,11 @@ for i, sol in enumerate(will_sol):
 
     mesh = Mesh('../../data/geometries/spine_closed.vol')
 
-    solver = UnsteadySolver(mesh = mesh, dt=dt, T=T, t=t)
-    solver.AddPDE(sol, BDF1(conservative=False))
-    solver.ale.SetMeshDeformation(sol.gfu.components[0])
+    solver = Dynamic(mesh = mesh, dt=dt, T=T, t=t)
+    solver.AddPDE(sol)
+    solver.ale.deformation_field = sol.displacement
 
-    scene = Draw(sol.kappa_h, mesh, deformation = solver.ale.deformation, min = 0)
+    scene = Draw(sol.mean_curvature, mesh, deformation = solver.ale.deformation, min = 0)
     for sol in solver():
         scene.Redraw()
 # %%

@@ -48,20 +48,20 @@ def gradient(f,P):
             
     elif l == 1:
         # vector gradient is defined component by component
-        # and disposed along columns
+        # and disposed along rows
 
         if m == 2:
             aux1 = gradient(f[0], P)
             aux2 = gradient(f[1], P)
             output = CoefficientFunction((aux1[0], aux2[0], \
-                aux1[1], aux2[1]), dims = (m,m))
+                aux1[1], aux2[1]), dims = (m,m)).trans
         elif m == 3:
             aux1 = gradient(f[0], P)
             aux2 = gradient(f[1], P)
             aux3 = gradient(f[2], P)
             output = CoefficientFunction((aux1[0], aux2[0], aux3[0], \
                 aux1[1], aux2[1], aux3[1],\
-                    aux1[2], aux2[2], aux3[2]), dims = (m,m))
+                    aux1[2], aux2[2], aux3[2]), dims = (m,m)).trans
             
     else:
 
@@ -168,7 +168,8 @@ def MandBP(gfu_vec, dt = None, weights=None, BP=None, MP=False, mass0=None):
 
     if BP and not MP:
 
-        gfu_data = np.minimum(np.maximum(gfu_vec, BP[0]), BP[1])  
+        # gfu_data = np.minimum(np.maximum(gfu_vec, BP[0]), BP[1]) 
+        gfu_data = np.clip(gfu_vec, BP[0], BP[1])  
 
     elif MP:
 
@@ -179,8 +180,7 @@ def MandBP(gfu_vec, dt = None, weights=None, BP=None, MP=False, mass0=None):
             temp = gfu_vec + dt * xsi
 
             result -= mass0
-            dummy = np.minimum(np.maximum(temp, BP[0]), 
-                                BP[1])
+            dummy = np.clip(temp, BP[0], BP[1])
             result += np.sum(weights * dummy)
 
             return result
@@ -200,6 +200,6 @@ def MandBP(gfu_vec, dt = None, weights=None, BP=None, MP=False, mass0=None):
             xsi_old1 = xsi2
 
         threshold = dt * xsi2
-        gfu_data = np.minimum(np.maximum(gfu_vec + threshold, 
-                                            BP[0]), BP[1]) 
+        gfu_data = np.clip(gfu_vec + threshold, BP[0], BP[1]) 
+
     return gfu_data

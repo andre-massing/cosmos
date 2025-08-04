@@ -6,11 +6,12 @@ from ngsolve.webgui import Draw
 import numpy as np
 import scipy.sparse as sp
 from cosmos.solvers.fields import Field
+from myngspy import *
 
 class AdBndADR(BaseADR):
 
     def __init__(self, b = None, c = None, d = None, u0 = None, rhs = None,
-                 neu_d = {}, neu_b = {}, dir_d = {}, dir_b = {}, Fneu_b = {},
+                 neu_d = {}, neu_b = {}, dir_d = {}, dir_b = {},
                  domain:str = '.*', name:str = 'surface_adr', periodic :bool = False,
                  MP:bool = False, BP:bool = False, time_scheme = BDF1()):
 
@@ -25,7 +26,6 @@ class AdBndADR(BaseADR):
         self.neu_b = neu_b
         self.dir_d = dir_d
         self.dir_b = dir_b
-        self.Fneu_b = Fneu_b
         self.MP = MP
         self.BP = BP
         self.periodic = periodic
@@ -109,13 +109,7 @@ class AdBndADR(BaseADR):
         else:
             self.facet_space = FacetSurface(solverdata.mesh, order = 0)
 
-        dim = solverdata.mesh.dim
-        J = specialcf.JacobianMatrix(dim, dim-1) 
-        if dim == 3:
-            area = sqrt(Det(J.trans*J))/2
-            self.h_f = sqrt(area/pi)
-        elif dim == 2:
-            self.h_f = Norm(J[:, 0])
+        self.h_f = MyMeshSize()
 
     def GetLHS(self, solverdata, trial, test):
 
@@ -153,16 +147,6 @@ class AdBndADR(BaseADR):
                     lhs += IfPos(InnerProduct(self.nE, b), 
                                     InnerProduct(self.nE, b)*trial[0], 0)\
                                         *neu_b[str(i)]*test[0]*ds(element_boundary=True, deformation = solverdata.ale.deformation)
-            
-            if self.Fneu_b:
-                Fneu_b = {}
-                for i, (key, field) in enumerate(self.Fneu_b.items()):
-                    boundaries += key + '|'
-                    Fneu_b[str(i)] = GridFunction(self.facet_space)
-                    Fneu_b[str(i)].Set(1, definedon=solverdata.mesh.BBoundaries('.*') - solverdata.mesh.BBoundaries(key))
-                    lhs += IfPos(InnerProduct(self.nE, b), 
-                                    InnerProduct(self.nE, b)*trial[0], CF(0))\
-                                        *Fneu_b[str(i)]*test[0]*ds(element_boundary=True, deformation = solverdata.ale.deformation)
                     
             if self.dir_b:
                 dir_b = {}
@@ -176,12 +160,12 @@ class AdBndADR(BaseADR):
             
             if hasattr(solverdata, 'dt'):
                 max_bc = GridFunction(H1(solverdata.mesh, definedon = self.domain))
-                max_bc.Set(Norm(self.h_f*Norm(b) + 1/solverdata.dt), definedon=self.domain)
+                max_bc.Set(self.h_f*Norm(b) + self.h_f**2*1/solverdata.dt, definedon=self.domain)
                 max_bc = np.max(max_bc.vec)
                 stab = self.h_f**3/max_bc
             else:
                 max_bc = GridFunction(H1(solverdata.mesh, definedon = self.domain))
-                max_bc.Set(Norm(self.h_f*Norm(b) + Norm(self.c)), definedon=self.domain)
+                max_bc.Set(self.h_f*Norm(b) + self.h_f**2*Norm(self.c), definedon=self.domain)
                 max_bc = np.max(max_bc.vec)
                 stab = self.h_f**3/max_bc
             if solverdata.mesh.dim == 2:
@@ -230,14 +214,6 @@ class AdBndADR(BaseADR):
                 rhs += -IfPos(InnerProduct(self.nE, b), 0,
                             InnerProduct(self.nE, field))*neu_b[str(i)]*test[0]\
                                 *ds(element_boundary=True, deformation = solverdata.ale.deformation)
-            
-        if self.Fneu_b:
-            Fneu_b = {}
-            for i, (key, field) in enumerate(self.Fneu_b.items()):
-                Fneu_b[str(i)] = GridFunction(self.facet_space)
-                Fneu_b[str(i)].Set(1, definedon=solverdata.mesh.BBoundaries(key))
-                rhs += -InnerProduct(self.nE, field)*Fneu_b[str(i)]*test[0]\
-                                *ds(element_boundary=True, deformation = solverdata.ale.deformation)
                 
         if self.dir_d:
             alpha = 5 * self.fes_order * (self.fes_order+1)
@@ -284,10 +260,10 @@ class AdBndADR(BaseADR):
 
             if solverdata.mesh.dim == 2:
                 ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
-                ds_lumped = ds(intrules = { SEGM : ir }, deformation=solverdata.ale.deformation)
+                ds_lumped = ds(intrules = { SEGM : ir }, deformation=solverdata.ale.deformation_new)
             elif solverdata.mesh.dim == 3:
                 ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-                ds_lumped = ds(intrules = { TRIG : ir }, deformation=solverdata.ale.deformation)
+                ds_lumped = ds(intrules = { TRIG : ir }, deformation=solverdata.ale.deformation_new)
             A = BilinearForm(self.gfu.components[0].space, symmetric = True)
             u, v = self.gfu.components[0].space.TnT()
             A += u*v*ds_lumped
@@ -319,6 +295,14 @@ class AdBndADR(BaseADR):
             save.Save(solverdata, self)
 
         solverdata.mesh.UnsetDeformation()
+
+    def GetTotMass(self, solverdata):
+
+        solverdata.mesh.SetDeformation(solverdata.ale.deformation)
+        mass = Integrate(self.solute, solverdata.mesh, VOL_or_BND=BND)
+        solverdata.mesh.UnsetDeformation()
+
+        return mass
 
     def get_error(self, solverdata, ex_sol, norm):
 

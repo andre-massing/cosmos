@@ -1,9 +1,7 @@
 # Import necessary libraries
 from ngsolve import *
 from cosmos.pdes.pde_base import BasePDE
-from cosmos.pdes.ale import ale
-from ngsolve.webgui import Draw
-from cosmos.solvers.time_schemes import BDF1, BDF2, CN, Steady
+import time
 
 class WeakCoupling(BasePDE):
     
@@ -29,8 +27,8 @@ class WeakCoupling(BasePDE):
         else:
             self.initialized = True
 
-        if len(self.PDEs)<2:
-            raise Exception('Coupling class is meant for more than only 1 PDE!')
+        # if len(self.PDEs)<2:
+        #     raise Exception('Coupling class is meant for more than only 1 PDE!')
 
         for pde in self.PDEs:
             pde.Initialize(solverdata)
@@ -39,23 +37,40 @@ class WeakCoupling(BasePDE):
 
         dim = len(self.PDEs)
         errors = [1e10]*dim
-        gfus_old = [None]*dim
-        gfus_new = [None]*dim
 
         for i, pde in enumerate(self.PDEs):
             pde.Solve(solverdata)
-            solverdata.ale.update_ale()
-            gfus_old[i] = pde.gfu.vec.Copy()
+            pde.PostProcess(solverdata)
+            solverdata.ale.compute_new_def()
 
+        iter = 0
+        max_iter = 30
         if self.type == 'implicit':
-            while max(errors)>self.tol:
+            while max(errors)>self.tol and iter<max_iter:
+
+                iter += 1
                 for i, pde in enumerate(self.PDEs):
+
+                    vec1 = pde.gfu.vec.Copy()
+                    t1 = time.time()
                     pde.SystemSolve(solverdata)
+                    t2 = time.time()
                     pde.PostProcess(solverdata)
-                    solverdata.ale.update_ale()
-                    gfus_new[i] = pde.gfu.vec.Copy()
-                    errors[i] = Norm(gfus_new[i] - gfus_old[i])/Norm(gfus_old[i])
-                    gfus_old[i] = gfus_new[i]
+                    t3 = time.time()
+                    solverdata.ale.compute_new_def()
+                    t4 = time.time()
+                    vec2 = pde.gfu.vec.Copy()
+                    errors[i] = Norm(vec2 - vec1)/Norm(vec2)
+                    t5 = time.time()
+
+                    # print('Solving time:', t2-t1)
+                    # print('Postprocess time:', t3-t2)
+                    # print('Deformation update', t4-t3)
+                    # print('Norm computation', t5-t4)
+
+            if iter == max_iter:
+                raise Exception('Reached '+ str(max_iter) + ' iterations without converging!')
+
         elif self.type != 'explicit':
             raise Exception('Weak coupling type ', self.type, ' not implemented')
 

@@ -63,7 +63,7 @@ class Static(BaseSolver):
     def SolveStep(self):
         for pde in self.PDEs:
             pde.Solve(self)
-            self.ale.update_ale()
+            self.ale.compute_new_def()
                     
     def PreProcess(self):
         pass
@@ -95,7 +95,9 @@ class Dynamic(Static):
 
         with TaskManager():
 
-            max_steps = int(self.T/self.dt.Get())
+            max_steps = int(abs((self.T - self.t.Get())/self.dt.Get()))
+
+            print(max_steps)
 
             if self.verbose>0:
                 print('Initializing...')
@@ -105,6 +107,9 @@ class Dynamic(Static):
                         N.', len(self.PDEs), ' PDEs have been initialized correctly')
 
             yield
+
+            for pde in self.PDEs:
+                pde.Update(self)
 
             if self.verbose>0:
                 print('-'*10, '\nStarting the simulation...')
@@ -126,21 +131,18 @@ class Dynamic(Static):
     def __call__(self):
         return self.__generator__()
     
-    def PreProcess(self):
-
-        self.prev_dt.append(self.dt.Get())    
-        if len(self.prev_dt)>6:
-            self.prev_dt.pop(0)
-        self.ale.deformation_old.vec.data = self.ale.deformation.vec.data
-        self.ale.update_ale()
-
     def Initialize(self):
 
         self.prev_def.append(self.ale.deformation.vec.Copy())
         self.prev_vel.append(self.ale.velocity.vec.Copy())
         self.prev_mat_vel.append(self.ale.material_velocity.vec.Copy())
-        for pde in self.PDEs:
-            pde.Update(self)
+    
+    def PreProcess(self):
+
+        self.prev_dt.append(self.dt.Get())    
+        if len(self.prev_dt)>6:
+            self.prev_dt.pop(0)
+        self.ale.compute_new_def()
 
     def Solve(self):
 
@@ -150,6 +152,7 @@ class Dynamic(Static):
         
     def PostProcess(self):
 
+        self.ale.update_ale()
         self.prev_def.append(self.ale.deformation.vec.Copy())
         self.prev_vel.append(self.ale.velocity.vec.Copy())
         self.prev_mat_vel.append(self.ale.material_velocity.vec.Copy())    

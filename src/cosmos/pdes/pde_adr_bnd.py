@@ -5,11 +5,12 @@ import numpy as np
 import scipy.sparse as sp
 from cosmos.solvers.time_schemes import BDF1, BDF2, CN, Steady
 from cosmos.solvers.fields import Field
+from myngspy import *
 
 class BndADR(BaseADR):
 
     def __init__(self, b = None, c = None, d = None, u0 = None, rhs = None,
-                 neu_d = {}, neu_b = {}, dir_d = {}, dir_b = {}, Fneu_b = {},
+                 neu_d = {}, neu_b = {}, dir_d = {}, dir_b = {},
                  domain:str = '.*', name:str = 'surface_adr', periodic:bool = False,
                  MP:bool = False, BP:bool = False, time_scheme = BDF1()):
 
@@ -24,7 +25,6 @@ class BndADR(BaseADR):
         self.neu_b = neu_b
         self.dir_d = dir_d
         self.dir_b = dir_b
-        self.Fneu_b = Fneu_b
         self.MP = MP
         self.BP = BP
         self.periodic = periodic
@@ -65,12 +65,9 @@ class BndADR(BaseADR):
         self.gfu_save[0].Set(self.gfu, definedon = self.domain)
 
         if self.MP:
-            if solverdata.mesh.dim == 2:
-                ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
-                ds_lumped = ds(intrules = { SEGM : ir })
-            elif solverdata.mesh.dim == 3:
-                ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-                ds_lumped = ds(intrules = { TRIG : ir })
+            ir_segm = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
+            ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
+            ds_lumped = ds(intrules = {  SEGM : ir_segm, TRIG : ir_trig })
             A = BilinearForm(self.gfu.space, symmetric = True)
             u, v = self.gfu.space.TnT()
             A += u*v*ds_lumped
@@ -99,15 +96,7 @@ class BndADR(BaseADR):
         else:
             self.facet_space = FacetSurface(solverdata.mesh, order = 0)
 
-        dim = solverdata.mesh.dim
-        J = specialcf.JacobianMatrix(dim, dim-1) 
-        if dim == 3:
-            a = Norm(J[:,0])
-            b = Norm(J[:,1])
-            c = Norm(J[:,0] - J[:,1])
-            self.h_f = IfPos(IfPos(a-b, a, b) - c, IfPos(a-b, a, b), c)
-        elif dim == 2:
-            self.h_f = Norm(J[:, 0])
+        self.h_f = MyMeshSize()
 
     def GetLHS(self, solverdata, trial, test):
 
@@ -144,16 +133,6 @@ class BndADR(BaseADR):
                     lhs += IfPos(InnerProduct(self.nE, b), 
                                     InnerProduct(self.nE, b)*trial[0], 0)\
                                         *neu_b[str(i)]*test[0]*ds(element_boundary=True, deformation = solverdata.ale.deformation)
-            
-            if self.Fneu_b:
-
-                Fneu_b = {}
-                for i, (key, field) in enumerate(self.Fneu_b.items()):
-                    Fneu_b[str(i)] = GridFunction(self.facet_space)
-                    Fneu_b[str(i)].Set(1, definedon=solverdata.mesh.BBoundaries('.*') - solverdata.mesh.BBoundaries(key))
-                    lhs += IfPos(InnerProduct(self.nE, b), 
-                                    InnerProduct(self.nE, b)*trial[0], CF(0))\
-                                        *Fneu_b[str(i)]*test[0]*ds(element_boundary=True, deformation = solverdata.ale.deformation)
                     
             if self.dir_b:
 
@@ -191,16 +170,7 @@ class BndADR(BaseADR):
                 neu_b[str(i)].Set(1, definedon=solverdata.mesh.BBoundaries(key))
                 rhs += -IfPos(InnerProduct(self.nE, b), 0,
                             InnerProduct(self.nE, field))*neu_b[str(i)]*test[0]\
-                                *ds(element_boundary=True, deformation = solverdata.ale.deformation)
-            
-        if self.Fneu_b:
-
-            Fneu_b = {}
-            for i, (key, field) in enumerate(self.Fneu_b.items()):
-                Fneu_b[str(i)] = GridFunction(self.facet_space)
-                Fneu_b[str(i)].Set(1, definedon=solverdata.mesh.BBoundaries(key))
-                rhs += -InnerProduct(self.nE, field)*Fneu_b[str(i)]*test[0]\
-                                *ds(element_boundary=True, deformation = solverdata.ale.deformation)
+                                *ds(element_boundary=True, deformation = solverdata.ale.deformation) 
                 
         if self.dir_d:
 
@@ -247,19 +217,15 @@ class BndADR(BaseADR):
             else:
                 raise Exception('A time-dependent simulation is needed to impose conservative mass!')
 
-            if solverdata.mesh.dim == 2:
-                ir = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
-                ds_lumped = ds(intrules = { SEGM : ir }, deformation=solverdata.ale.deformation)
-            elif solverdata.mesh.dim == 3:
-                ir = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-                ds_lumped = ds(intrules = { TRIG : ir }, deformation=solverdata.ale.deformation)
+            ir_segm = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
+            ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
+            ds_lumped = ds(intrules = { SEGM: ir_segm, TRIG : ir_trig }, deformation=solverdata.ale.deformation_new)
             A = BilinearForm(self.gfu.space, symmetric = True)
             u, v = self.gfu.space.TnT()
             A += u*v*ds_lumped
             A.Assemble()
             rows,cols,vals = A.mat.COO()
             weights = sp.csr_matrix((vals,(rows,cols))).diagonal()
-            print(weights)
             gfu_vec = self.gfu.vec.Copy().FV().NumPy()
 
             if self.BP:
@@ -284,6 +250,14 @@ class BndADR(BaseADR):
             save.Save(solverdata, self)
 
         solverdata.mesh.UnsetDeformation()
+
+    def GetTotMass(self, solverdata): 
+
+        solverdata.mesh.SetDeformation(solverdata.ale.deformation)
+        mass = Integrate(self.solute, solverdata.mesh, VOL_or_BND=BND)
+        solverdata.mesh.UnsetDeformation()
+
+        return mass
 
     def get_error(self, solverdata, ex_sol, norm):
 
