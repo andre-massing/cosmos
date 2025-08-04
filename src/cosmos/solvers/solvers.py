@@ -95,7 +95,9 @@ class Dynamic(Static):
 
         with TaskManager():
 
-            max_steps = int(self.T/self.dt.Get())
+            max_steps = int(abs((self.T - self.t.Get())/self.dt.Get()))
+
+            print(max_steps)
 
             if self.verbose>0:
                 print('Initializing...')
