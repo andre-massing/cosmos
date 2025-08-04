@@ -55,6 +55,7 @@ class VolADR(BaseADR):
         else:
             self.fes = Compress(H1(solverdata.mesh, order = self.fes_order, 
                                    definedon = self.domain))
+        
             
         self.trial = self.fes.TrialFunction()
         self.test = self.fes.TestFunction()
