@@ -97,8 +97,6 @@ class Dynamic(Static):
 
             max_steps = int(abs((self.T - self.t.Get())/self.dt.Get()))
 
-            print(max_steps)
-
             if self.verbose>0:
                 print('Initializing...')
             self.Initialize()
