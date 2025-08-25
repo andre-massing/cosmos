@@ -54,20 +54,21 @@ class Solver:
 
         start_time = time.time()
 
-        while self.time.t.Get()<self.time.final_t:
-            self.time.preprocess()
-            self.iterator.preprocess()
-            self.iterator.solve_step()
+        with TaskManager():
+            while self.time.t.Get()<self.time.final_t:
+                self.time.preprocess()
+                self.iterator.preprocess()
+                self.iterator.solve_step()
 
-            elapsed = time.strftime("%H:%M:%S", time.gmtime(time.time() - start_time))
-            logging.info(
-                f"t = {self.time.t.Get():.2e} | Δt = {self.time.dt.Get():.2e} | Iter {self.time.iter}"
-                f" | Elapsed = {elapsed} \r"
-            )
+                elapsed = time.strftime("%H:%M:%S", time.gmtime(time.time() - start_time))
+                logging.info(
+                    f"t = {self.time.t.Get():.2e} | Δt = {self.time.dt.Get():.2e} | Iter {self.time.iter}"
+                    f" | Elapsed = {elapsed} \r"
+                )
 
-            yield
-            self.iterator.postprocess()
-            self.time.postprocess()
+                yield
+                self.iterator.postprocess()
+                self.time.postprocess()
 
     def run(self):
         for step in self(): 
