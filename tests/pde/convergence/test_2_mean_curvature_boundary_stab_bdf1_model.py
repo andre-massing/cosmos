@@ -35,7 +35,7 @@ def test_2_mean_curvature_boundary_stab_bdf1_model():
 
         solvertime = SolverTime(dt = dt, initial_t=0, final_t=Tend, t_coef=t)
         solvermesh = SolverMesh(mesh)
-        solver = Solver(solvermesh, solvertime)
+        solver = Solver(solvermesh, solvertime, iter = True)
 
         mean_curvature = MeanCurvatureBoundaryStabBDF1Model(solver, 1, name = 'mean_curvature_boundary_stab_bdf1')
         displacement = DisplacementBoundaryBDF1Coupling(solver, 2, mean_curvature.displacement)
@@ -65,13 +65,13 @@ def test_2_mean_curvature_boundary_stab_bdf1_model():
         return errs
 
     power_t = 1.5
-    dt0 = 0.02
-    dt_refs = 3
+    dt0 = 0.01
+    dt_refs = 2
     dts = dt0/(power_t**(np.arange(dt_refs+1)))
 
     power_h = 1.5
     dh0 = 0.2
-    dh_refs = 3
+    dh_refs = 2
     dhs = dh0/(power_h**(np.arange(dh_refs+1)))
 
     ERRORS_dX = np.zeros((len(dts), len(dhs)))

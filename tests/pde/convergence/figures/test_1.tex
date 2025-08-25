@@ -11,6 +11,7 @@
 \usepackage[pdftex]{graphics}
 \usepackage{pgfplots}
 \usepackage{pgfplotstable}
+\usepackage{comment}
 
 \definecolor{viridis1}{rgb}{0.267004, 0.004874, 0.329415}  % dark purple
 \definecolor{viridis2}{rgb}{0.190631, 0.407061, 0.556089}  % blue
@@ -153,6 +154,10 @@
     \end{tikzpicture}
 
 \section{Convergence sphere with spontaneous mean curvature and stabilized mean curvature initialization}
+
+
+\textcolor{red}{Simulation breaks}
+\begin{comment}
     \begin{tikzpicture}[]
         \begin{loglogaxis}
         [
@@ -225,6 +230,7 @@
             
         \end{loglogaxis}
     \end{tikzpicture}
+\end{comment}
 
 \section{Convergence sphere with spontaneous mean curvature and stabilized mean curvature algorithm}
     \begin{tikzpicture}[]
@@ -285,6 +291,80 @@
         ]
 
         \pgfplotstableread{../results_test_1_willmore_boundary_v1_bdf1_model/data_dX.dat}\datatable
+
+        \pgfplotstableforeachcolumn\datatable\as\col{
+        \ifnum\pgfplotstablecol=0
+            % Exclude the first column
+        \else
+            \addplot table[x=th, y=\col] {\datatable};
+            \addlegendentryexpanded{$h=$\col}
+        \fi
+        }
+
+        \logLogSlopeTriangle{0.75}{0.1}{0.25}{1}{black}
+            
+        \end{loglogaxis}
+    \end{tikzpicture}
+
+\section{Convergence sphere with spontaneous mean curvature and stabilized mean curvature algorithm plus stabilized initialization}
+    \begin{tikzpicture}[]
+        \begin{loglogaxis}
+        [
+            title = Space convergence,
+            xlabel= mesh size  ($h$),
+            ylabel= error $L^\infty(L^\infty)$,
+            legend style=
+            {
+                at={(1,1)},
+                anchor=north east,
+                fill = white,
+                nodes={scale=0.8, transform shape}
+            },
+            legend cell align= left,
+            grid=major,
+            clip=false,
+            scale only axis=true,
+            width = 0.4\textwidth,
+            height=0.4\textwidth,
+        ]
+
+        \pgfplotstableread{../results_test_1_willmore_boundary_v2_bdf1_model/data_dX_flipped.dat}\datatable
+
+        \pgfplotstableforeachcolumn\datatable\as\col{
+        \ifnum\pgfplotstablecol=0
+            % Exclude the first column
+        \else
+            \addplot table[x=ht, y=\col] {\datatable};
+            \addlegendentryexpanded{$\tau=$\col}
+        \fi
+        }
+
+        \logLogSlopeTriangle{0.8}{0.1}{0.3}{2}{black}
+            
+        \end{loglogaxis}
+    \end{tikzpicture}
+    \begin{tikzpicture}[]
+        \begin{loglogaxis}
+        [
+            title = Time convergence,
+            xlabel= time step  ($\tau$),
+            % ylabel= error $L^\infty(L^\infty)$,
+            legend style=
+            {
+                at={(1,1)},
+                anchor=north east,
+                fill = white,
+                nodes={scale=0.8, transform shape}
+            },
+            legend cell align= left,
+            grid=major,
+            clip=false,
+            scale only axis=true,
+            width = 0.4\textwidth,
+            height=0.4\textwidth,
+        ]
+
+        \pgfplotstableread{../results_test_1_willmore_boundary_v2_bdf1_model/data_dX.dat}\datatable
 
         \pgfplotstableforeachcolumn\datatable\as\col{
         \ifnum\pgfplotstablecol=0
