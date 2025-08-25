@@ -74,8 +74,8 @@ class ADRBoundaryBDF1Model(BasePDEModel):
         self.gfu.Set(self.input_params['u0'], definedon = self.domain, dual = True)
         self.output_fields["sol"] = OutputField(self.gfu, "sol", BND)
 
-        deform = self._solver.mesh.prev_deformation[-1]
-        deform_old = self._solver.mesh.prev_deformation[-2]
+        deform = self._solver.mesh.curr_deformation
+        deform_old = self._solver.mesh.prev_deformation[-1]
 
         # Creating GridFunctions for the Fields
         b_gfu = GridFunction(fes_vector)
@@ -94,7 +94,7 @@ class ADRBoundaryBDF1Model(BasePDEModel):
         if self.input_params["mass_preserving"]:
             ir_segm = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
             ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-            ds_lumped = ds(intrules = {  SEGM : ir_segm, TRIG : ir_trig })
+            ds_lumped = ds(intrules = {  SEGM : ir_segm, TRIG : ir_trig }, deformation = deform)
             self.Amp = BilinearForm(self.gfu.space, symmetric = True)
             u, v = self.gfu.space.TnT()
             self.Amp += u*v*ds_lumped

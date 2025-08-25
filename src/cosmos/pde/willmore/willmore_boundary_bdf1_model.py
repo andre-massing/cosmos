@@ -78,7 +78,7 @@ class WillmoreBoundaryBDF1Model(BasePDEModel):
         self.A_mc.Assemble()
         self.invA_mc = self.A_mc.mat.Inverse(freedofs = fes_mc.FreeDofs())
         self.F_mc = LinearForm(fes_mc)
-        self.F_mc += -InnerProduct(Ps, grad(eta_mc).Trace())*ds
+        self.F_mc += -InnerProduct(Ps, grad(eta_mc).Trace())*ds(deformation = deform)
         # if self.input_params["clamped_bnd"]:
         #     if self._solver.ngsmesh.dim == 2:
         #         gfBB = GridFunction(H1(self._solver.ngsmesh, order =1,\
@@ -126,7 +126,6 @@ class WillmoreBoundaryBDF1Model(BasePDEModel):
 
         self.A += (1/self._solver.time.dt*trial_D*test_D + 1/self.input_params["elasticity_modulus"]*InnerProduct(trial_Y, test_Y)).Compile(True, True)*ds_lumped
         self.A += (-InnerProduct(grad(trial_Y).Trace(), grad(test_D).Trace()) + InnerProduct(grad(trial_D).Trace(), grad(test_Y).Trace())).Compile(True, True)*ds(deformation = deform)
-
         
         self.F += (-InnerProduct(Ps, grad(test_Y).Trace())).Compile(True, True)*ds(deformation = deform)
         self.F += (-1*k0_gfu*InnerProduct(self.ns, test_Y)).Compile(True, True)*ds_lumped

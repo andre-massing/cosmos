@@ -33,31 +33,29 @@ class SolverMesh:
             self.domain = self.mesh.Materials('.*')
             self.V = VectorH1(self.mesh, order=self.mesh.GetCurveOrder(), definedon = self.domain)
         _deformation = GridFunction(self.V)
-        self.prev_deformation = [GridFunction(self.V)]*self.buffer
         self.mesh.SetDeformation(_deformation)
+        self.prev_deformation = [GridFunction(self.V)]*self.buffer
+        self.curr_deformation = GridFunction(self.V)
 
         logger.debug('Mesh has been initialized correctly')
 
     def update_state(self):
 
         for i in range(self.buffer - 1):
-            self.prev_deformation[i].vec.data = self.prev_deformation[i+1].vec.data 
-        self.prev_deformation[-1].vec.data = self.mesh.deformation.vec.data
+            self.prev_deformation[i].vec.data = self.prev_deformation[i+1].vec.data
+        self.prev_deformation[-1].vec.data = self.curr_deformation.vec.data
+        self.mesh.deformation.vec.data = self.curr_deformation.vec.data
 
     def get_state(self):
         mesh_state = {
-            "deformation": self.mesh.deformation,
+            "deformation": self.curr_deformation,
             "prev_def": self.prev_deformation
         }
         return mesh_state
     
     @property
     def deformation(self):
-        return self.prev_deformation[-1]
-    
-    deformation.setter
-    def deformation(self, cf):
-        self.prev_deformation[-1]
+        return self.curr_deformation
 
 
 

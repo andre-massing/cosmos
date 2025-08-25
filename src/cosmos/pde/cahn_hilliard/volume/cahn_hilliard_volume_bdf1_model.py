@@ -77,8 +77,8 @@ class CahnHilliardVolumeBDF1Model(BasePDEModel):
         self.gfu_w.Set(self.input_params['w0'], dual = True)
         self.output_fields["potential"] = OutputField(self.gfu_w, "potential", VOL)
 
-        deform = self._solver.mesh.prev_deformation[-1]
-        deform_old = self._solver.mesh.prev_deformation[-2]
+        deform = self._solver.mesh.curr_deformation
+        deform_old = self._solver.mesh.prev_deformation[-1]
 
         # Creating GridFunctions for the Fields
         b_gfu = GridFunction(fes_vector)

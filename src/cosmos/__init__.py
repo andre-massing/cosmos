@@ -11,6 +11,7 @@ from cosmos.pde.mean_curvature.mean_curvature_boundary_stab_bdf1_model import Me
 from cosmos.pde.willmore.willmore_boundary_bdf1_model import WillmoreBoundaryBDF1Model
 from cosmos.pde.willmore.willmore_boundary_stab_bdf1_model import WillmoreBoundaryStabBDF1Model
 from cosmos.pde.willmore.willmore_boundary_v1_bdf1_model import WillmoreBoundaryV1BDF1Model
+from cosmos.pde.willmore.willmore_boundary_v2_bdf1_model import WillmoreBoundaryV2BDF1Model
 from cosmos.coupling.deformation_boundary_bdf1_coupling import DeformationBoundaryBDF1Coupling
 from cosmos.coupling.displacement_boundary_bdf1_coupling import DisplacementBoundaryBDF1Coupling
 from cosmos.coupling.deformation_volume_bdf1_coupling import DeformationVolumeBDF1Coupling
@@ -31,6 +32,7 @@ __all__ = [
     "WillmoreBoundaryBDF1Model",
     "WillmoreBoundaryStabBDF1Model",
     "WillmoreBoundaryV1BDF1Model",
+    "WillmoreBoundaryV2BDF1Model",
     "DeformationBoundaryBDF1Coupling",
     "DisplacementBoundaryBDF1Coupling",
     "DeformationVolumeBDF1Coupling",

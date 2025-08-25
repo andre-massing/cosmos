@@ -19,7 +19,7 @@ class DeformationBoundaryBDF1Coupling(BasePDEModel):
 
         solver._attach_model(self, self.model_order)
         self.domain = self._solver.mesh.domain
-        self.gfu = GridFunction(self._solver.ngsmesh.deformation.space)
+        self.gfu = GridFunction(self._solver.mesh.curr_deformation.space)
 
         self.input_fields["deformation"] = InputField(self.gfu, deformation_field, "deformation", self.domain)
         self.output_fields["deformation"] = OutputField(self.gfu, "deformation", BND)
@@ -31,11 +31,11 @@ class DeformationBoundaryBDF1Coupling(BasePDEModel):
     def Solve(self):
 
         self.update_input_fields()
-        self._solver.ngsmesh.deformation.vec.data = self.gfu.vec.data
-        self._solver.mesh.update_state()
+        self._solver.mesh.curr_deformation.vec.data = self.gfu.vec.data
 
     def PostProcess(self):
         
+        self._solver.mesh.update_state()
         for field in self.output_fields.values():
             if field.vtk and self._solver.time.iter % field.sample_rate == 0:
                 field.vtk.Do(time = self._solver.time.t.Get(), vb = field.domain)

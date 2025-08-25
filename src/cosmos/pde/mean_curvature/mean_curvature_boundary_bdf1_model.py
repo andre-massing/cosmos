@@ -32,14 +32,12 @@ class MeanCurvatureBoundaryBDF1Model(BasePDEModel):
 
         self.set_input_params(input_params)
 
-        h = self.cfg.h
         self.ns = specialcf.normal(self._solver.ngsmesh.dim)
         Ps = Id(self._solver.ngsmesh.dim) - OuterProduct(self.ns, self.ns)
 
         V1 = VectorH1(self._solver.ngsmesh, order=1,
                     definedon=self.domain)
         V2 = VectorH1(self._solver.ngsmesh, order=1, definedon=self.domain)
-        V3 = H1(self._solver.ngsmesh, order=1,definedon=self.domain)
 
         self.fes = CompressCompound(V1*V2)
         self.A = BilinearForm(self.fes)
@@ -62,7 +60,6 @@ class MeanCurvatureBoundaryBDF1Model(BasePDEModel):
 
         rhs_gfu = GridFunction(V2)
         self.input_fields["rhs"] = InputField(rhs_gfu, CF((0,)*self._solver.ngsmesh.dim), "rhs", self._solver.ngsmesh.Boundaries('.*'))
-        
 
         self.X0 = GridFunction(V1)
         if self._solver.ngsmesh.dim == 2:

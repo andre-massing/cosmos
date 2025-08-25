@@ -33,7 +33,7 @@ class ADRVolumeBDF1Model(BasePDEModel):
         else:
             logger.error('The domain specified for the Model ', self.name, ' does not exist')
 
-        solver._attach_model(self, self.order)
+        solver._attach_model(self, self.model_order)
 
         self.input_params["Neu_bnd"] = ''
         self.input_params["Dir_bnd"] = ''
@@ -69,8 +69,8 @@ class ADRVolumeBDF1Model(BasePDEModel):
         self.gfu.Set(self.input_params['u0'], dual = True)
         self.output_fields["sol"] = OutputField(self.gfu, "sol", VOL)
 
-        deform = self._solver.mesh.prev_deformation[-1]
-        deform_old = self._solver.mesh.prev_deformation[-2]
+        deform = self._solver.mesh.curr_deformation
+        deform_old = self._solver.mesh.prev_deformation[-1]
 
         # Creating GridFunctions for the Fields
         b_gfu = GridFunction(fes_vector)

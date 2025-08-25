@@ -12,7 +12,7 @@ from typing import Dict
 
 class Solver:
 
-    def __init__(self, solvermesh:SolverMesh, solvertime:SolverTime = None, name:str = 'solver'):
+    def __init__(self, solvermesh:SolverMesh, solvertime:SolverTime = None, name:str = 'solver', iter:bool = False):
 
         if not isinstance(name, str):
             raise Exception('Name must be a string')
@@ -33,7 +33,7 @@ class Solver:
             self.time = SolverTime(dt = 0.0, initial_t=0, final_t=0)
 
         self.pdes: Dict[str, BasePDEModel] = {}
-        self.iterator = SolverIterator(self.pdes)
+        self.iterator = SolverIterator(self.pdes, iter)
 
     def __call__(self):
         return self._generator()
