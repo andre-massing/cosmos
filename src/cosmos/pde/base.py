@@ -32,14 +32,14 @@ class BasePDEModel(ABC):
             if key in self.input_fields.keys():
                 self.input_fields[key].cf = value
             else:
-                logger.error('No such field in Model ' + self.name, key)
+                raise Exception('No such field in Model ' + self.name, key)
 
     def set_input_params(self, input_params: Dict):
         for key, value in input_params.items():
             if key in self.input_params.keys():
                 self.input_params[key] = value
             else:
-                logger.error('No such parameter in Model  ' + self.name, key)
+                raise Exception('No such parameter in Model  ' + self.name, key)
 
     def update_input_fields(self):
         for value in self.input_fields.values():
