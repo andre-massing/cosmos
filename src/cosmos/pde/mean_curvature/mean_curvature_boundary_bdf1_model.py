@@ -37,9 +37,8 @@ class MeanCurvatureBoundaryBDF1Model(BasePDEModel):
 
         V1 = VectorH1(self._solver.ngsmesh, order=1,
                     definedon=self.domain)
-        V2 = VectorH1(self._solver.ngsmesh, order=1, definedon=self.domain)
 
-        self.fes = CompressCompound(V1*V2)
+        self.fes = CompressCompound(V1*V1)
         self.A = BilinearForm(self.fes)
         self.F = LinearForm(self.fes)
 
@@ -58,7 +57,7 @@ class MeanCurvatureBoundaryBDF1Model(BasePDEModel):
         self.output_fields["displacement"] = OutputField(self.gfu_D, "displacement", BND)
         self.output_fields["mean_curvature"] = OutputField(self.gfu_k, "mean_curvature", BND)
 
-        rhs_gfu = GridFunction(V2)
+        rhs_gfu = GridFunction(V1)
         self.input_fields["rhs"] = InputField(rhs_gfu, CF((0,)*self._solver.ngsmesh.dim), "rhs", self._solver.ngsmesh.Boundaries('.*'))
 
         self.X0 = GridFunction(V1)
@@ -69,8 +68,8 @@ class MeanCurvatureBoundaryBDF1Model(BasePDEModel):
         self.displacement_tot = GridFunction(V1)
 
         self.A += (1/self._solver.time.dt*trial_D*test_D + InnerProduct(trial_k, test_k)).Compile(True, True)*ds_lumped
-        self.A += (-InnerProduct(trial_k, test_D) + InnerProduct(grad(trial_D).Trace(), grad(test_k).Trace())).Compile(True, True)*ds(deformation = deform)
-
+        self.A += (InnerProduct(grad(trial_D).Trace(), grad(test_k).Trace())).Compile(True, True)*ds(deformation = deform)
+        self.A += (-InnerProduct(trial_k, test_D)).Compile(True, True)*ds_lumped
         
         self.F += (-InnerProduct(Ps, grad(test_k).Trace())).Compile(True, True)*ds(deformation = deform)
         self.F += (InnerProduct(rhs_gfu, test_D)).Compile(True, True)*ds_lumped
