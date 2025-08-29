@@ -138,6 +138,7 @@ class ADRVolumeBDF1Model(BasePDEModel):
 
     def Solve(self):
 
+        self._solver.time.advance_tcoef()
         self.update_input_fields()
 
         self.A.Assemble()
@@ -172,6 +173,8 @@ class ADRVolumeBDF1Model(BasePDEModel):
                                 MP=self.input_params["mass_preserving"], mass0=self.mass0, dt = dt)
 
             self.gfu.vec.data = gfu_new
+
+        self._solver.time.reset_tcoef()
 
     def PostProcess(self):
         
