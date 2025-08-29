@@ -8,6 +8,7 @@ from ngsolve import *
 from cosmos.pde.base import BasePDEModel
 from cosmos.core.solver import Solver
 from cosmos.core.field import InputField, OutputField
+from ngsolve.webgui import Draw
 
 class WillmoreBoundaryBDF1Model(BasePDEModel):
 
@@ -33,6 +34,7 @@ class WillmoreBoundaryBDF1Model(BasePDEModel):
         self.input_params["clamped_bnd"] = ''
         self.input_params["clamped_conormal"] = CF((0,)*self._solver.ngsmesh.dim)
         self.input_params["elasticity_modulus"] = 1
+        self.input_params["autoupdate"] = False
 
         self.set_input_params(input_params)
         if (self.input_params["clamped_bnd"]!='') and \
@@ -57,7 +59,7 @@ class WillmoreBoundaryBDF1Model(BasePDEModel):
             V1 = VectorH1(self._solver.ngsmesh, order=1,
                         definedon=self.domain)
         V2 = VectorH1(self._solver.ngsmesh, order=1,definedon=self.domain)
-        V3 = H1(self._solver.ngsmesh, order=1,definedon=self.domain)
+        V3 = H1(self._solver.ngsmesh, order=1, definedon=self.domain)
 
         self.fes = CompressCompound(V1*V2)
         self.A = BilinearForm(self.fes)
@@ -112,7 +114,7 @@ class WillmoreBoundaryBDF1Model(BasePDEModel):
 
         k0_gfu = GridFunction(V3)
         rhs_gfu = GridFunction(V2)
-        self.input_fields["spontaneous_curvature"] = InputField(k0_gfu, CF((0)), "spontaneous_curvature", self._solver.ngsmesh.Boundaries('.*'))
+        self.input_fields["spontaneous_curvature"] = InputField(k0_gfu, CF(0), "spontaneous_curvature", self._solver.ngsmesh.Boundaries('.*'))
         self.input_fields["rhs"] = InputField(rhs_gfu, CF((0,)*self._solver.ngsmesh.dim), "rhs", self._solver.ngsmesh.Boundaries('.*'))
         
 
@@ -157,11 +159,12 @@ class WillmoreBoundaryBDF1Model(BasePDEModel):
         
         self.gfu_old.vec.data = self.gfu.vec.data
 
-        self.A_mc.Assemble()
-        self.invA_mc.Update()
-        self.F_mc.Assemble()
-        self.gfu_k.vec.data = self.invA_mc*self.F_mc.vec
-        self.gfu_Y.Set(self.input_params["elasticity_modulus"]*(self.gfu_k - self.input_fields["spontaneous_curvature"].gfu*self.ns), dual = True, definedon = self.domain)
+        if self.input_params['autoupdate'] or self._solver.time.iter == 0:
+            self.A_mc.Assemble()
+            self.invA_mc.Update()
+            self.F_mc.Assemble()
+            self.gfu_k.vec.data = self.invA_mc*self.F_mc.vec
+            self.gfu_Y.Set(self.input_params["elasticity_modulus"]*(self.gfu_k - self.input_fields["spontaneous_curvature"].gfu*self.ns), dual = True, definedon = self.domain)
 
     def Solve(self):
 
@@ -171,14 +174,11 @@ class WillmoreBoundaryBDF1Model(BasePDEModel):
         self.F.Assemble()
 
         self.gfu.vec.data = self.invA*self.F.vec
-
         self.gfu_k.Set(1/self.input_params["elasticity_modulus"]*self.gfu_Y + self.input_fields["spontaneous_curvature"].gfu*self.ns, dual = True, definedon = self.domain)
 
     def PostProcess(self):
-        
-        for field in self.output_fields.values():
-            if field.vtk and self._solver.time.iter % field.sample_rate == 0:
-                field.vtk.Do(time = self._solver.time.t.Get(), vb = field.domain)
+
+        pass
 
     @property
     def displacement(self):

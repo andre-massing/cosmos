@@ -37,6 +37,7 @@ class WillmoreBoundaryV1BDF1Model(BasePDEModel):
         self.input_params["clamped_conormal"] = CF((0,)*self._solver.ngsmesh.dim)
         self.input_params["elasticity_modulus"] = 1
         self.input_params["stabilization"] = 0.01
+        self.input_params["autoupdate"] = False
 
         self.set_input_params(input_params)
         if (self.input_params["clamped_bnd"]!='') and \
@@ -77,7 +78,7 @@ class WillmoreBoundaryV1BDF1Model(BasePDEModel):
         ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
         
         ds_lumped = ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = deform)
-        ds_el_lumped = ds(element_boundary=True, intrules = { SEGM : ir_segm, TRIG: ir_trig })
+        ds_el_lumped = ds(element_boundary=True, intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = deform)
 
         fes_mc = Compress(V2)
         kappa_mc, eta_mc = fes_mc.TnT()
@@ -86,7 +87,7 @@ class WillmoreBoundaryV1BDF1Model(BasePDEModel):
         self.A_mc.Assemble()
         self.invA_mc = self.A_mc.mat.Inverse(freedofs = fes_mc.FreeDofs())
         self.F_mc = LinearForm(fes_mc)
-        self.F_mc += -InnerProduct(Ps, grad(eta_mc).Trace())*ds
+        self.F_mc += -InnerProduct(Ps, grad(eta_mc).Trace())*ds(deformation = deform)
         # if self.input_params["clamped_bnd"]:
         #     if self._solver.ngsmesh.dim == 2:
         #         gfBB = GridFunction(H1(self._solver.ngsmesh, order =1,\
@@ -136,7 +137,7 @@ class WillmoreBoundaryV1BDF1Model(BasePDEModel):
         self.A += (-InnerProduct(grad(trial_Y).Trace(), grad(test_D).Trace()) + InnerProduct(grad(trial_D).Trace(), grad(test_Y).Trace())).Compile(True, True)*ds(deformation = deform)
         jump_dkappadn = (trial_Y.Trace().Deriv()*nE-trial_dY.Trace())
         jump_detadn = (test_Y.Trace().Deriv()*nE-test_dY.Trace())
-        self.A += (self.input_params["stabilization"]*h*InnerProduct(jump_dkappadn,jump_detadn))*ds(element_boundary=True)
+        self.A += (self.input_params["stabilization"]*h*InnerProduct(jump_dkappadn,jump_detadn))*ds(element_boundary=True, deformation = deform)
         
         self.F += (-InnerProduct(Ps, grad(test_Y).Trace())).Compile(True, True)*ds(deformation = deform)
         self.F += (-1*k0_gfu*InnerProduct(self.ns, test_Y)).Compile(True, True)*ds_lumped
@@ -156,8 +157,8 @@ class WillmoreBoundaryV1BDF1Model(BasePDEModel):
 
         if self.input_params["clamped_bnd"]:
             self.F += (InnerProduct(self.input_params["clamped_conormal"], test_Y)*gfBB).Compile(True, True)*ds_el_lumped
-            self.A += -1*gfBB*(self.input_params["stabilization"]*h*InnerProduct(jump_dkappadn,jump_detadn))*ds(element_boundary=True)
-            self.A +=  (gfBB*trial_dY.Trace()*test_dY.Trace())*ds(element_boundary=True)
+            self.A += -1*gfBB*(self.input_params["stabilization"]*h*InnerProduct(jump_dkappadn,jump_detadn))*ds(element_boundary=True, deformation = deform)
+            self.A +=  (gfBB*trial_dY.Trace()*test_dY.Trace())*ds(element_boundary=True, deformation = deform)
         
         # if self.input_params["clamped_bnd"]:
         #     self.F += (InnerProduct(nE, test_Y)*gfBB).Compile(True, True)*ds_el_lumped
@@ -170,11 +171,12 @@ class WillmoreBoundaryV1BDF1Model(BasePDEModel):
         
         self.gfu_old.vec.data = self.gfu.vec.data
 
-        self.A_mc.Assemble()
-        self.invA_mc.Update()
-        self.F_mc.Assemble()
-        self.gfu_k.vec.data = self.invA_mc*self.F_mc.vec
-        self.gfu_Y.Set(self.input_params["elasticity_modulus"]*(self.gfu_k - self.input_fields["spontaneous_curvature"].gfu*self.ns), dual = True, definedon = self.domain)
+        if self.input_params['autoupdate'] or self._solver.time.iter == 0:
+            self.A_mc.Assemble()
+            self.invA_mc.Update()
+            self.F_mc.Assemble()
+            self.gfu_k.vec.data = self.invA_mc*self.F_mc.vec
+            self.gfu_Y.Set(self.input_params["elasticity_modulus"]*(self.gfu_k - self.input_fields["spontaneous_curvature"].gfu*self.ns), dual = True, definedon = self.domain)
 
     def Solve(self):
 

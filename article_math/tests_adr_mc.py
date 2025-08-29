@@ -18,16 +18,16 @@ from cosmos.solvers.time_schemes import BDF1
 results_folder = "./results_adr_mc"
 time_scheme = BDF1()
 
-# solvers = [
-#     (results_folder ,"MCBGN", MCBGN, {"time_scheme": time_scheme}),
-#     (results_folder ,"MCBGNStab", MCBGNStab, {"time_scheme": time_scheme}),
-#     (results_folder ,"MCBGNPP", MCBGN, {"time_scheme": time_scheme, "postprocess": True}),
-#     (results_folder ,"MCBGNStabPP", MCBGNStab, {"time_scheme": time_scheme, "postprocess": True}),
-# ]
+solvers = [
+    (results_folder ,"MCBGN", MCBGN, {"time_scheme": time_scheme}),
+    (results_folder ,"MCBGNStab", MCBGNStab, {"time_scheme": time_scheme}),
+    (results_folder ,"MCBGNPP", MCBGN, {"time_scheme": time_scheme, "postprocess": True}),
+    (results_folder ,"MCBGNStabPP", MCBGNStab, {"time_scheme": time_scheme, "postprocess": True}),
+]
 
-# # Run all tests
-# for results, name, constructor, kwargs in solvers:
-#     test_adr_mc(results, name, constructor, **kwargs)
+# Run all tests
+for results, name, constructor, kwargs in solvers:
+    test_adr_mc(results, name, constructor, **kwargs)
 
 solvers = [
     (results_folder ,"MCWalker", MCWalker, {"time_scheme": time_scheme}),

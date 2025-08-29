@@ -37,6 +37,7 @@ class WillmoreBoundaryStabBDF1Model(BasePDEModel):
         self.input_params["clamped_conormal"] = CF((0,)*self._solver.ngsmesh.dim)
         self.input_params["elasticity_modulus"] = 1
         self.input_params["stabilization"] = 0.01
+        self.input_params["autoupdate"] = False
 
         self.set_input_params(input_params)
         if (self.input_params["clamped_bnd"]!='') and \
@@ -166,12 +167,13 @@ class WillmoreBoundaryStabBDF1Model(BasePDEModel):
         
         self.gfu_old.vec.data = self.gfu.vec.data
 
-        self.A_mc.Assemble()
-        self.invA_mc.Update()
-        self.F_mc.Assemble()
-        self.gfu_mc.vec.data = self.invA_mc*self.F_mc.vec
-        self.gfu_k.vec.data = self.gfu_mc.components[0].vec.data
-        self.gfu_Y.Set(self.input_params["elasticity_modulus"]*(self.gfu_k - self.input_fields["spontaneous_curvature"].gfu*self.ns), dual = True, definedon = self.domain)
+        if self.input_params['autoupdate'] or self._solver.time.iter == 0:
+            self.A_mc.Assemble()
+            self.invA_mc.Update()
+            self.F_mc.Assemble()
+            self.gfu_mc.vec.data = self.invA_mc*self.F_mc.vec
+            self.gfu_k.vec.data = self.gfu_mc.components[0].vec.data
+            self.gfu_Y.Set(self.input_params["elasticity_modulus"]*(self.gfu_k - self.input_fields["spontaneous_curvature"].gfu*self.ns), dual = True, definedon = self.domain)
 
     def Solve(self):
 
