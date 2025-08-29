@@ -24,17 +24,23 @@ def MandBP(gfu_vec, dt = None, weights=None, BP=None, MP=False, mass0=None):
 
         xsi_old0 = 0
         xsi_old1 = -dt
-        xsi2 = -1
+        xsi2 = -2
 
-        while abs(F(xsi_old1) - F(xsi_old0))>tol or xsi2==-1:
+        while abs(F(xsi_old1) - F(xsi_old0))>tol or xsi2==-2:
 
-            F1 = F(xsi_old1)
-            F0 = F(xsi_old0)
+            if F(xsi_old1) == F(xsi_old0):
 
-            xsi2 = xsi_old1-F1*(xsi_old1 - xsi_old0)/(F1 - F0)
+                xsi2 = -1
 
-            xsi_old0 = xsi_old1
-            xsi_old1 = xsi2
+            else:
+
+                F1 = F(xsi_old1)
+                F0 = F(xsi_old0)
+
+                xsi2 = xsi_old1-F1*(xsi_old1 - xsi_old0)/(F1 - F0)
+
+                xsi_old0 = xsi_old1
+                xsi_old1 = xsi2
 
         threshold = dt * xsi2
         gfu_data = np.clip(gfu_vec + threshold, BP[0], BP[1]) 
