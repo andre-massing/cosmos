@@ -30,8 +30,10 @@ class DeformationBoundaryBDF1Coupling(BasePDEModel):
 
     def Solve(self):
 
+        self._solver.time.advance_tcoef()
         self.update_input_fields()
         self._solver.mesh.curr_deformation.vec.data = self.gfu.vec.data
+        self._solver.time.reset_tcoef()
 
     def PostProcess(self):
         
