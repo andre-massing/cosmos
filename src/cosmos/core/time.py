@@ -59,15 +59,14 @@ class SolverTime:
 
     def preprocess(self):
 
-        # Setting the coefficients values to the next step for added accuracy
-        # TODO: Implement more efficient way to deal also with schemes like Crank-Nicholson
-        if self.t_coef != None:
-            self.t_coef.Set(self.t.Get()+self.dt.Get())
+        pass
 
     def postprocess(self):
 
         self.iter += 1
-        self.t.Set( self.t.Get() + self.dt.Get())
+        if self.t_coef != None:
+            self.advance_tcoef()
+        self.t.Set(self.t.Get() + self.dt.Get())
 
         if isinstance(self.input_params["dt"], list):
             self.dt.Set( self.input_params["dt"][self.iter] )
@@ -98,6 +97,12 @@ class SolverTime:
             "prev_t": self.prev_t
         }    
         return time_state
+    
+    def advance_tcoef(self):
+        self.t_coef.Set(self.t.Get() + self.dt.Get())
+
+    def reset_tcoef(self):
+        self.t_coef.Set(self.t.Get())
     
     def print_state(self):
         print(self.get_state())
