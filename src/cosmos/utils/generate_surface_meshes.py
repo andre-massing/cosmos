@@ -229,7 +229,7 @@ def generate_cylinder(maxh = 0.1, order_g=1, bnd_name = "boundary", geo_only = F
 Torus
 '''
 # TODO: Other possibilities to generate
-def generate_torus(maxh = 0.1, order_g = 1, center=occ.Pnt(0,0,0), R = 1.0, r = 0.4, vol_or_bnd = 'VOL', geo_only = False):
+def generate_torus(maxh = 0.1, order_g = 1, center=occ.Pnt(0,0,0), R = 1.0, r = 0.4, vol_or_bnd = 'BND', geo_only = False):
 
     # spline = csg.SplineCurve2d() # create a 2d spline
     # eps = r*1e-2
@@ -276,7 +276,7 @@ def generate_torus(maxh = 0.1, order_g = 1, center=occ.Pnt(0,0,0), R = 1.0, r = 
         mesh = Meshing(geo, maxh, order_g, vol_or_bnd)
         return mesh, geo
 
-def generate_half_torus(maxh = 0.1, order_g = 1, R = 1.0, r = 0.4, vol_or_bnd = "VOL", bnd_name = "bottom", geo_only = False):
+def generate_half_torus(maxh = 0.1, order_g = 1, R = 1.0, r = 0.4, vol_or_bnd = "BND", bnd_name = "bottom", geo_only = False):
 
     pnt1 = occ.Pnt(R-r, 0, 0 )
     pnt2 = occ.Pnt(R, 0, r )
@@ -300,7 +300,7 @@ def generate_half_torus(maxh = 0.1, order_g = 1, R = 1.0, r = 0.4, vol_or_bnd = 
         mesh = Meshing(geo, maxh, order_g, vol_or_bnd)
         return mesh, geo
 
-def generate_box(maxh = 0.1, order_g = 1, center=occ.Pnt(0,0,0), a = 1, b = 1, c = 1, vol_or_bnd = 'VOL', bnd_name = "boundary", geo_only = False):
+def generate_box(maxh = 0.1, order_g = 1, center=occ.Pnt(0,0,0), a = 1, b = 1, c = 1, vol_or_bnd = 'BND', bnd_name = "boundary", geo_only = False):
 
     body = occ.Box(occ.Pnt(-a/2,-b/2,-c/2), occ.Pnt(a/2, b/2, c/2))
     body = body.Move((center[0], center[1], center[2]))
