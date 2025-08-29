@@ -110,11 +110,11 @@ class ADRBoundaryBDF1Model(BasePDEModel):
             dir_bnd_gfu.Set(1, definedon = self._solver.ngsmesh.BBoundaries(self.input_params['Dir_bnd']))
             self.A += - dir_bnd_gfu*d_gfu*InnerProduct(nE, grad(trial).Trace())*test*ds(element_boundary=True, deformation = deform) \
                 - dir_bnd_gfu*d_gfu*InnerProduct(nE, grad(test).Trace())*trial*ds(element_boundary=True, deformation = deform)\
-                + dir_bnd_gfu*d_gfu*alpha/h*trial*test*ds(element_boundary=True, deformation = deform)\
+                + dir_bnd_gfu*d_gfu*alpha/h*trial*test*ds(element_boundary=True, deformation = deform)
 
         self.A += -b_gfu*grad(test).Trace() * trial*ds(deformation = deform)
         bnd_gfu = GridFunction(facet_space)
-        bnd_gfu.Set(1, definedon = self._solver.ngsmesh.BBoundaries('.*'))
+        bnd_gfu.Set(1, definedon = self._solver.ngsmesh.BBoundaries(self.input_params['Dir_bnd']+'|'+self.input_params['Neu_bnd']))
         self.A += bnd_gfu*IfPos(b_gfu*nE, b_gfu*nE*trial, CF(0))*test\
             *ds(element_boundary=True, deformation = deform)
         
@@ -147,7 +147,8 @@ class ADRBoundaryBDF1Model(BasePDEModel):
             self.mass0 = np.sum(self.weights*gfu0_vec)
 
     def Solve(self):
-
+        
+        self._solver.time.advance_tcoef()
         self.update_input_fields()
 
         self.A.Assemble()
@@ -183,11 +184,11 @@ class ADRBoundaryBDF1Model(BasePDEModel):
 
             self.gfu.vec.data = gfu_new
 
+        self._solver.time.reset_tcoef()
+
     def PostProcess(self):
         
-        for field in self.output_fields.values():
-            if field.vtk and self._solver.time.iter % field.sample_rate == 0:
-                field.vtk.Do(time = self._solver.time.t.Get(), vb = field.domain)
+        pass
 
     @property
     def sol(self):
