@@ -66,11 +66,10 @@ class WillmoreBoundaryV3BDF1Model(BasePDEModel):
         # if self._solver.ngsmesh.dim == 2:
         #     dV = H1(self._solver.ngsmesh, order=1,definedon = self.domain)
         # elif self._solver.ngsmesh.dim == 3:
-        dV = NormalFacetSurface(self._solver.ngsmesh, order=0, definedon = self.domain)
 
-        self.fes = CompressCompound(V1*V2)
-        self.A = BilinearForm(self.fes)
-        self.F = LinearForm(self.fes)
+        fes = CompressCompound(V1*V2)
+        self.A = BilinearForm(fes)
+        self.F = LinearForm(fes)
 
         deform = self._solver.mesh.prev_deformation[-1]
 
@@ -110,9 +109,9 @@ class WillmoreBoundaryV3BDF1Model(BasePDEModel):
         self.F_mc.Assemble()
         self.gfu_mc = GridFunction(fes_mc)
 
-        (trial_D, trial_Y), (test_D, test_Y) = self.fes.TnT()
-        self.gfu = GridFunction(self.fes)
-        self.gfu_old = GridFunction(self.fes)
+        (trial_D, trial_Y), (test_D, test_Y) = fes.TnT()
+        self.gfu = GridFunction(fes)
+        self.gfu_old = GridFunction(fes)
         self.gfu_D, self.gfu_Y = self.gfu.components
         self.gfu_k = GridFunction(V2)
 
@@ -144,14 +143,12 @@ class WillmoreBoundaryV3BDF1Model(BasePDEModel):
         def D_s(chi, Ps):
             sym = 0.5*Ps*(grad(chi).Trace()+grad(chi).Trace().trans)*Ps
             return sym
-        if self._solver.ngsmesh.dim == 3:
-            self.F += (InnerProduct(Trace(grad(self.gfu_Y).Trace()),Trace(grad(test_D).Trace()))).Compile(True, True)*ds(deformation = deform)
-            self.F += (-2*InnerProduct(grad(self.gfu_Y).Trace().trans, D_s(test_D, Ps)*Ps.trans)).Compile(True, True)*ds(deformation = deform)
-            self.F += (-self.input_params["elasticity_modulus"]*InnerProduct(k0_gfu*self.gfu_k, grad(test_D).Trace().trans*self.ns)).Compile(True, True)*ds_lumped
-            self.F += (-0.5*InnerProduct(self.input_params["elasticity_modulus"]*(Norm(self.gfu_k - k0_gfu*self.ns)**2)*Ps,grad(test_D).Trace())).Compile(True, True)*ds_lumped
-            self.F += (InnerProduct(InnerProduct(self.gfu_Y, self.gfu_k)*Ps,grad(test_D).Trace())).Compile(True, True)*ds_lumped
-        elif self._solver.ngsmesh.dim == 2 :
-            self.F += (InnerProduct(InnerProduct(self.gfu_Y, self.gfu_k)*Ps,grad(test_D).Trace())).Compile(True, True)*ds_lumped
+        
+        self.F += (InnerProduct(Trace(grad(self.gfu_Y).Trace()),Trace(grad(test_D).Trace()))).Compile(True, True)*ds(deformation = deform)
+        self.F += (-2*InnerProduct(grad(self.gfu_Y).Trace().trans, D_s(test_D, Ps)*Ps.trans)).Compile(True, True)*ds(deformation = deform)
+        self.F += (-self.input_params["elasticity_modulus"]*InnerProduct(k0_gfu*self.gfu_k, grad(test_D).Trace().trans*self.ns)).Compile(True, True)*ds_lumped
+        self.F += (-0.5*InnerProduct(self.input_params["elasticity_modulus"]*(Norm(self.gfu_k - k0_gfu*self.ns)**2)*Ps,grad(test_D).Trace())).Compile(True, True)*ds_lumped
+        self.F += (InnerProduct(InnerProduct(self.gfu_Y, self.gfu_k)*Ps,grad(test_D).Trace())).Compile(True, True)*ds_lumped
 
         if self.input_params["clamped_bnd"]:
             self.F += (InnerProduct(self.input_params["clamped_conormal"], test_Y)*gfBB).Compile(True, True)*ds_el_lumped
@@ -159,9 +156,8 @@ class WillmoreBoundaryV3BDF1Model(BasePDEModel):
         # if self.input_params["clamped_bnd"]:
         #     self.F += (InnerProduct(nE, test_Y)*gfBB).Compile(True, True)*ds_el_lumped
 
-        Precond_A = Preconditioner(self.A, "multigrid")
         self.A.Assemble()
-        self.invA = GMRESSolver(self.A.mat, Precond_A.mat, maxsteps = 1000)
+        self.invA = self.A.mat.Inverse(freedofs = fes.FreeDofs())
 
     def PreProcess(self):
         
@@ -180,6 +176,7 @@ class WillmoreBoundaryV3BDF1Model(BasePDEModel):
         self.update_input_fields()
 
         self.A.Assemble()
+        self.invA.Update()
         self.F.Assemble()
 
         self.gfu.vec.data = self.invA*self.F.vec

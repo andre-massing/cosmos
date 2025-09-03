@@ -112,9 +112,8 @@ class ADRVolumeBDF1Model(BasePDEModel):
         
         self.A += 1/self._solver.time.dt*trial*test*dx(deformation = deform)
 
-        Precond_A = Preconditioner(self.A, "local") # TODO: multigrid preconditioner doesn't seem to work
         self.A.Assemble()
-        self.invA = GMRESSolver(self.A.mat, Precond_A.mat, maxsteps = 1000)
+        self.invA = self.A.mat.Inverse(freedofs = fes.FreeDofs())
 
         self.F += rhs_gfu*test*dx(deformation = deform)
         
@@ -139,9 +138,11 @@ class ADRVolumeBDF1Model(BasePDEModel):
     def Solve(self):
 
         self._solver.time.advance_tcoef()
+        self._solver.mesh.advance_mesh()
         self.update_input_fields()
 
         self.A.Assemble()
+        self.invA.Update()
         self.F.Assemble()
 
         self.gfu.vec.data = self.invA*self.F.vec
@@ -175,12 +176,11 @@ class ADRVolumeBDF1Model(BasePDEModel):
             self.gfu.vec.data = gfu_new
 
         self._solver.time.reset_tcoef()
+        self._solver.mesh.reset_mesh()
 
     def PostProcess(self):
         
-        for field in self.output_fields.values():
-            if field.vtk and self._solver.time.iter % field.sample_rate == 0:
-                field.vtk.Do(time = self._solver.time.t.Get(), vb = field.domain)
+        pass
 
     @property
     def sol(self):

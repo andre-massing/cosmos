@@ -30,7 +30,7 @@ class CahnHilliardBoundaryBDF1Model(BasePDEModel):
         else:
             logger.error('The domain specified for the Model ', self.name, ' does not exist')
 
-        solver._attach_model(self, self.order)
+        solver._attach_model(self, self.model_order)
 
         # TODO: Implement boundary conditions
         # self.input_params["Neu_bnd"] = ''
@@ -181,9 +181,7 @@ class CahnHilliardBoundaryBDF1Model(BasePDEModel):
 
     def PostProcess(self):
         
-        for field in self.output_fields.values():
-            if field.vtk and self._solver.time.iter % field.sample_rate == 0:
-                field.vtk.Do(time = self._solver.time.t.Get(), vb = field.domain)
+        pass
 
     @property
     def phase(self):

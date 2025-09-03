@@ -7,7 +7,7 @@ from cosmos.config.parameters import get_config
 
 class SolverMesh:
 
-    def __init__(self, mesh:Mesh):
+    def __init__(self, mesh:Mesh, dirichlet_bnd = ''):
 
         self.mesh = mesh
         self.ne = self.mesh.ne
@@ -31,7 +31,7 @@ class SolverMesh:
             self.V = VectorH1(self.mesh, order=self.mesh.GetCurveOrder(), definedon = self.domain)
         else:
             self.domain = self.mesh.Materials('.*')
-            self.V = VectorH1(self.mesh, order=self.mesh.GetCurveOrder(), definedon = self.domain)
+            self.V = VectorH1(self.mesh, order=self.mesh.GetCurveOrder(), definedon = self.domain, dirichlet = dirichlet_bnd)
         _deformation = GridFunction(self.V)
         self.mesh.SetDeformation(_deformation)
         self.prev_deformation = [GridFunction(self.V)]*self.buffer
@@ -52,6 +52,12 @@ class SolverMesh:
             "prev_def": self.prev_deformation
         }
         return mesh_state
+    
+    def advance_mesh(self):
+        self.mesh.deformation.vec.data = self.curr_deformation.vec.data
+
+    def reset_mesh(self):
+        self.mesh.deformation.vec.data = self.prev_deformation[-1].vec.data
     
     @property
     def deformation(self):

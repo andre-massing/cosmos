@@ -34,7 +34,7 @@ class SolverTime:
         elif isinstance(dt, numbers.Number):
             self.dt = Parameter(dt)
         else:
-            raise Exception("dt must be either a number or a list of numbers", exc_info=True)
+            raise Exception("dt must be either a number or a list of numbers")
 
         if self.dt.Get() <= 0:
             raise Exception("Time-step has been set to negative value")
@@ -64,7 +64,7 @@ class SolverTime:
     def postprocess(self):
 
         self.iter += 1
-        if self.t_coef != None:
+        if self.t_coef:
             self.advance_tcoef()
         self.t.Set(self.t.Get() + self.dt.Get())
 
@@ -99,10 +99,12 @@ class SolverTime:
         return time_state
     
     def advance_tcoef(self):
-        self.t_coef.Set(self.t.Get() + self.dt.Get())
+        if self.t_coef:
+            self.t_coef.Set(self.t.Get() + self.dt.Get())
 
     def reset_tcoef(self):
-        self.t_coef.Set(self.t.Get())
+        if self.t_coef:
+            self.t_coef.Set(self.t.Get())
     
     def print_state(self):
         print(self.get_state())

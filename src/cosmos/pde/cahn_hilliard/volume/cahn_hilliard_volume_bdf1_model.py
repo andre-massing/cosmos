@@ -110,9 +110,8 @@ class CahnHilliardVolumeBDF1Model(BasePDEModel):
         # self.A += IfPos(b_gfu*n, b_gfu*n*trial, CF(0))*test\
         #     *ds(deformation = deform)
 
-        Precond_A = Preconditioner(self.A, "local") # TODO: multigrid preconditioner doesn't seem to work
         self.A.Assemble()
-        self.invA = GMRESSolver(self.A.mat, Precond_A.mat, maxsteps = 1000)
+        self.invA = self.A.mat.Inverse(freedofs = fes.FreeDofs())
 
         self.F += rhs_u_gfu*test_u*dx(deformation = deform)
         self.F += rhs_w_gfu*test_w*dx(deformation = deform)
@@ -145,15 +144,23 @@ class CahnHilliardVolumeBDF1Model(BasePDEModel):
         
         self.gfu_old.vec.data = self.gfu.vec.data
 
-        if self._solver.time.iter == 0 and self.input_params["mass_preserving"]:
-            gfu0_vec = self.gfu_u.vec.Copy().FV().NumPy()
-            self.mass0 = np.sum(self.weights*gfu0_vec)
+        if self._solver.time.iter == 0:
+
+            if self.input_params["mass_preserving"] and self.input_params["fes_order"]>1:
+                raise Exception('Mass preservation not yet implemented for fes_order>1')
+            if self.input_params["bounds"] and self.input_params["fes_order"]>1:
+                raise Exception('Bounds preservation not yet implemented for fes_order>1')
+        
+            if self.input_params["mass_preserving"]:
+                gfu0_vec = self.gfu_u.vec.Copy().FV().NumPy()
+                self.mass0 = np.sum(self.weights*gfu0_vec)
 
     def Solve(self):
 
         self.update_input_fields()
 
         self.A.Assemble()
+        self.invA.Update()
         self.F.Assemble()
 
         self.gfu.vec.data = self.invA*self.F.vec
@@ -188,9 +195,7 @@ class CahnHilliardVolumeBDF1Model(BasePDEModel):
 
     def PostProcess(self):
         
-        for field in self.output_fields.values():
-            if field.vtk and self._solver.time.iter % field.sample_rate == 0:
-                field.vtk.Do(time = self._solver.time.t.Get(), vb = field.domain)
+        pass
 
     @property
     def phase(self):

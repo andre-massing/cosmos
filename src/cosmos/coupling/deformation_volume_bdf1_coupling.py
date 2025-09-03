@@ -30,17 +30,13 @@ class DeformationVolumeBDF1Coupling(BasePDEModel):
 
     def Solve(self):
 
-        self._solver.time.advance_tcoef()
+        # self._solver.time.advance_tcoef()
         self.update_input_fields()
         self._solver.mesh.curr_deformation.vec.data = self.gfu.vec.data
-        self._solver.time.reset_tcoef()
+        # self._solver.time.reset_tcoef()
 
     def PostProcess(self):
-        
         self._solver.mesh.update_state()
-        for field in self.output_fields.values():
-            if field.vtk and self._solver.time.iter % field.sample_rate == 0:
-                field.vtk.Do(time = self._solver.time.t.Get(), vb = field.domain)
 
     @property
     def deformation(self):
