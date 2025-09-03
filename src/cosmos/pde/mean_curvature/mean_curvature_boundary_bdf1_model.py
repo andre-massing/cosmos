@@ -38,9 +38,9 @@ class MeanCurvatureBoundaryBDF1Model(BasePDEModel):
         V1 = VectorH1(self._solver.ngsmesh, order=1,
                     definedon=self.domain)
 
-        self.fes = CompressCompound(V1*V1)
-        self.A = BilinearForm(self.fes)
-        self.F = LinearForm(self.fes)
+        fes = CompressCompound(V1*V1)
+        self.A = BilinearForm(fes)
+        self.F = LinearForm(fes)
 
         deform = self._solver.mesh.prev_deformation[-1]
 
@@ -49,9 +49,9 @@ class MeanCurvatureBoundaryBDF1Model(BasePDEModel):
         
         ds_lumped = ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = deform)
 
-        (trial_D, trial_k), (test_D, test_k) = self.fes.TnT()
-        self.gfu = GridFunction(self.fes)
-        self.gfu_old = GridFunction(self.fes)
+        (trial_D, trial_k), (test_D, test_k) = fes.TnT()
+        self.gfu = GridFunction(fes)
+        self.gfu_old = GridFunction(fes)
         self.gfu_D, self.gfu_k = self.gfu.components
 
         self.output_fields["displacement"] = OutputField(self.gfu_D, "displacement", BND)
@@ -74,9 +74,8 @@ class MeanCurvatureBoundaryBDF1Model(BasePDEModel):
         self.F += (-InnerProduct(Ps, grad(test_k).Trace())).Compile(True, True)*ds(deformation = deform)
         self.F += (InnerProduct(rhs_gfu, test_D)).Compile(True, True)*ds_lumped
 
-        Precond_A = Preconditioner(self.A, "multigrid")
         self.A.Assemble()
-        self.invA = GMRESSolver(self.A.mat, Precond_A.mat, maxsteps = 1000)
+        self.invA = self.A.mat.Inverse(freedofs = fes.FreeDofs())
 
     def PreProcess(self):
         
@@ -87,6 +86,7 @@ class MeanCurvatureBoundaryBDF1Model(BasePDEModel):
         self.update_input_fields()
 
         self.A.Assemble()
+        self.invA.Update()
         self.F.Assemble()
 
         self.gfu.vec.data = self.invA*self.F.vec
