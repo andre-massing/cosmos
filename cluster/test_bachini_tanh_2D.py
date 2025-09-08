@@ -5,7 +5,7 @@ from cosmos import *
 from ngsolve.webgui import Draw
 from cosmos.utils.generate_surface_meshes import generate_circle
 import numpy as np
-from cluster.test_bachini_config import CFG
+from test_bachini_config import CFG
 
 import os
 filename = os.path.splitext(os.path.basename(__file__))[0]
