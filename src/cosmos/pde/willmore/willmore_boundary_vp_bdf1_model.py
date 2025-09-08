@@ -15,7 +15,7 @@ class WillmoreBoundaryVPBDF1Model(BasePDEModel):
     def __init__(self, solver:Solver,
                  model_order:int,
                  domain:str = '.*',
-                 name:str = 'WillmoreBoundaryBDF1Model',
+                 name:str = 'WillmoreBoundaryVPBDF1Model',
                  input_params = {}):
 
         super().__init__()
@@ -219,7 +219,7 @@ class WillmoreBoundaryVPBDF1Model(BasePDEModel):
             self.gfu_k.Set(1/self.input_params["elasticity_modulus"]*self.gfu_Y + self.input_fields["spontaneous_curvature"].gfu*self.ns, dual = True, definedon = self.domain)
 
         if iter == 10:
-            raise Exception('Convergence not achieved for Surface area preserving Willmore flow')
+            raise Exception('Convergence not achieved for Volume preserving Willmore flow')
 
     def PostProcess(self):
 

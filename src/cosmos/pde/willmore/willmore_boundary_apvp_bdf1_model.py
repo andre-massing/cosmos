@@ -15,7 +15,7 @@ class WillmoreBoundaryAPVPBDF1Model(BasePDEModel):
     def __init__(self, solver:Solver,
                  model_order:int,
                  domain:str = '.*',
-                 name:str = 'WillmoreBoundaryBDF1Model',
+                 name:str = 'WillmoreBoundaryAPVPBDF1Model',
                  input_params = {}):
 
         super().__init__()
@@ -198,7 +198,7 @@ class WillmoreBoundaryAPVPBDF1Model(BasePDEModel):
         new_omega = 1e5
         iter = 0
         
-        while abs(new_lambda-old_lambda) + abs(new_omega-old_omega)>1e-8 and iter<10:
+        while abs(new_lambda-old_lambda) + abs(new_omega-old_omega)>1e-8 and iter<20:
 
             iter += 1
             old_omega = self.omega_h.vec.data[0]
@@ -245,8 +245,8 @@ class WillmoreBoundaryAPVPBDF1Model(BasePDEModel):
             self.gfu.vec.data = self.invA*self.F.vec
             self.gfu_k.Set(1/self.input_params["elasticity_modulus"]*self.gfu_Y + self.input_fields["spontaneous_curvature"].gfu*self.ns, dual = True, definedon = self.domain)
 
-        if iter == 10:
-            raise Exception('Convergence not achieved for Surface area preserving Willmore flow')
+        if iter == 20:
+            raise Exception('Convergence not achieved for Volume and Surface area preserving Willmore flow')
 
     def PostProcess(self):
 

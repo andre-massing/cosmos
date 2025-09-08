@@ -56,7 +56,7 @@ class Solver:
     def _generator(self):
 
         start_time = time.time()
-        self.save_pdes_solutions()
+        self._save_pdes_solutions()
 
         with TaskManager():
             while self.time.t.Get()<self.time.final_t:
@@ -66,7 +66,7 @@ class Solver:
                 self.iterator.solve_step()
                 self.iterator.postprocess()
                 self.time.postprocess()
-                self.save_pdes_solutions()
+                self._save_pdes_solutions()
 
                 elapsed = time.strftime("%H:%M:%S", time.gmtime(time.time() - start_time))
                 logging.debug(
@@ -96,15 +96,15 @@ class Solver:
             else:
                 raise Exception('Output field ' + output_field + ' to be saved is not in PDE model ' + pde)
         else:
-            raise Exception('PDE ' + pde.name + ' is not registered as a Model in Solver ' + self.name)
+            raise Exception('PDE ' + pde + ' is not registered as a Model in Solver ' + self.name)
         
-    def save_pdes_solutions(self):
+    def _save_pdes_solutions(self):
         for _, pde in self.pdes.items():
             for field in pde.output_fields.values():
                 if field.vtk and self.time.iter % field.sample_rate == 0:
                     field.vtk.Do(time = self.time.t.Get(), vb = field.domain)
 
-    def print_info(self, folder, sample_rate):
+    def output_params(self, folder, sample_rate):
         self.output_folder = folder
         self.output_sample_rate = sample_rate
 

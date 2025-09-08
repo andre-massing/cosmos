@@ -45,7 +45,6 @@ class SolverIterator:
                     errors[i] = Norm(pde.gfu.vec-old_sol[i])/Norm(old_sol[i])
                     old_sol[i] = pde.gfu.vec.Copy()
                 self.subiter_count += 1
-                print(errors)
                 logger.debug(f'Step subiter_bool count: {self.subiter_count} | Max error {np.max(np.array(errors)):.2e}')
 
             if self.subiter_count == 20:

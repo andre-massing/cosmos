@@ -316,7 +316,7 @@ def generate_box(maxh = 0.1, order_g = 1, center=occ.Pnt(0,0,0), a = 1, b = 1, c
     
 def generate_smoothed_box(maxh = 0.1, order_g = 1, center=occ.Pnt(0,0,0), a = 1, b = 1, c = 1, vol_or_bnd = 'BND', bnd_name = "boundary", geo_only = False):
 
-    fillet = min(a, b, c)/10
+    fillet = min(a, b, c)/3
     body = occ.Box(occ.Pnt(-a/2,-b/2,-c/2), occ.Pnt(a/2, b/2, c/2))
     body = body.Move((center[0], center[1], center[2]))
     body.faces.name = bnd_name

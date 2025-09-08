@@ -36,7 +36,8 @@ class CahnHilliardBoundaryBachiniBDF1Model(BasePDEModel):
         tE = specialcf.tangential(self._solver.ngsmesh.dim)
         Ps = Id(self._solver.ngsmesh.dim) - OuterProduct(n, n)
         if self._solver.ngsmesh.dim == 2:
-            facet_space = fes
+            facet_space = H1(self._solver.ngsmesh, order = 1, 
+                                            definedon = self.domain)
             nE = specialcf.tangential(self._solver.ngsmesh.dim)
         else:
             facet_space = FacetSurface(self._solver.ngsmesh, order = 0)

@@ -15,7 +15,7 @@ class WillmoreBoundaryAPBDF1Model(BasePDEModel):
     def __init__(self, solver:Solver,
                  model_order:int,
                  domain:str = '.*',
-                 name:str = 'WillmoreBoundaryBDF1Model',
+                 name:str = 'WillmoreBoundaryAPBDF1Model',
                  input_params = {}):
 
         super().__init__()
