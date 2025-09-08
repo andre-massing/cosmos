@@ -5,9 +5,10 @@ from collections import Counter
 from ngsolve import *
 from cosmos.config.parameters import get_config
 
+
 class SolverMesh:
 
-    def __init__(self, mesh:Mesh, dirichlet_bnd = ''):
+    def __init__(self, mesh:Mesh):
 
         self.mesh = mesh
         self.ne = self.mesh.ne
@@ -20,9 +21,9 @@ class SolverMesh:
         self.order = self.mesh.GetCurveOrder()
         self.buffer = get_config().buffer
 
-        self.vol_markers = list(Counter(self.mesh.GetMaterials()).keys())
-        self.bnd_markers = list(Counter(self.mesh.GetBoundaries()).keys())
-        self.bbnd_markers = list(Counter(self.mesh.GetBBoundaries()).keys())
+        self.vol_markers = set(Counter(self.mesh.GetMaterials()).keys())
+        self.bnd_markers = set(Counter(self.mesh.GetBoundaries()).keys())
+        self.bbnd_markers = set(Counter(self.mesh.GetBBoundaries()).keys())
 
         self.is_bnd = False
         if self.ne == 0:
@@ -31,7 +32,7 @@ class SolverMesh:
             self.V = VectorH1(self.mesh, order=self.mesh.GetCurveOrder(), definedon = self.domain)
         else:
             self.domain = self.mesh.Materials('.*')
-            self.V = VectorH1(self.mesh, order=self.mesh.GetCurveOrder(), definedon = self.domain, dirichlet = dirichlet_bnd)
+            self.V = VectorH1(self.mesh, order=self.mesh.GetCurveOrder(), definedon = self.domain)
         _deformation = GridFunction(self.V)
         self.mesh.SetDeformation(_deformation)
         self.prev_deformation = [GridFunction(self.V)]*self.buffer

@@ -10,11 +10,12 @@ from typing import Dict
 
 class SolverIterator:
 
-    def __init__(self, pdes:Dict[str, BasePDEModel], iter:bool = False):
+    def __init__(self, pdes:Dict[str, BasePDEModel], subiter_bool:bool = False):
 
         self._pdes = pdes
         self._ordered_pdes = {}
-        self.iter = iter
+        self.subiter_bool = subiter_bool
+        self.subiter_count = None
 
     def _order_pdes(self):
 
@@ -29,22 +30,26 @@ class SolverIterator:
     def solve_step(self):
 
         old_sol = []
-        tol = 1e-10
-        errors = np.zeros(len(self._ordered_pdes.keys()))
+        tol = 1e-8
+        errors = np.ones(len(self._ordered_pdes.keys()))*1e5
 
         for i, pde in enumerate(self._ordered_pdes.values()):
             pde.Solve()
             old_sol.append(pde.gfu.vec.Copy())
 
-        iter_count = 0
-        if self.iter:
-            while np.max(errors)>tol or iter_count == 0:
+        if self.subiter_bool:
+            self.subiter_count = 0
+            while np.max(errors)>tol and self.subiter_count < 20:
                 for i, pde in enumerate(self._ordered_pdes.values()):
                     pde.Solve()
-                    errors[i] = Norm(pde.gfu.vec-old_sol[i])
+                    errors[i] = Norm(pde.gfu.vec-old_sol[i])/Norm(old_sol[i])
                     old_sol[i] = pde.gfu.vec.Copy()
-                iter_count += 1
-                logger.info(f'Step iter count: {iter_count} | Max error {np.max(np.array(errors)):.2e}')
+                self.subiter_count += 1
+                print(errors)
+                logger.debug(f'Step subiter_bool count: {self.subiter_count} | Max error {np.max(np.array(errors)):.2e}')
+
+            if self.subiter_count == 20:
+                raise Exception('Internal solver iteration exceeded max number of 20 iterations')
                 
 
     def postprocess(self):

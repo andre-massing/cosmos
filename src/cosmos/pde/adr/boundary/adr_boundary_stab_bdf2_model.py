@@ -103,8 +103,8 @@ class ADRBoundaryStabBDF2Model(BasePDEModel):
         self.input_fields["d"] = InputField(d_gfu, CF(0), "d", self._solver.ngsmesh.Boundaries('.*'))
         self.input_fields["c"] = InputField(c_gfu, CF(0), "c", self._solver.ngsmesh.Boundaries('.*'))
         self.input_fields["rhs"] = InputField(rhs_gfu, CF(0), "rhs", self._solver.ngsmesh.Boundaries('.*'))
-        self.input_fields["gradu_bnd"] = InputField(gradu_gfu, CF((0,)*solver.mesh.dim), "gradu_bnd", self._solver.ngsmesh.BBoundaries('.*'))
-        self.input_fields["u_bnd"] = InputField(u_bnd_gfu, CF(0), "u_bnd", self._solver.ngsmesh.BBoundaries('.*'))
+        self.input_fields["gradu_bnd"] = InputField(gradu_gfu, CF((0,)*solver.mesh.dim), "gradu_bnd", self._solver.ngsmesh.Boundaries('.*'))
+        self.input_fields["u_bnd"] = InputField(u_bnd_gfu, CF(0), "u_bnd", self._solver.ngsmesh.Boundaries('.*'))
 
         if self.input_params["mass_preserving"]:
             ir_segm = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])

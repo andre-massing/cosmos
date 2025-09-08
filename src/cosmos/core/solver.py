@@ -35,6 +35,9 @@ class Solver:
         self.pdes: Dict[str, BasePDEModel] = {}
         self.iterator = SolverIterator(self.pdes, iter)
 
+        self.output_folder = ''
+        self.output_sample_rate = None
+
     def __call__(self):
         return self._generator()
 
@@ -66,7 +69,7 @@ class Solver:
                 self.save_pdes_solutions()
 
                 elapsed = time.strftime("%H:%M:%S", time.gmtime(time.time() - start_time))
-                logging.info(
+                logging.debug(
                     f"t = {self.time.t.Get():.2e} | Δt = {self.time.dt.Get():.2e} | Iter {self.time.iter}"
                     f" | Elapsed = {elapsed} \r"
                 )
@@ -77,29 +80,33 @@ class Solver:
         for step in self(): 
                 pass
 
-    def save_model_solution(self, pde:str, output_field:str, subdivision = 0, sample_rate = 1):
+    def save_model_solution(self, pde:str, output_field:str, subdivision = 0):
 
         if pde in self.pdes.keys():
             if output_field in self.pdes[pde].output_fields.keys():
 
                 field = self.pdes[pde].output_fields[output_field]
                 field.save = True
-                folder = './' + self.name + '/' + field.name
+                folder = self.output_folder + '/' + self.name + '/' + field.name
                 os.makedirs(folder, exist_ok = True)
                 filename = folder + '/' + field.name + '_vtk'
                 field.vtk = VTKOutput(self.ngsmesh, coefs=[field._coef], names =[field.name],
                                       filename= filename, subdivision = subdivision)
-                field.sample_rate = sample_rate
+                field.sample_rate = self.output_sample_rate
             else:
                 raise Exception('Output field ' + output_field + ' to be saved is not in PDE model ' + pde)
         else:
-            raise Exception('PDE ' + pde + ' is not registered as a Model in Solver ' + self.name)
+            raise Exception('PDE ' + pde.name + ' is not registered as a Model in Solver ' + self.name)
         
     def save_pdes_solutions(self):
         for _, pde in self.pdes.items():
             for field in pde.output_fields.values():
                 if field.vtk and self.time.iter % field.sample_rate == 0:
                     field.vtk.Do(time = self.time.t.Get(), vb = field.domain)
+
+    def print_info(self, folder, sample_rate):
+        self.output_folder = folder
+        self.output_sample_rate = sample_rate
 
     @property
     def current_time(self):

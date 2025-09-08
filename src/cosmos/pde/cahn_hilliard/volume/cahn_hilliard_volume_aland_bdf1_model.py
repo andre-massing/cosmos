@@ -140,6 +140,11 @@ class CahnHilliardVolumeAlandBDF1Model(BasePDEModel):
                 raise Exception('Mass preservation not yet implemented for fes_order>1')
             if self.input_params["bounds"] and self.input_params["fes_order"]>1:
                 raise Exception('Bounds preservation not yet implemented for fes_order>1')
+            
+            if self.input_params["bounds"]:
+                gfu_vec = self.gfu_u.vec.Copy().FV().NumPy()
+                gfu_new = MandBP(gfu_vec, BP = self.input_params["bounds"])
+                self.gfu_u.vec.data = gfu_new
         
             if self.input_params["mass_preserving"]:
                 gfu0_vec = self.gfu_u.vec.Copy().FV().NumPy()

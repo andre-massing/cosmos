@@ -313,6 +313,22 @@ def generate_box(maxh = 0.1, order_g = 1, center=occ.Pnt(0,0,0), a = 1, b = 1, c
     else:
         mesh = Meshing(geo, maxh, order_g, vol_or_bnd)
         return mesh, geo
+    
+def generate_smoothed_box(maxh = 0.1, order_g = 1, center=occ.Pnt(0,0,0), a = 1, b = 1, c = 1, vol_or_bnd = 'BND', bnd_name = "boundary", geo_only = False):
+
+    fillet = min(a, b, c)/10
+    body = occ.Box(occ.Pnt(-a/2,-b/2,-c/2), occ.Pnt(a/2, b/2, c/2))
+    body = body.Move((center[0], center[1], center[2]))
+    body.faces.name = bnd_name
+    body = body.MakeFillet (body.edges, fillet)
+
+    geo= occ.OCCGeometry(body)
+
+    if geo_only:
+        return geo
+    else:
+        mesh = Meshing(geo, maxh, order_g, vol_or_bnd)
+        return mesh, geo
 
 def import_stl_mesh(fname, maxh = 0.1, order_g = 1, geo_only = False):
 
