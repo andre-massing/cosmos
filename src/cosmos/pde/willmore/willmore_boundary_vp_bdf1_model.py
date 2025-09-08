@@ -86,7 +86,7 @@ class WillmoreBoundaryVPBDF1Model(BasePDEModel):
         fes_mc = Compress(V2)
         kappa_mc, eta_mc = fes_mc.TnT()
         self.A_mc = BilinearForm(fes_mc, symmetric = True)
-        self.A_mc += (kappa_mc*eta_mc).Compile(True, True)*self.ds_lumped
+        self.A_mc += (kappa_mc*eta_mc)*self.ds_lumped
         self.A_mc.Assemble()
         self.invA_mc = self.A_mc.mat.Inverse(freedofs = fes_mc.FreeDofs())
         self.F_mc = LinearForm(fes_mc)
@@ -96,21 +96,21 @@ class WillmoreBoundaryVPBDF1Model(BasePDEModel):
         #         gfBB = GridFunction(H1(self._solver.ngsmesh, order =1,\
         #                 definedon=self.domain))
         #         gfBB.Set(1, definedon=self._solver.ngsmesh.BBoundaries(self.clamped_bnd))
-        #         self.F_mc += InnerProduct(gfBB*nE, eta_mc).Compile(True, True)*ds_el_lumped
+        #         self.F_mc += InnerProduct(gfBB*nE, eta_mc)*ds_el_lumped
         #     elif self._solver.ngsmesh.dim == 3:
         #         gfBB = GridFunction(FacetSurface(self._solver.ngsmesh, order=0, definedon = self.domain))
         #         gfBB.Set(1, definedon=self._solver.ngsmesh.BBoundaries(self.clamped_bnd))
-        #         self.F_mc += InnerProduct(nE, eta_mc).Compile(True, True)*gfBB*ds_el_lumped
+        #         self.F_mc += InnerProduct(nE, eta_mc)*gfBB*ds_el_lumped
         if self.input_params["clamped_bnd"]:
             if self._solver.ngsmesh.dim == 2:
                 gfBB = GridFunction(H1(self._solver.ngsmesh, order =1,\
                         definedon=self.domain))
                 gfBB.Set(1, definedon=self._solver.ngsmesh.BBoundaries(self.input_params["clamped_bnd"]))
-                self.F_mc += InnerProduct(gfBB*self.input_params["clamped_conormal"], eta_mc).Compile(True, True)*ds_el_lumped
+                self.F_mc += InnerProduct(gfBB*self.input_params["clamped_conormal"], eta_mc)*ds_el_lumped
             elif self._solver.ngsmesh.dim == 3:
                 gfBB = GridFunction(FacetSurface(self._solver.ngsmesh, order=0, definedon = self.domain))
                 gfBB.Set(1, definedon=self._solver.ngsmesh.BBoundaries(self.input_params["clamped_bnd"]))
-                self.F_mc += InnerProduct(self.input_params["clamped_conormal"], eta_mc).Compile(True, True)*gfBB*ds_el_lumped
+                self.F_mc += InnerProduct(self.input_params["clamped_conormal"], eta_mc)*gfBB*ds_el_lumped
         self.F_mc.Assemble()
 
         (trial_D, trial_Y), (test_D, test_Y) = fes.TnT()
@@ -137,26 +137,26 @@ class WillmoreBoundaryVPBDF1Model(BasePDEModel):
             self.X0.Set(CF((x, y, z)), dual = True, definedon=self.domain)
         self.displacement_tot = GridFunction(V1)
 
-        self.A += (1/self._solver.time.dt*trial_D*test_D + 1/self.input_params["elasticity_modulus"]*InnerProduct(trial_Y, test_Y)).Compile(True, True)*self.ds_lumped
-        self.A += (-InnerProduct(grad(trial_Y).Trace(), grad(test_D).Trace()) + InnerProduct(grad(trial_D).Trace(), grad(test_Y).Trace())).Compile(True, True)*ds(deformation = self.deform)
+        self.A += (1/self._solver.time.dt*trial_D*test_D + 1/self.input_params["elasticity_modulus"]*InnerProduct(trial_Y, test_Y))*self.ds_lumped
+        self.A += (-InnerProduct(grad(trial_Y).Trace(), grad(test_D).Trace()) + InnerProduct(grad(trial_D).Trace(), grad(test_Y).Trace()))*ds(deformation = self.deform)
         
-        self.F += (-InnerProduct(self.Ps, grad(test_Y).Trace())).Compile(True, True)*ds(deformation = self.deform)
-        self.F += (-1*self.k0_gfu*InnerProduct(self.ns, test_Y)).Compile(True, True)*self.ds_lumped
-        self.F += (InnerProduct(rhs_gfu, test_D)).Compile(True, True)*self.ds_lumped
+        self.F += (-InnerProduct(self.Ps, grad(test_Y).Trace()))*ds(deformation = self.deform)
+        self.F += (-1*self.k0_gfu*InnerProduct(self.ns, test_Y))*self.ds_lumped
+        self.F += (InnerProduct(rhs_gfu, test_D))*self.ds_lumped
 
-        self.F += (InnerProduct(Trace(grad(self.gfu_Y_old).Trace()),Trace(grad(test_D).Trace()))).Compile(True, True)*ds(deformation = self.deform)
-        self.F += (-2*InnerProduct(grad(self.gfu_Y_old).Trace().trans, self.D_s(test_D, self.Ps)*self.Ps.trans)).Compile(True, True)*ds(deformation = self.deform)
-        self.F += (-self.input_params["elasticity_modulus"]*InnerProduct(self.k0_gfu*self.gfu_k_old, grad(test_D).Trace().trans*self.ns)).Compile(True, True)*self.ds_lumped
-        self.F += (-0.5*InnerProduct(self.input_params["elasticity_modulus"]*(Norm(self.gfu_k_old - self.k0_gfu*self.ns)**2)*self.Ps,grad(test_D).Trace())).Compile(True, True)*self.ds_lumped
-        self.F += (InnerProduct(InnerProduct(self.gfu_Y_old, self.gfu_k_old)*self.Ps,grad(test_D).Trace())).Compile(True, True)*self.ds_lumped
+        self.F += (InnerProduct(Trace(grad(self.gfu_Y_old).Trace()),Trace(grad(test_D).Trace())))*ds(deformation = self.deform)
+        self.F += (-2*InnerProduct(grad(self.gfu_Y_old).Trace().trans, self.D_s(test_D, self.Ps)*self.Ps.trans))*ds(deformation = self.deform)
+        self.F += (-self.input_params["elasticity_modulus"]*InnerProduct(self.k0_gfu*self.gfu_k_old, grad(test_D).Trace().trans*self.ns))*self.ds_lumped
+        self.F += (-0.5*InnerProduct(self.input_params["elasticity_modulus"]*(Norm(self.gfu_k_old - self.k0_gfu*self.ns)**2)*self.Ps,grad(test_D).Trace()))*self.ds_lumped
+        self.F += (InnerProduct(InnerProduct(self.gfu_Y_old, self.gfu_k_old)*self.Ps,grad(test_D).Trace()))*self.ds_lumped
 
         if self.input_params["clamped_bnd"]:
-            self.F += (InnerProduct(self.input_params["clamped_conormal"], test_Y)*gfBB).Compile(True, True)*ds_el_lumped
+            self.F += (InnerProduct(self.input_params["clamped_conormal"], test_Y)*gfBB)*ds_el_lumped
         
         # if self.input_params["clamped_bnd"]:
-        #     self.F += (InnerProduct(nE, test_Y)*gfBB).Compile(True, True)*ds_el_lumped
+        #     self.F += (InnerProduct(nE, test_Y)*gfBB)*ds_el_lumped
 
-        self.F += (self.omega_h*InnerProduct(self.normal, test_D)).Compile(True, True)*self.ds_lumped
+        self.F += (self.omega_h*InnerProduct(self.normal, test_D))*self.ds_lumped
 
         self.A.Assemble()
         self.invA = self.A.mat.Inverse(freedofs = fes.FreeDofs())
