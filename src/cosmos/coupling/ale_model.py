@@ -61,15 +61,15 @@ class ALEField(Field):
                 # ir_segm = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
                 # ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
                 
-                self.A_pp += (InnerProduct(grad(w).Trace(), grad(eta).Trace())).Compile(True, True)*ds(deformation = deformation0)
-                self.A_pp += (-1*InnerProduct(eta*ns, kappa)).Compile(True, True)*ds(deformation=self.mat_def)
-                self.A_pp += (-1*InnerProduct(w*ns, mu)).Compile(True, True)*ds(deformation=self.mat_def)
+                self.A_pp += (InnerProduct(grad(w).Trace(), grad(eta).Trace()))*ds(deformation = deformation0)
+                self.A_pp += (-1*InnerProduct(eta*ns, kappa))*ds(deformation=self.mat_def)
+                self.A_pp += (-1*InnerProduct(w*ns, mu))*ds(deformation=self.mat_def)
                 self.A_pp.Assemble()
                 self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
 
-                self.F_pp += (-1*InnerProduct(Ps, grad(eta).Trace())).Compile(True, True)*ds(deformation = deformation0)
-                self.F_pp += (-1*InnerProduct(grad(self.mat_def).Trace(), grad(eta).Trace())).Compile(True, True)*ds(deformation = deformation0)
-                self.F_pp += (InnerProduct(grad(deformation0).Trace(), grad(eta).Trace())).Compile(True, True)*ds(deformation = deformation0)
+                self.F_pp += (-1*InnerProduct(Ps, grad(eta).Trace()))*ds(deformation = deformation0)
+                self.F_pp += (-1*InnerProduct(grad(self.mat_def).Trace(), grad(eta).Trace()))*ds(deformation = deformation0)
+                self.F_pp += (InnerProduct(grad(deformation0).Trace(), grad(eta).Trace()))*ds(deformation = deformation0)
 
             elif def_type == 'MDR':
 
@@ -93,13 +93,13 @@ class ALEField(Field):
                 # ir_segm = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
                 # ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
                 
-                self.A_pp += (1/self._solver.time.dt*InnerProduct(grad(w).Trace(), grad(eta).Trace())).Compile(True, True)*ds(deformation = deformation0)
-                self.A_pp += (-1*InnerProduct(eta*ns, kappa)).Compile(True, True)*ds(deformation=self.mat_def)
-                self.A_pp += (-1*InnerProduct(w*ns, mu)).Compile(True, True)*ds(deformation=self.mat_def)
+                self.A_pp += (1/self._solver.time.dt*InnerProduct(grad(w).Trace(), grad(eta).Trace()))*ds(deformation = deformation0)
+                self.A_pp += (-1*InnerProduct(eta*ns, kappa))*ds(deformation=self.mat_def)
+                self.A_pp += (-1*InnerProduct(w*ns, mu))*ds(deformation=self.mat_def)
                 self.A_pp.Assemble()
                 self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
 
-                self.F_pp += (-1/self._solver.time.dt*InnerProduct(grad(self.ale_displ).Trace(), grad(eta).Trace())).Compile(True, True)*ds(deformation = deformation0)
+                self.F_pp += (-1/self._solver.time.dt*InnerProduct(grad(self.ale_displ).Trace(), grad(eta).Trace()))*ds(deformation = deformation0)
 
 
     @property

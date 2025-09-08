@@ -6,4 +6,4 @@ class CFG():
     output_folder = '/cluster/work/alesscon/blood_cell/'
     dt = 1e-4
     maxh = 0.15
-    Tend = 1e-4
+    Tend = 1
