@@ -9,7 +9,6 @@ from cosmos.pde.base import BasePDEModel
 from cosmos.core.solver import Solver
 from cosmos.core.field import InputField, OutputField
 from cosmos.core.utils import MandBP
-from myngspy import *
 
 class CahnHilliardBoundaryPolBDF1Model(BasePDEModel):
 

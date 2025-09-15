@@ -10,7 +10,6 @@ from cosmos.core.solver import Solver
 from cosmos.core.field import InputField, OutputField
 from cosmos.core.utils import MandBP
 from ngsolve.webgui import Draw
-from myngspy import *
 
 class CahnHilliardVolumeBDF1Model(BasePDEModel):
 

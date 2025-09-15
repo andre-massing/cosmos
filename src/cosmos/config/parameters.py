@@ -4,12 +4,12 @@ logger = logging.getLogger(__name__)
 from dataclasses import dataclass, field
 from typing import Optional
 from ngsolve import *
-from myngspy import *
+# from myngspy import *
 
 @dataclass
 class Config:
-    h = MyMeshSize()
-    # h = specialcf.mesh_size
+    # h = MyMeshSize()
+    h = specialcf.mesh_size
     seed: Optional[int] = None
     buffer: int = 2
     precision: str = "float64"
