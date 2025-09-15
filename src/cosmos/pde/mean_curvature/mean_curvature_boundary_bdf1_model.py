@@ -68,12 +68,12 @@ class MeanCurvatureBoundaryBDF1Model(BasePDEModel):
             self.X0.Set(CF((x, y, z)), dual = True, definedon=self.domain)
         self.displacement_tot = GridFunction(V1)
 
-        self.A += (1/self._solver.time.dt*trial_D*test_D + InnerProduct(trial_k, test_k)).Compile(True, True)*ds_lumped
-        self.A += (InnerProduct(grad(trial_D).Trace(), grad(test_k).Trace())).Compile(True, True)*ds(deformation = deform)
-        self.A += (-self.input_params["kappa"]*InnerProduct(trial_k, test_D)).Compile(True, True)*ds_lumped
+        self.A += (1/self._solver.time.dt*trial_D*test_D + InnerProduct(trial_k, test_k))*ds_lumped
+        self.A += (InnerProduct(grad(trial_D).Trace(), grad(test_k).Trace()))*ds(deformation = deform)
+        self.A += (-self.input_params["kappa"]*InnerProduct(trial_k, test_D))*ds_lumped
         
-        self.F += (-InnerProduct(Ps, grad(test_k).Trace())).Compile(True, True)*ds(deformation = deform)
-        self.F += (InnerProduct(rhs_gfu, test_D)).Compile(True, True)*ds_lumped
+        self.F += (-InnerProduct(Ps, grad(test_k).Trace()))*ds(deformation = deform)
+        self.F += (InnerProduct(rhs_gfu, test_D))*ds_lumped
 
         self.A.Assemble()
         self.invA = self.A.mat.Inverse(freedofs = fes.FreeDofs())
