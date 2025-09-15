@@ -145,6 +145,28 @@ def generate_sphere(maxh=0.1, order_g = 1, center=csg.Pnt(0,0,0), R = 1.0, geo_o
         mesh.Curve(order_g)
         return mesh, geo
     
+def generate_ellipse(a, b, c, maxh):
+
+    ell = occ.Ellipsoid(occ.Axes((0,0,0),occ.X,occ.Y),a,b,c).faces[0]
+    mesh = Mesh(occ.OCCGeometry(ell).GenerateMesh(maxh=maxh))
+    # fixpoint = []
+    # for seg in mesh.ngmesh.Elements1D():
+    #     fixpoint += seg.vertices
+    # fixpoint = set(fixpoint)
+    # par = 0.03*maxh if maxh > 0.2 else 0.08*maxh
+    # for i,p in enumerate(mesh.ngmesh.Points()):
+    #     if i + 1 in fixpoint: continue
+    #     x1,x2,x3 = p[0],p[1],p[2]
+    #     x1 += np.random.uniform(-par,par)
+    #     x2 += np.random.uniform(-par,par)
+    #     x3 += np.random.uniform(-par,par)
+    #     radius = sqrt(x1**2/a**2+x2**2/b**2+x3**2/c**2)
+    #     p[0] = x1/radius
+    #     p[1] = x2/radius
+    #     p[2] = x3/radius
+
+    return mesh, ell
+    
 '''
 Sigar
 NOTE: no vol_or_bnd option here, since explicitly requesting for a surface
@@ -208,11 +230,11 @@ def generate_ball(maxh = 0.1, order_g = 1, center=occ.Pnt(0,0,0), R = 1.0, vol_o
 Cylinder
 NOTE: no vol_or_bnd option here, since explicitly requesting for a surface
 '''
-def generate_cylinder(maxh = 0.1, order_g=1, bnd_name = "boundary", geo_only = False):
+def generate_cylinder(maxh = 0.1, R=1, order_g=1, bnd_name = "boundary", geo_only = False):
     geo       = csg.CSGeometry()
-    cyl       = csg.Cylinder(csg.Pnt(0,0,0), csg.Pnt(1,0,0), 1)
-    right     = csg.Plane(csg.Pnt(2,0,0), csg.Vec(1,0,0))
-    left      = csg.Plane(csg.Pnt(-2,0,0), csg.Vec(-1,0,0))
+    cyl       = csg.Cylinder(csg.Pnt(0,0,0), csg.Pnt(0,0,1), R)
+    right     = csg.Plane(csg.Pnt(0,0,1), csg.Vec(0,0,1))
+    left      = csg.Plane(csg.Pnt(0,0,-1), csg.Vec(0,0,-1))
     finitecyl = cyl * left * right
 
     geo.AddSurface(cyl, finitecyl)
@@ -265,7 +287,6 @@ def generate_torus(maxh = 0.1, order_g = 1, center=occ.Pnt(0,0,0), R = 1.0, r = 
     arc2 = occ.ArcOfCircle(pnt3, pnt4, pnt1)
 
     w = occ.Wire([arc1, arc2])
-    w.edges.name = "membrane"
     body = w.Revolve(occ.Axis((0,0,0),occ.Z), 360).Rotate(occ.Axis((0,0,0),occ.X), 90)
 
     geo = occ.OCCGeometry(body)
@@ -287,7 +308,6 @@ def generate_half_torus(maxh = 0.1, order_g = 1, R = 1.0, r = 0.4, vol_or_bnd = 
     arc2 = occ.ArcOfCircle(pnt3, pnt4, pnt1)
 
     w = occ.Wire([arc1, arc2])
-    w.edges.name = "membrane"
     body = w.Revolve(occ.Axis((0,0,0),occ.Z), 180).Rotate(occ.Axis((0,0,0),occ.X), 90)
 
     body.edges[occ.Z<maxh/2].name = bnd_name

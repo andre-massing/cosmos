@@ -33,7 +33,6 @@ class WillmoreBoundaryAPBDF1Model(BasePDEModel):
 
         self.input_params["clamped_bnd"] = ''
         self.input_params["clamped_conormal"] = CF((0,)*self._solver.ngsmesh.dim)
-        self.input_params["elasticity_modulus"] = 1
         self.input_params["autoupdate"] = False
 
         self.set_input_params(input_params)
@@ -45,7 +44,6 @@ class WillmoreBoundaryAPBDF1Model(BasePDEModel):
             (self.input_params["clamped_bnd"] not in self._solver.mesh.bbnd_markers):
             raise ValueError('Clamped boundary conditions are imposed on non-existing BBoundary')
 
-        h = self.cfg.h
         tE = specialcf.tangential(self._solver.ngsmesh.dim)
         self.ns = specialcf.normal(self._solver.ngsmesh.dim)
         self.Ps = Id(self._solver.ngsmesh.dim) - OuterProduct(self.ns, self.ns)
@@ -123,9 +121,11 @@ class WillmoreBoundaryAPBDF1Model(BasePDEModel):
 
         self.k0_gfu = GridFunction(V3)
         rhs_gfu = GridFunction(V2)
+        kappa_gfu = GridFunction(V3)
         self.input_fields["spontaneous_curvature"] = InputField(self.k0_gfu, CF(0), "spontaneous_curvature", self._solver.ngsmesh.Boundaries('.*'))
         self.input_fields["rhs"] = InputField(rhs_gfu, CF((0,)*self._solver.ngsmesh.dim), "rhs", self._solver.ngsmesh.Boundaries('.*'))
-        
+        self.input_fields["elasticity_modulus"] = InputField(kappa_gfu, CF(1), "elasticity_modulus", self._solver.ngsmesh.Boundaries('.*'))
+        kappa_gfu.Set(1, definedon = self.domain)
 
         self.X0 = GridFunction(V1)
         if self._solver.ngsmesh.dim == 2:
@@ -134,7 +134,7 @@ class WillmoreBoundaryAPBDF1Model(BasePDEModel):
             self.X0.Set(CF((x, y, z)), dual = True, definedon=self.domain)
         self.displacement_tot = GridFunction(V1)
 
-        self.A += (1/self._solver.time.dt*trial_D*test_D + 1/self.input_params["elasticity_modulus"]*InnerProduct(trial_Y, test_Y))*self.ds_lumped
+        self.A += (1/self._solver.time.dt*trial_D*test_D + 1/kappa_gfu*InnerProduct(trial_Y, test_Y))*self.ds_lumped
         self.A += (-InnerProduct(grad(trial_Y).Trace(), grad(test_D).Trace()) + InnerProduct(grad(trial_D).Trace(), grad(test_Y).Trace()))*ds(deformation = self.deform)
         
         self.F += (-InnerProduct(self.Ps, grad(test_Y).Trace()))*ds(deformation = self.deform)
@@ -143,8 +143,8 @@ class WillmoreBoundaryAPBDF1Model(BasePDEModel):
 
         self.F += (InnerProduct(Trace(grad(self.gfu_Y_old).Trace()),Trace(grad(test_D).Trace())))*ds(deformation = self.deform)
         self.F += (-2*InnerProduct(grad(self.gfu_Y_old).Trace().trans, self.D_s(test_D, self.Ps)*self.Ps.trans))*ds(deformation = self.deform)
-        self.F += (-self.input_params["elasticity_modulus"]*InnerProduct(self.k0_gfu*self.gfu_k_old, grad(test_D).Trace().trans*self.ns))*self.ds_lumped
-        self.F += (-0.5*InnerProduct(self.input_params["elasticity_modulus"]*(Norm(self.gfu_k_old - self.k0_gfu*self.ns)**2)*self.Ps,grad(test_D).Trace()))*self.ds_lumped
+        self.F += (-kappa_gfu*InnerProduct(self.k0_gfu*self.gfu_k_old, grad(test_D).Trace().trans*self.ns))*self.ds_lumped
+        self.F += (-0.5*InnerProduct(kappa_gfu*(Norm(self.gfu_k_old - self.k0_gfu*self.ns)**2)*self.Ps,grad(test_D).Trace()))*self.ds_lumped
         self.F += (InnerProduct(InnerProduct(self.gfu_Y_old, self.gfu_k_old)*self.Ps,grad(test_D).Trace()))*self.ds_lumped
 
         if self.input_params["clamped_bnd"]:
@@ -164,20 +164,18 @@ class WillmoreBoundaryAPBDF1Model(BasePDEModel):
         return sym
 
     def PreProcess(self):
-        
-        self.gfu_old.vec.data = self.gfu.vec.data
 
         if self.input_params['autoupdate'] or self._solver.time.iter == 0:
             self.A_mc.Assemble()
             self.invA_mc.Update()
             self.F_mc.Assemble()
             self.gfu_k_old.vec.data = self.invA_mc*self.F_mc.vec
-            self.gfu_Y_old.Set(self.input_params["elasticity_modulus"]*(self.gfu_k_old - self.input_fields["spontaneous_curvature"].gfu*self.ns), dual = True, definedon = self.domain)
+            self.gfu_Y_old.Set(self.input_fields["elasticity_modulus"].gfu*(self.gfu_k_old - self.input_fields["spontaneous_curvature"].gfu*self.ns), dual = True, definedon = self.domain)
             self.gfu_k.vec.data = self.gfu_k_old.vec.data
             self.gfu_Y.vec.data = self.gfu_Y_old.vec.data
         else:
             self.gfu_k_old.vec.data = self.gfu_k.vec.data
-            self.gfu_Y_old.vec.data = self.gfu_Y.vec.data
+            self.gfu_old.vec.data = self.gfu.vec.data
 
     def Solve(self):
 
@@ -188,8 +186,9 @@ class WillmoreBoundaryAPBDF1Model(BasePDEModel):
         old = 0
         new = 1e5
         iter = 0
+        maxiter = 10
         
-        while abs(new-old)>1e-8 and iter<10:
+        while abs(new-old)>1e-8 and iter<maxiter:
 
             iter += 1
             old = self.lambda_h.vec.data[0]
@@ -200,8 +199,8 @@ class WillmoreBoundaryAPBDF1Model(BasePDEModel):
                     -1*InnerProduct(self.input_fields['rhs'].gfu, self.gfu_k)*self.ds_lumped
                     -1*InnerProduct(Trace(grad(self.gfu_Y).Trace()),Trace(grad(self.gfu_k).Trace()))*ds(deformation = self.deform)
                     +2*InnerProduct(grad(self.gfu_Y).Trace().trans, self.D_s(self.gfu_k, self.Ps)*self.Ps.trans)*ds(deformation = self.deform)
-                    +self.input_params["elasticity_modulus"]*InnerProduct(self.k0_gfu*self.gfu_k, grad(self.gfu_k).Trace().trans*self.ns)*self.ds_lumped
-                    +0.5*InnerProduct(self.input_params["elasticity_modulus"]*(Norm(self.gfu_k - self.k0_gfu*self.ns)**2)*self.Ps,grad(self.gfu_k).Trace())*self.ds_lumped
+                    +self.input_fields["elasticity_modulus"].gfu*InnerProduct(self.k0_gfu*self.gfu_k, grad(self.gfu_k).Trace().trans*self.ns)*self.ds_lumped
+                    +0.5*InnerProduct(self.input_fields["elasticity_modulus"].gfu*(Norm(self.gfu_k - self.k0_gfu*self.ns)**2)*self.Ps,grad(self.gfu_k).Trace())*self.ds_lumped
                     -InnerProduct(InnerProduct(self.gfu_Y, self.gfu_k)*self.Ps,grad(self.gfu_k).Trace())*self.ds_lumped
                 , self._solver.ngsmesh)/Integrate(InnerProduct(self.gfu_k, self.gfu_k)*self.ds_lumped, self._solver.ngsmesh)
             
@@ -212,9 +211,9 @@ class WillmoreBoundaryAPBDF1Model(BasePDEModel):
             self.F.Assemble()
 
             self.gfu.vec.data = self.invA*self.F.vec
-            self.gfu_k.Set(1/self.input_params["elasticity_modulus"]*self.gfu_Y + self.input_fields["spontaneous_curvature"].gfu*self.ns, dual = True, definedon = self.domain)
+            self.gfu_k.Set(1/self.input_fields["elasticity_modulus"].gfu*self.gfu_Y + self.input_fields["spontaneous_curvature"].gfu*self.ns, dual = True, definedon = self.domain)
 
-        if iter == 10:
+        if iter == maxiter:
             raise Exception('Convergence not achieved for Surface area preserving Willmore flow')
 
     def PostProcess(self):

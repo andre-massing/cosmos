@@ -30,6 +30,7 @@ class MeanCurvatureBoundaryBDF1Model(BasePDEModel):
 
         solver._attach_model(self, self.model_order)
 
+        self.input_params["kappa"] = 1
         self.set_input_params(input_params)
 
         self.ns = specialcf.normal(self._solver.ngsmesh.dim)
@@ -69,7 +70,7 @@ class MeanCurvatureBoundaryBDF1Model(BasePDEModel):
 
         self.A += (1/self._solver.time.dt*trial_D*test_D + InnerProduct(trial_k, test_k)).Compile(True, True)*ds_lumped
         self.A += (InnerProduct(grad(trial_D).Trace(), grad(test_k).Trace())).Compile(True, True)*ds(deformation = deform)
-        self.A += (-InnerProduct(trial_k, test_D)).Compile(True, True)*ds_lumped
+        self.A += (-self.input_params["kappa"]*InnerProduct(trial_k, test_D)).Compile(True, True)*ds_lumped
         
         self.F += (-InnerProduct(Ps, grad(test_k).Trace())).Compile(True, True)*ds(deformation = deform)
         self.F += (InnerProduct(rhs_gfu, test_D)).Compile(True, True)*ds_lumped

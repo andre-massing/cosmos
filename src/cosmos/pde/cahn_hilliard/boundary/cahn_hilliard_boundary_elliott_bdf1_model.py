@@ -9,14 +9,14 @@ from cosmos.pde.base import BasePDEModel
 from cosmos.core.solver import Solver
 from cosmos.core.field import InputField, OutputField
 from cosmos.core.utils import MandBP
-from myngspy import *
+from ngsolve.solvers import Newton
 
-class CahnHilliardBoundaryBDF1Model(BasePDEModel):
+class CahnHilliardBoundaryElliottBDF1Model(BasePDEModel):
 
     def __init__(self, solver:Solver,
                  model_order:int,
                  domain:str = '.*',
-                 name:str = 'CahnHilliardBoundaryBDF1Model',
+                 name:str = 'CahnHilliardBoundaryBachiniBDF1Model',
                  input_params = {}):
         
         super().__init__()
@@ -32,18 +32,28 @@ class CahnHilliardBoundaryBDF1Model(BasePDEModel):
 
         solver._attach_model(self, self.model_order)
 
-        # TODO: Implement boundary conditions
-        # self.input_params["Neu_bnd"] = ''
-        # self.input_params["Dir_bnd"] = ''
+        n = specialcf.normal(self._solver.ngsmesh.dim)
+        tE = specialcf.tangential(self._solver.ngsmesh.dim)
+        Ps = Id(self._solver.ngsmesh.dim) - OuterProduct(n, n)
+        if self._solver.ngsmesh.dim == 2:
+            facet_space = H1(self._solver.ngsmesh, order = 1, 
+                                            definedon = self.domain)
+            nE = specialcf.tangential(self._solver.ngsmesh.dim)
+        else:
+            facet_space = FacetSurface(self._solver.ngsmesh, order = 0)
+            nE = Cross(n, tE)
+
         self.input_params["periodic"] = False
         self.input_params["mass_preserving"] = False
         self.input_params["bounds"] = None
         self.input_params["fes_order"] = 1
         self.input_params["u0"] = CF(0)
         self.input_params["w0"] = CF(0)
+        self.input_params["M"] = 1
         self.input_params["epsilon"] = 1
-        self.input_params["theta1"] = 1
-        self.input_params["theta2"] = 1
+        self.input_params["sigma"] = 1
+        self.input_params["Neu_bnd_phase"] = ''
+        self.input_params["Neu_bnd_potential"] = ''
 
         self.set_input_params(input_params)
         
@@ -60,7 +70,6 @@ class CahnHilliardBoundaryBDF1Model(BasePDEModel):
           
         (trial_u, trial_w), (test_u, test_w) = fes.TnT()
         self.A = BilinearForm(fes)
-        self.F = LinearForm(fes)
         
         self.gfu = GridFunction(fes)
         self.gfu_u, self.gfu_w = self.gfu.components
@@ -71,24 +80,42 @@ class CahnHilliardBoundaryBDF1Model(BasePDEModel):
         self.gfu_w.Set(self.input_params['w0'], dual = True, definedon = self.domain)
         self.output_fields["potential"] = OutputField(self.gfu_w, "potential", BND)
 
-        deform = self._solver.mesh.curr_deformation
         deform_old = self._solver.mesh.prev_deformation[-1]
+        deform_new = self._solver.mesh.curr_deformation
 
         # Creating GridFunctions for the Fields
         b_gfu = GridFunction(fes_vector)
-        D_gfu = GridFunction(_fes)
         rhs_u_gfu = GridFunction(_fes)
         rhs_w_gfu = GridFunction(_fes)
-        # TODO: Implement boundary conditions
-        # gradu_gfu = GridFunction(fes_vector)
-        # u_bnd_gfu = GridFunction(fes)
+        grad_phase_bnd_gfu = GridFunction(fes_vector)
+        grad_potential_bnd_gfu = GridFunction(fes_vector)
         self.input_fields["b"] = InputField(b_gfu, CF((0,)*solver.mesh.dim), "b", self._solver.ngsmesh.Boundaries('.*'))
-        self.input_fields["D"] = InputField(D_gfu, CF(1), "D", self._solver.ngsmesh.Boundaries('.*'))
         self.input_fields["rhs_u"] = InputField(rhs_u_gfu, CF(0), "rhs_u", self._solver.ngsmesh.Boundaries('.*'))
         self.input_fields["rhs_w"] = InputField(rhs_w_gfu, CF(0), "rhs_w", self._solver.ngsmesh.Boundaries('.*'))
-        # TODO: Implement boundary conditions
-        # self.input_fields["gradu_bnd"] = InputField(gradu_gfu, CF((0,)*solver.mesh.dim), "gradu_bnd", self._solver.ngsmesh.Boundaries('.*'))
-        # self.input_fields["u_bnd"] = InputField(u_bnd_gfu, CF(0), "u_bnd", self._solver.ngsmesh.Boundaries('.*'))
+        self.input_fields["grad_phase_bnd"] = InputField(grad_phase_bnd_gfu, CF((0,)*self._solver.ngsmesh.dim), "grad_phase_bnd", self._solver.ngsmesh.Boundaries('.*'))
+        self.input_fields["grad_potential_bnd"] = InputField(grad_potential_bnd_gfu, CF((0,)*self._solver.ngsmesh.dim), "grad_potential_bnd", self._solver.ngsmesh.Boundaries('.*'))
+
+        self.A += 1/self._solver.time.dt*trial_u*test_u*ds(deformation = deform_new)
+        self.A += -1*b_gfu*grad(trial_u).Trace()*test_u*ds(deformation = deform_new)
+        self.A += self.input_params["M"]*grad(trial_w).Trace()*grad(test_u).Trace()*ds(deformation = deform_new)
+        self.A += trial_w*test_w*ds(deformation = deform_new)
+        self.A += -self.input_params["sigma"]*self.input_params["epsilon"]*grad(trial_u).Trace()*grad(test_w).Trace()*ds(deformation = deform_new)
+        self.A += -self.input_params["sigma"]/self.input_params["epsilon"]*trial_u**3*test_w*ds(deformation = deform_new)
+
+        self.A += -1*rhs_u_gfu*test_u*ds(deformation = deform_new)
+        self.A += -1*rhs_w_gfu*test_w*ds(deformation = deform_new)
+        
+        self.A += -1/self._solver.time.dt*self.gfu_u_old*test_u*ds(deformation = deform_old)
+        self.A += self.input_params["sigma"]/self.input_params["epsilon"]*self.gfu_u_old*test_w*ds(deformation = deform_old)
+
+        if self.input_params["Neu_bnd_phase"]:
+            neu_bnd_gfu_phase = GridFunction(facet_space)
+            neu_bnd_gfu_phase.Set(1, definedon = self._solver.ngsmesh.BBoundaries(self.input_params['Neu_bnd_phase']))
+            self.A += neu_bnd_gfu_phase*self.input_params["sigma"]*self.input_params["epsilon"]*grad_phase_bnd_gfu*nE*test_w*ds(element_boundary = True, deformation = deform_new)
+        if self.input_params["Neu_bnd_potential"]:
+            neu_bnd_gfu_potential = GridFunction(facet_space)
+            neu_bnd_gfu_potential.Set(1, definedon = self._solver.ngsmesh.BBoundaries(self.input_params['Neu_bnd_potential']))
+            self.A += -1*neu_bnd_gfu_potential*self.input_params["M"]*grad_potential_bnd_gfu*nE*test_u*ds(element_boundary=True, deformation = deform_new)
 
         if self.input_params["mass_preserving"]:
             ir_segm = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
@@ -101,55 +128,30 @@ class CahnHilliardBoundaryBDF1Model(BasePDEModel):
             rows,cols,vals = self.Amp.mat.COO()
             self.weights = sp.csr_matrix((vals,(rows,cols))).diagonal()
 
-        self.A += 1/self._solver.time.dt*trial_u*test_u*ds(deformation = deform)
-        self.A += D_gfu*grad(trial_w).Trace()*grad(test_u).Trace()*ds(deformation = deform)
-        self.A += trial_w*test_w*ds(deformation = deform)
-        self.A += -self.input_params["epsilon"]*grad(trial_u).Trace()*grad(test_w).Trace()*ds(deformation = deform)
-                
-        # if self.input_params['Dir_bnd']:
-        #     self.A += - d_gfu*InnerProduct(n, grad(trial))*test*ds(definedon = self.input_params['Dir_bnd'], skeleton=True, deformation = deform) \
-        #         - d_gfu*InnerProduct(n, grad(test))*trial*ds(definedon = self.input_params['Dir_bnd'], skeleton=True, deformation = deform)\
-        #         + d_gfu*alpha/h*trial*test*ds(definedon = self.input_params['Dir_bnd'], skeleton = True, deformation = deform)\
-
-        # self.A += -b_gfu*grad(test) * trial*dx(deformation = deform)
-        # self.A += IfPos(b_gfu*n, b_gfu*n*trial, CF(0))*test\
-        #     *ds(deformation = deform)
-
-        Precond_A = Preconditioner(self.A, "local") # TODO: multigrid preconditioner doesn't seem to work
-        self.A.Assemble()
-        self.invA = GMRESSolver(self.A.mat, Precond_A.mat, maxsteps = 1000)
-
-        self.F += rhs_u_gfu*test_u*ds(deformation = deform)
-        self.F += rhs_w_gfu*test_w*ds(deformation = deform)
-        
-        # if self.input_params['Dir_bnd']:
-        #     self.F += d_gfu*alpha/h*u_bnd_gfu*test*ds(definedon = self.input_params['Dir_bnd'], skeleton = True, deformation = deform)\
-        #         - d_gfu*InnerProduct(n, grad(test))*u_bnd_gfu*ds(definedon = self.input_params['Dir_bnd'], skeleton=True, deformation = deform)
-        # if self.input_params['Neu_bnd']:
-        #     self.F += d_gfu*gradu_gfu*n*test*ds(definedon = self.input_params['Neu_bnd'], deformation = deform)
-
-        # self.F += -IfPos(b_gfu*n, CF(0), b_gfu*n*u_bnd_gfu)*test*ds(deformation = deform)
-
-        self.F += self.input_params["theta1"]*(log(1+self.gfu_u_old) - log(1-self.gfu_u_old))*test_w*ds(deformation = deform_old)
-        self.F += -1*self.input_params["theta2"]*self.gfu_u_old*test_w*ds(deformation = deform)
-        self.F += 1/self._solver.time.dt*self.gfu_u_old*test_u*ds(deformation = deform_old)
-
     def PreProcess(self):
+
+        if self.input_params['epsilon']<self._solver.time.dt.Get():
+            logger.warning('The solver might be unstable, choose a lower timestep on the order of epsilon')
         
         self.gfu_old.vec.data = self.gfu.vec.data
 
-        if self._solver.time.iter==0 and self.input_params["mass_preserving"]:
-            gfu0_vec = self.gfu_u.vec.Copy().FV().NumPy()
-            self.mass0 = np.sum(self.weights*gfu0_vec)
+        if self._solver.time.iter == 0:
+
+            if self.input_params["mass_preserving"] and self.input_params["fes_order"]>1:
+                raise Exception('Mass preservation not yet implemented for fes_order>1')
+            if self.input_params["bounds"] and self.input_params["fes_order"]>1:
+                raise Exception('Bounds preservation not yet implemented for fes_order>1')
+        
+            if self.input_params["mass_preserving"]:
+                gfu0_vec = self.gfu_u.vec.Copy().FV().NumPy()
+                self.mass0 = np.sum(self.weights*gfu0_vec)
 
     def Solve(self):
 
+        self._solver.time.advance_tcoef()
         self.update_input_fields()
 
-        self.A.Assemble()
-        self.F.Assemble()
-
-        self.gfu.vec.data = self.invA*self.F.vec
+        Newton(self.A,self.gfu,maxit=20, printing=False)
         
         if self.input_params["bounds"] and not self.input_params["mass_preserving"]:
 
@@ -162,7 +164,7 @@ class CahnHilliardBoundaryBDF1Model(BasePDEModel):
             if hasattr(self._solver.time, 'dt'):
                 dt = self._solver.time.dt.Get()
             else:
-                logger.error('A time-dependent simulation is needed to impose conservative mass')
+                raise Exception('A time-dependent simulation is needed to impose conservative mass')
 
             self.Amp.Assemble()
             rows,cols,vals = self.Amp.mat.COO()
@@ -178,6 +180,8 @@ class CahnHilliardBoundaryBDF1Model(BasePDEModel):
                                 MP=self.input_params["mass_preserving"], mass0=self.mass0, dt = dt)
 
             self.gfu_u.vec.data = gfu_new
+
+        self._solver.time.reset_tcoef()
 
     def PostProcess(self):
         

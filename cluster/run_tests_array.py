@@ -29,9 +29,13 @@ def main():
     elif n == 8:
         import test_bachini_tanh_3D_duanli
     elif n == 9:
-        import test_helfrich_blood_cell
+        import test_helfrich_blood_cell_441
     elif n == 10:
-        import test_helfrich_blood_cell_duanli
+        import test_helfrich_blood_cell_441_duanli
+    elif n == 11:
+        import test_helfrich_blood_cell_551
+    elif n == 12:
+        import test_helfrich_blood_cell_551_duanli
 
 if __name__ == "__main__":
     main()

@@ -69,8 +69,9 @@ class Solver:
                 self._save_pdes_solutions()
 
                 elapsed = time.strftime("%H:%M:%S", time.gmtime(time.time() - start_time))
+                dt = self.time.dt.Get()
                 logging.debug(
-                    f"t = {self.time.t.Get():.2e} | Δt = {self.time.dt.Get():.2e} | Iter {self.time.iter}"
+                    f"t = {self.time.t.Get():.2e} | Δt = {dt:.2e} | Iter {self.time.iter}"
                     f" | Elapsed = {elapsed} \r"
                 )
 
@@ -87,7 +88,7 @@ class Solver:
 
                 field = self.pdes[pde].output_fields[output_field]
                 field.save = True
-                folder = self.output_folder + '/' + self.name + '/' + field.name
+                folder = self.output_folder + '/' + self.name + '/' + pde + '/' + field.name
                 os.makedirs(folder, exist_ok = True)
                 filename = folder + '/' + field.name + '_vtk'
                 field.vtk = VTKOutput(self.ngsmesh, coefs=[field._coef], names =[field.name],

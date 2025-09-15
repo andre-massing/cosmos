@@ -76,6 +76,8 @@ class SolverTime:
             self.dt.Set(self.input_params["dt"][self.iter])
             if self.dt.Get() <= 0:
                 raise Exception("Time-step has been set to negative value")
+        else:
+            self.dt.Set(self.input_params["dt"])
 
         self.prev_dt.append(self.dt.Get())
         if len(self.prev_dt)>self.buffer:
