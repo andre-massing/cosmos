@@ -86,8 +86,6 @@ class SolverTime:
         if len(self.prev_t)>self.buffer:
             self.prev_t.pop(0)
 
-        logger.debug('Time had been advanced correctly')
-
     def get_state(self):
         time_state = {
             "iter": self.iter,
@@ -108,5 +106,8 @@ class SolverTime:
         if self.t_coef:
             self.t_coef.Set(self.t.Get())
     
-    def print_state(self):
-        print(self.get_state())
+    def print_info(self):
+        print('Time stepping parameters are: ')
+        print(f'\t - initial time: {self.initial_t:.2e}')
+        print(f'\t - final time: {self.final_t:.2e}')
+        print(f'\t - timestep: {self.dt.Get():.2e}')

@@ -12,7 +12,8 @@ from typing import Dict
 
 class Solver:
 
-    def __init__(self, solvermesh:SolverMesh, solvertime:SolverTime = None, name:str = 'solver', iter:bool = False):
+    def __init__(self, solvermesh:SolverMesh, solvertime:SolverTime = None, name:str = 'solver',
+                 iter:bool = False, printing:bool = False):
 
         if not isinstance(name, str):
             raise Exception('Name must be a string')
@@ -38,6 +39,12 @@ class Solver:
         self.output_folder = ''
         self.output_sample_rate = None
 
+        self.printing = printing
+
+        if self.printing:
+            self.mesh.print_info()
+            self.time.print_info()
+
     def __call__(self):
         return self._generator()
 
@@ -55,6 +62,17 @@ class Solver:
     
     def _generator(self):
 
+        if self.printing:
+            print('\n !!! SIMULATION HAS STARTED !!! \n')
+            print('The solver name is: ', self.name)
+            print('The solver contains N.', len(self.pdes), ' PDE solvers:')
+            for pde_name, pde in self.pdes.items():
+                print('\t - Solver ', pde_name, ' with execution order', pde.model_order)
+            print('\n')
+            if self.output_folder:
+                print('Results are saved in: ', self.output_folder)
+                print('Results printing sample rate is: ', self.output_sample_rate, '\n')
+
         start_time = time.time()
         self._save_pdes_solutions()
 
@@ -68,14 +86,18 @@ class Solver:
                 self.time.postprocess()
                 self._save_pdes_solutions()
 
-                elapsed = time.strftime("%H:%M:%S", time.gmtime(time.time() - start_time))
+                elapsed_hms = time.strftime("%H:%M:%S", time.gmtime(time.time() - start_time))
+                elapsed = time.time() - start_time
                 dt = self.time.dt.Get()
-                logging.debug(
-                    f"t = {self.time.t.Get():.2e} | Δt = {dt:.2e} | Iter {self.time.iter}"
-                    f" | Elapsed = {elapsed} \r"
-                )
+
+                if self.printing:
+                    print(f"t = {self.time.t.Get():.3e} | Δt = {dt:.3e} | Iter {self.time.iter}"
+                        f" | Elapsed = {elapsed_hms}  | Avg. Iter Time = {elapsed/self.time.iter:.3e}", end = '\r')
 
                 yield
+        
+        if self.printing:
+            print('\n\n !!! SIMULATION CONCLUDED SUCCESSFULLY !!!')
 
     def run(self):
         for step in self(): 

@@ -5,8 +5,8 @@ import numpy as np
 from ngsolve import *
 from ngsolve.webgui import Draw
 from cosmos.pde.base import BasePDEModel
-from cosmos.config.parameters import get_config
 from typing import Dict
+import time
 
 class SolverIterator:
 
@@ -52,6 +52,8 @@ class SolverIterator:
 
             if self.subiter_count == 20:
                 raise Exception('Internal solver iteration exceeded max number of 20 iterations')
+            
+        logger.debug(f'Subiter solved successfully')
                 
 
     def postprocess(self):

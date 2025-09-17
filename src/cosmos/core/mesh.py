@@ -59,6 +59,22 @@ class SolverMesh:
 
     def reset_mesh(self):
         self.mesh.deformation.vec.data = self.prev_deformation[-1].vec.data
+
+    def print_info(self):
+
+        print('The mesh has dimension: ', self.dim)
+        print('The mesh has the following codimension 0 domains:')
+        print(self.vol_markers)
+        print('The mesh has the following codimension 1 domains:')
+        print(self.bnd_markers)
+        print('The mesh has the following codimension 2 domains:')
+        print(self.vol_markers)
+        print('Mesh characteristics are:')
+        print('\t - number of elements: ', self.ne)
+        print('\t - number of vertices: ', self.nv)
+        print('\t - number of facets: ', self.nfacet)
+        print('\t - number of faces: ', self.nface)
+        print('\t - number of edges: ', self.nedge)
     
     @property
     def deformation(self):
