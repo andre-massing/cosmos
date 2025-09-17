@@ -181,7 +181,6 @@ class WillmoreBoundaryInexBDF1Model(BasePDEModel):
                     +0.5*InnerProduct(self.input_fields["elasticity_modulus"].gfu*(Norm(self.gfu_k_old - k0_gfu*self.ns)**2)*Ps,grad(self.gfu_k_old).Trace())*test_lam*ds_lumped \
                     -InnerProduct(InnerProduct(self.gfu_Y_old, self.gfu_k_old)*Ps,grad(self.gfu_k_old).Trace())*test_lam*ds_lumped \
         
-
         self.A.Assemble()
         self.invA = self.A.mat.Inverse(freedofs = fes.FreeDofs())
 

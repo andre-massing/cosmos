@@ -12,7 +12,7 @@ import numbers
 
 class ALEField(Field):
 
-    def __init__(self, solver:Solver, coef: CoefficientFunction, domain:str, VorB,  clamped_bnd:str='', redistribute = False):
+    def __init__(self, solver:Solver, coef: CoefficientFunction, domain:str, VorB,  clamped_bnd:str='', redistribute = False, redistribute_type = 'DuanLi'):
 
         super().__init__(coef)
         
@@ -22,6 +22,7 @@ class ALEField(Field):
         self.domain = domain
         self.clamped_bnd = clamped_bnd
         self.redistribute = redistribute
+        self.redistribute_type = redistribute_type
         self.VorB = VorB
 
         if self.VorB == BND:
@@ -36,35 +37,69 @@ class ALEField(Field):
 
         if self.redistribute:
 
-            deformation0 = GridFunction(self._solver.mesh.curr_deformation.space)
-            self.mat_def = GridFunction(self._solver.mesh.curr_deformation.space)
+            if self.redistribute_type == 'DuanLi':
 
-            self.ale_displ = GridFunction(V)
-            V2 = Compress(H1(self._solver.ngsmesh, order = self._solver.ngsmesh.GetCurveOrder(),
-                    definedon = self._solver.ngsmesh.Boundaries(domain)))
+                deformation0 = GridFunction(self._solver.mesh.curr_deformation.space)
+                self.mat_def = GridFunction(self._solver.mesh.curr_deformation.space)
 
-            fes_pp = V*V2
-            self.A_pp = BilinearForm(fes_pp, symmetric = True)
-            self.F_pp = LinearForm(fes_pp)
-            self.duanli = GridFunction(fes_pp)
-            self.wind = self.duanli.components[0]
+                self.ale_displ = GridFunction(V)
+                V2 = Compress(H1(self._solver.ngsmesh, order = self._solver.ngsmesh.GetCurveOrder(),
+                        definedon = self._solver.ngsmesh.Boundaries(domain)))
 
-            (w, kappa), (eta, mu) = fes_pp.TnT()
-            ns = specialcf.normal(self._solver.ngsmesh.dim)
-            Ps = Id(self._solver.ngsmesh.dim) - OuterProduct(ns, ns)
+                fes_pp = V*V2
+                self.A_pp = BilinearForm(fes_pp, symmetric = True)
+                self.F_pp = LinearForm(fes_pp)
+                self.duanli = GridFunction(fes_pp)
+                self.wind = self.duanli.components[0]
 
-            # ir_segm = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
-            # ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-            
-            self.A_pp += (InnerProduct(grad(w).Trace(), grad(eta).Trace()))*ds(deformation = deformation0)
-            self.A_pp += (-1*InnerProduct(eta*ns, kappa))*ds(deformation=self.mat_def)
-            self.A_pp += (-1*InnerProduct(w*ns, mu))*ds(deformation=self.mat_def)
-            self.A_pp.Assemble()
-            self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
+                (w, kappa), (eta, mu) = fes_pp.TnT()
+                ns = specialcf.normal(self._solver.ngsmesh.dim)
+                Ps = Id(self._solver.ngsmesh.dim) - OuterProduct(ns, ns)
+                
+                self.A_pp += (InnerProduct(grad(w).Trace(), grad(eta).Trace()))*ds(deformation = deformation0)
+                self.A_pp += (-1*InnerProduct(eta*ns, kappa))*ds(deformation=self.mat_def)
+                self.A_pp += (-1*InnerProduct(w*ns, mu))*ds(deformation=self.mat_def)
+                self.A_pp.Assemble()
+                self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
 
-            self.F_pp += (-1*InnerProduct(Ps, grad(eta).Trace()))*ds(deformation = deformation0)
-            self.F_pp += (-1*InnerProduct(grad(self.mat_def).Trace(), grad(eta).Trace()))*ds(deformation = deformation0)
-            self.F_pp += (InnerProduct(grad(deformation0).Trace(), grad(eta).Trace()))*ds(deformation = deformation0)
+                self.F_pp += (-1*InnerProduct(Ps, grad(eta).Trace()))*ds(deformation = deformation0)
+                self.F_pp += (-1*InnerProduct(grad(self.mat_def).Trace(), grad(eta).Trace()))*ds(deformation = deformation0)
+                self.F_pp += (InnerProduct(grad(deformation0).Trace(), grad(eta).Trace()))*ds(deformation = deformation0)
+
+            elif self.redistribute_type == 'MDR':
+
+                self.mat_def = GridFunction(self._solver.mesh.curr_deformation.space)
+                deform = self._solver.mesh.prev_deformation[-1]
+
+                ir_segm = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
+                ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
+                
+                ds_lumped = ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = self.mat_def)
+
+                self.ale_displ = GridFunction(V)
+                V2 = Compress(H1(self._solver.ngsmesh, order = self._solver.ngsmesh.GetCurveOrder(),
+                        definedon = self._solver.ngsmesh.Boundaries(domain)))
+
+                fes_pp = V*V2
+                self.A_pp = BilinearForm(fes_pp, symmetric = True)
+                self.F_pp = LinearForm(fes_pp)
+                self.duanli = GridFunction(fes_pp)
+                self.wind = self.duanli.components[0]
+
+                (w, kappa), (eta, mu) = fes_pp.TnT()
+                ns = specialcf.normal(self._solver.ngsmesh.dim)
+                Ps = Id(self._solver.ngsmesh.dim) - OuterProduct(ns, ns)
+                
+                self.A_pp += (InnerProduct(grad(w).Trace()/self._solver.time.dt, grad(eta).Trace()))*ds(deformation = deform)
+                self.A_pp += (-1*InnerProduct(eta*ns, kappa))*ds_lumped
+                self.A_pp += (-1*InnerProduct(w*ns, mu))*ds_lumped
+                self.A_pp.Assemble()
+                self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
+
+                self.F_pp += (-1*InnerProduct(grad(self.ale_displ).Trace()/self._solver.time.dt, grad(eta).Trace()))*ds(deformation = deform)
+
+            else:
+                raise Exception('Mesh redistribution_type not recognized, use DuanLi or MDR as options')
 
     @property
     def cf(self):
@@ -178,7 +213,7 @@ class ALEModel(BasePDEModel):
         
         self._solver.mesh.update_state()
 
-    def set_bnd_displacement(self, coef, domain, clamped_bnd='', redistribute=False):
+    def set_bnd_displacement(self, coef, domain, clamped_bnd='', redistribute=False, redistribute_type = 'DuanLi'):
 
         if self.vol_is_prescribed:
             raise Exception('Cannot prescribe boundary displcement if volume displacement is already prescribed')
@@ -191,7 +226,8 @@ class ALEModel(BasePDEModel):
             if not all(word in self._solver.mesh.bbnd_markers for word in clamped_bnd.split('|')):
                 raise Exception('Clamped boudnary not present in list of boundaries for the mesh')
         
-        self.bnd_fields[domain] = ALEField(self._solver, coef, domain, BND, clamped_bnd=clamped_bnd, redistribute=redistribute)
+        self.bnd_fields[domain] = ALEField(self._solver, coef, domain, BND, clamped_bnd=clamped_bnd,
+                                           redistribute=redistribute, redistribute_type = redistribute_type)
 
     def set_vol_displacement(self, coef, domain):
 
