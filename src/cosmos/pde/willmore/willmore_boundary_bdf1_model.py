@@ -189,3 +189,10 @@ class WillmoreBoundaryBDF1Model(BasePDEModel):
     @property
     def mean_curvature(self):
         return self.gfu_k
+    
+    @property
+    def energy(self):
+        energy = Integrate(0.5*self.input_fields['elasticity_modulus'].gfu*Norm(self.mean_curvature\
+                            -self.input_fields['spontaneous_curvature'].gfu*specialcf.normal(self._solver.ngsmesh.dim))**2, 
+                            self._solver.ngsmesh, VOL_or_BND = BND)
+        return energy

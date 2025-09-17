@@ -184,6 +184,8 @@ class WillmoreBoundaryInexBDF1Model(BasePDEModel):
         self.A.Assemble()
         self.invA = self.A.mat.Inverse(freedofs = fes.FreeDofs())
 
+        self.area0 = self.area
+
     def PreProcess(self):
         
         self.gfu_old.vec.data = self.gfu.vec.data
@@ -233,6 +235,9 @@ class WillmoreBoundaryInexBDF1Model(BasePDEModel):
         self.gfu.vec.data = self.invA*self.F.vec
         self.gfu_k.Set(1/self.input_fields["elasticity_modulus"].gfu*self.gfu_Y + self.input_fields["spontaneous_curvature"].gfu*self.ns, dual = True, definedon = self.domain)
 
+        if abs(self.area-self.area0)/self.area0>0.1:
+            raise Exception('Area of the simulation has exceeded accepted limit')
+
     def PostProcess(self):
 
         pass
@@ -248,3 +253,15 @@ class WillmoreBoundaryInexBDF1Model(BasePDEModel):
     @property
     def multiplier(self):
         return self.gfu_lam
+    
+    @property
+    def energy(self):
+        energy = Integrate(0.5*self.input_fields['elasticity_modulus'].gfu*Norm(self.mean_curvature\
+                            -self.input_fields['spontaneous_curvature'].gfu*specialcf.normal(self._solver.ngsmesh.dim))**2, 
+                            self._solver.ngsmesh, VOL_or_BND = BND)
+        return energy
+    
+    @property
+    def area(self):
+        area = Integrate(1, self._solver.ngsmesh, VOL_or_BND = BND)
+        return area

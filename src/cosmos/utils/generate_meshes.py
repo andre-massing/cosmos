@@ -16,21 +16,6 @@ from netgen.meshing import Element0D, Element1D, Element2D, MeshPoint, Pnt
 from netgen.meshing import Mesh as NetGenMesh
 import numpy as np
 
-__all__ = [
-    'generate_arc',
-    'generate_plane',
-    'generate_circle',
-    'generate_sphere',
-    'generate_half_sphere',
-    'generate_ball',
-    'generate_cylinder',
-    'generate_torus',
-    'generate_half_torus', 
-    'generate_box',
-    'generate_sigar',
-    'import_stl_mesh'
-]
-
 '''
 Auxiliary function to allowing to mesh, switching between volume and surface mesh
 '''
@@ -48,15 +33,11 @@ def Meshing(geo, maxh, order_g, vol_or_bnd):
 '''
 Arc
 '''
-def generate_arc(r=1, N=20, bnd_name = "boundary", geo_only = False):
-    # order_g is maintained just for compatibility, but it does not improve the 
-    # description of the plane. a,b are the side length. The boundary of the plane
-    # has been named to facilitate handling of boundary conditions
-
+def generate_boundary_arc(r=1, N=20, bbnd_name = "bboundary"):
 
     ngmesh = NetGenMesh(dim=2)
     pids = []
-    radius = 1.0
+    radius = r
     n_segments = N  # Number of segments for smoothness
     theta_vals = np.linspace(0, np.pi, n_segments + 1)  # Angles from 0 to π
     # Add points to the mesh.
@@ -72,44 +53,52 @@ def generate_arc(r=1, N=20, bnd_name = "boundary", geo_only = False):
 
     # Add BC to the mesh.
 
-    idx_l = ngmesh.AddRegion(bnd_name, dim=0)
-    idx_r = ngmesh.AddRegion(bnd_name, dim=0)
+    idx_l = ngmesh.AddRegion(bbnd_name, dim=0)
+    idx_r = ngmesh.AddRegion(bbnd_name, dim=0)
     ngmesh.Add(Element0D(pids[0], index=idx_l))  
     ngmesh.Add(Element0D(pids[n_segments], index=idx_r))
     mesh = Mesh(ngmesh)
-    if geo_only:
-        raise Exception('No geometry is created in this case')
-    else:	
-        return mesh , None
+    
+    return mesh
 
 '''
 Plane
 NOTE: This is a plane embedded in 3D, so its number of elements is 0
 '''
-def generate_plane(maxh=0.1, order_g = 1, a =1.0, b=2.0, bnd_name = "boundary", geo_only = False):
+def generate_boundary_plane(maxh=0.1, order_g = 1, a =1.0, b=2.0, bbnd_name = "bboundary"):
     # order_g is maintained just for compatibility, but it does not improve the 
     # description of the plane. a,b are the side length. The boundary of the plane
     # has been named to facilitate handling of boundary conditions
 
-    wp = occ.WorkPlane()
-    wp.Rectangle(a,b)
-    face = wp.Face()
-
-    face.edges.name = bnd_name
-
+    
+    face = occ.WorkPlane(occ.Axes((0,0,0), n=occ.Z, h=occ.X)).Rectangle(a,b).Face()
+    face.edges.name = bbnd_name
     geo = occ.OCCGeometry(face)
+    mesh = Meshing(geo, maxh, order_g, 'VOL')
+        
+    return mesh
 
-    if geo_only:
-        return geo
-    else:
-        mesh = Meshing(geo, maxh, order_g, 'VOL')	
-        return mesh , geo
+'''
+Circle Embedded in 3D
+NOTE: This is a circle embedded in 3D, so its number of elements is 0
+'''
+def generate_boundary_circle(maxh=0.1, order_g = 1, R = 1.0, bbnd_name = "bboundary"):
+    # order_g is maintained just for compatibility, but it does not improve the 
+    # description of the plane. a,b are the side length. The boundary of the plane
+    # has been named to facilitate handling of boundary conditions
+
+    
+    face = occ.WorkPlane(occ.Axes((0,0,0), n=occ.Z, h=occ.X)).Circle(0, 0, R).Face()
+    face.edges.name = bbnd_name
+    geo = occ.OCCGeometry(face)
+    mesh = Meshing(geo, maxh, order_g, 'VOL')
+        
+    return mesh
 
 '''
 2D circle
 '''
-# Later add-on, switch from 2D to 2D immersed in 3D
-def generate_circle(maxh=0.1, order_g = 1, center=occ.Pnt(0,0,0), R = 1.0, bnd_name = "boundary", geo_only = False):
+def generate_volume_circle(maxh=0.1, order_g = 1, center=occ.Pnt(0,0,0), R = 1.0, bnd_name = "boundary"):
 
     wp = occ.WorkPlane()
     wp.Arc(R, 180)
@@ -121,34 +110,30 @@ def generate_circle(maxh=0.1, order_g = 1, center=occ.Pnt(0,0,0), R = 1.0, bnd_n
     synapse = synapse.Move((center[0], center[1], center[2]))
 
     geo = occ.OCCGeometry(synapse, dim = 2)
-
-    if geo_only:
-        return geo
-    else:
-        mesh = Meshing(geo, maxh, order_g, 'VOL')
-        return mesh, geo
+    mesh = Meshing(geo, maxh, order_g, 'VOL')
+    return mesh
 
 '''
 Sphere
-NOTE: no vol_or_bnd option here, since explicitly requesting for a surface
 '''
-def generate_sphere(maxh=0.1, order_g = 1, center=csg.Pnt(0,0,0), R = 1.0, geo_only = False):
+def generate_boundary_sphere(maxh=0.1, order_g = 1, center=csg.Pnt(0,0,0), R = 1.0):
     
     geo          = csg.CSGeometry()
     sphere       = csg.Sphere(center, R)
     geo.Add(sphere)
+
+    mesh = Meshing(geo, maxh, order_g, 'BND')
+    mesh.Curve(order_g)
+    return mesh
     
-    if geo_only:
-        return geo
-    else:
-        mesh = Mesh(geo.GenerateMesh(maxh=maxh, optsteps2d=3, perfstepsend=MeshingStep.MESHSURFACE))
-        mesh.Curve(order_g)
-        return mesh, geo
-    
-def generate_ellipse(a, b, c, maxh):
+'''
+Ellipse
+'''  
+def generate_boundary_ellipse(maxh = 0.1, order_g = 1, a=1, b=1, c=1):
 
     ell = occ.Ellipsoid(occ.Axes((0,0,0),occ.X,occ.Y),a,b,c).faces[0]
-    mesh = Mesh(occ.OCCGeometry(ell).GenerateMesh(maxh=maxh))
+    geo = occ.OCCGeometry(ell, dim = 2)
+    mesh = Meshing(geo, maxh, order_g, 'BND')
     # fixpoint = []
     # for seg in mesh.ngmesh.Elements1D():
     #     fixpoint += seg.vertices
@@ -165,13 +150,12 @@ def generate_ellipse(a, b, c, maxh):
     #     p[1] = x2/radius
     #     p[2] = x3/radius
 
-    return mesh, ell
+    return mesh
     
 '''
 Sigar
-NOTE: no vol_or_bnd option here, since explicitly requesting for a surface
 '''
-def generate_sigar(maxh=0.1, order_g = 1, center=csg.Pnt(0,0,0), r = 1.0, h= 2, geo_only = False):
+def generate_boundary_sigar(maxh=0.1, order_g = 1, center=csg.Pnt(0,0,0), r = 1.0, h= 2):
 
     cyl = occ.Cylinder((0,-h/2,0), occ.Y, r=r, h=h)
     sphere1 = occ.Sphere( (0,h/2,0), r)
@@ -179,19 +163,15 @@ def generate_sigar(maxh=0.1, order_g = 1, center=csg.Pnt(0,0,0), r = 1.0, h= 2, 
     fused = cyl + sphere1 + sphere2
 
     geo = occ.OCCGeometry(fused)
+    mesh = Meshing(geo, maxh, order_g, 'BND')
+    mesh.Curve(order_g)
     
-    if geo_only:
-        return geo
-    else:
-        mesh = Mesh(geo.GenerateMesh(maxh=maxh, optsteps2d=3, perfstepsend=MeshingStep.MESHSURFACE))
-        mesh.Curve(order_g)
-        return mesh, geo
+    return mesh
 
 '''
 Half sphere
-NOTE: no vol_or_bnd option here, since explicitly requesting for a surface
 '''
-def generate_half_sphere(maxh=0.1, order_g = 1, center=csg.Pnt(0,0,0), R = 1.0,  bnd_name = "bottom", geo_only = False):
+def generate_boundary_half_sphere(maxh=0.1, order_g = 1, center=csg.Pnt(0,0,0), R = 1.0,  bbnd_name = "bboundary"):
     
     geo          = csg.CSGeometry()
     sphere       = csg.Sphere(center, R)
@@ -199,19 +179,17 @@ def generate_half_sphere(maxh=0.1, order_g = 1, center=csg.Pnt(0,0,0), R = 1.0, 
     finitesphere = sphere * bot
 
     geo.AddSurface(sphere, finitesphere)
-    geo.NameEdge(sphere,bot, bnd_name)
+    geo.NameEdge(sphere,bot, bbnd_name)
 
-    if geo_only:
-        return geo
-    else:
-        mesh = Mesh(geo.GenerateMesh(maxh=maxh))
-        mesh.Curve(order_g)
-        return mesh, geo
+    mesh = Meshing(geo, maxh, order_g, 'BND')
+    mesh.Curve(order_g)
+    
+    return mesh
 
 '''
 Ball
 '''
-def generate_ball(maxh = 0.1, order_g = 1, center=occ.Pnt(0,0,0), R = 1.0, vol_or_bnd = 'VOL', bnd_name = "boundary", geo_only = False):
+def generate_volume_ball(maxh = 0.1, order_g = 1, center=occ.Pnt(0,0,0), R = 1.0, bnd_name = "boundary"):
 
     body = occ.Sphere(center, R)
     body.faces.name = bnd_name
@@ -219,18 +197,14 @@ def generate_ball(maxh = 0.1, order_g = 1, center=occ.Pnt(0,0,0), R = 1.0, vol_o
 
     geo = occ.OCCGeometry(body)
 
-    if geo_only:
-        return geo
-    else:
-        mesh = Meshing(geo, maxh, order_g, vol_or_bnd)
-        return mesh, geo
+    mesh = Meshing(geo, maxh, order_g, 'VOL')
+    return mesh
 
 
 '''
 Cylinder
-NOTE: no vol_or_bnd option here, since explicitly requesting for a surface
 '''
-def generate_cylinder(maxh = 0.1, R=1, order_g=1, bnd_name = "boundary", geo_only = False):
+def generate_boundary_cylinder(maxh = 0.1, R=1, order_g=1, bbnd_name = "bboundary"):
     geo       = csg.CSGeometry()
     cyl       = csg.Cylinder(csg.Pnt(0,0,0), csg.Pnt(0,0,1), R)
     right     = csg.Plane(csg.Pnt(0,0,1), csg.Vec(0,0,1))
@@ -238,20 +212,17 @@ def generate_cylinder(maxh = 0.1, R=1, order_g=1, bnd_name = "boundary", geo_onl
     finitecyl = cyl * left * right
 
     geo.AddSurface(cyl, finitecyl)
-    geo.NameEdge(cyl, left, bnd_name)
-    geo.NameEdge(cyl, right, bnd_name)
+    geo.NameEdge(cyl, left, bbnd_name)
+    geo.NameEdge(cyl, right, bbnd_name)
 
-    if geo_only:
-        return geo
-    else:
-        mesh = Meshing(geo, maxh, order_g, 'BND')
-        return mesh, geo
+    mesh = Meshing(geo, maxh, order_g, 'BND')
+    return mesh
 
 '''
 Torus
 '''
 # TODO: Other possibilities to generate
-def generate_torus(maxh = 0.1, order_g = 1, center=occ.Pnt(0,0,0), R = 1.0, r = 0.4, vol_or_bnd = 'BND', geo_only = False):
+def generate_boundary_torus(maxh = 0.1, order_g = 1, center=occ.Pnt(0,0,0), R = 1.0, r = 0.4):
 
     # spline = csg.SplineCurve2d() # create a 2d spline
     # eps = r*1e-2
@@ -291,13 +262,10 @@ def generate_torus(maxh = 0.1, order_g = 1, center=occ.Pnt(0,0,0), R = 1.0, r = 
 
     geo = occ.OCCGeometry(body)
 
-    if geo_only:
-        return geo
-    else:
-        mesh = Meshing(geo, maxh, order_g, vol_or_bnd)
-        return mesh, geo
+    mesh = Meshing(geo, maxh, order_g, 'BND')
+    return mesh
 
-def generate_half_torus(maxh = 0.1, order_g = 1, R = 1.0, r = 0.4, vol_or_bnd = "BND", bnd_name = "bottom", geo_only = False):
+def generate_boundary_half_torus(maxh = 0.1, order_g = 1, R = 1.0, r = 0.4, bbnd_name = "bboundary"):
 
     pnt1 = occ.Pnt(R-r, 0, 0 )
     pnt2 = occ.Pnt(R, 0, r )
@@ -310,64 +278,51 @@ def generate_half_torus(maxh = 0.1, order_g = 1, R = 1.0, r = 0.4, vol_or_bnd = 
     w = occ.Wire([arc1, arc2])
     body = w.Revolve(occ.Axis((0,0,0),occ.Z), 180).Rotate(occ.Axis((0,0,0),occ.X), 90)
 
-    body.edges[occ.Z<maxh/2].name = bnd_name
+    body.edges[occ.Z<maxh/2].name = bbnd_name
 
     geo = occ.OCCGeometry(body)
+    mesh = Meshing(geo, maxh, order_g, 'BND')
+    
+    return mesh
 
-    if geo_only:
-        return geo
-    else:
-        mesh = Meshing(geo, maxh, order_g, vol_or_bnd)
-        return mesh, geo
-
-def generate_box(maxh = 0.1, order_g = 1, center=occ.Pnt(0,0,0), a = 1, b = 1, c = 1, vol_or_bnd = 'BND', bnd_name = "boundary", geo_only = False):
+def generate_boundary_box(maxh = 0.1, order_g = 1, center=occ.Pnt(0,0,0), a = 1, b = 1, c = 1):
 
     body = occ.Box(occ.Pnt(-a/2,-b/2,-c/2), occ.Pnt(a/2, b/2, c/2))
     body = body.Move((center[0], center[1], center[2]))
-    body.faces.name = bnd_name
 
     geo= occ.OCCGeometry(body)
 
-    if geo_only:
-        return geo
-    else:
-        mesh = Meshing(geo, maxh, order_g, vol_or_bnd)
-        return mesh, geo
+    mesh = Meshing(geo, maxh, order_g, 'BND')
+    return mesh
     
-def generate_smoothed_box(maxh = 0.1, order_g = 1, center=occ.Pnt(0,0,0), a = 1, b = 1, c = 1, vol_or_bnd = 'BND', bnd_name = "boundary", geo_only = False):
+def generate_boundary_smoothed_box(maxh = 0.1, order_g = 1, center=occ.Pnt(0,0,0), a = 1, b = 1, c = 1):
 
     fillet = min(a, b, c)/3
     body = occ.Box(occ.Pnt(-a/2,-b/2,-c/2), occ.Pnt(a/2, b/2, c/2))
     body = body.Move((center[0], center[1], center[2]))
-    body.faces.name = bnd_name
     body = body.MakeFillet (body.edges, fillet)
 
     geo= occ.OCCGeometry(body)
 
-    if geo_only:
-        return geo
-    else:
-        mesh = Meshing(geo, maxh, order_g, vol_or_bnd)
-        return mesh, geo
+    mesh = Meshing(geo, maxh, order_g, 'BND')
+    return mesh
 
-def import_stl_mesh(fname, maxh = 0.1, order_g = 1, geo_only = False):
+def import_stl_mesh(fname, maxh = 0.1, order_g = 1):
 
     geo = stl.STLGeometry(fname)
 
-    if geo_only:
-        return geo
-    else:
-        ngmesh = geo.GenerateMesh(perfstepsend=MeshingStep.MESHSURFACE,
-                            quad_dominated=False,
-                            maxh=maxh,
-                            grading=0.7,
-                            optimize2d = "smsmsmSmSmSm",
-                            yangle=50,
-                            contyangle=50,
-                            edgecornerangle=30)
-        mesh = Mesh(ngmesh)
-        mesh.Curve(order_g)
-        return mesh, geo
+    ngmesh = geo.GenerateMesh(perfstepsend=MeshingStep.MESHSURFACE,
+                        quad_dominated=False,
+                        maxh=maxh,
+                        grading=0.7,
+                        optimize2d = "smsmsmSmSmSm",
+                        yangle=50,
+                        contyangle=50,
+                        edgecornerangle=30)
+    
+    mesh = Mesh(ngmesh)
+    mesh.Curve(order_g)
+    return mesh
 
 # def generate_n_torus_mesh(maxh, order_g = 1, char_len=1, n=2):
 #     # char_len is the thickness of the thorus and coincides with the inner radius of 
@@ -436,13 +391,13 @@ if __name__ == "__main__":
     '''
     rel_path = "../../../data/geometries/"
 
-    mesh, _ = import_stl_mesh(maxh = 2, fname = rel_path + 'bunny.stl', geo_only = False)
+    mesh, _ = import_stl_mesh(maxh = 2, fname = rel_path + 'bunny.stl')
     DrawMesh(mesh)
 
-    mesh, _ = import_stl_mesh(maxh = 0.05, fname = rel_path + 'spot_cow.stl', geo_only = False)
+    mesh, _ = import_stl_mesh(maxh = 0.05, fname = rel_path + 'spot_cow.stl')
     DrawMesh(mesh)
 
-    # mesh, _ = import_stl_mesh(maxh = 10, fname = rel_path + 'brain.stl', geo_only = False)
+    # mesh, _ = import_stl_mesh(maxh = 10, fname = rel_path + 'brain.stl')
     # DrawMesh(mesh)
 
 

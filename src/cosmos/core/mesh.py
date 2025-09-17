@@ -63,11 +63,11 @@ class SolverMesh:
     def print_info(self):
 
         print('The mesh has dimension: ', self.dim)
-        print('The mesh has the following codimension 0 domains:')
+        print('The mesh has the following codimension-0 domains:')
         print(self.vol_markers)
-        print('The mesh has the following codimension 1 domains:')
+        print('The mesh has the following codimension-1 domains:')
         print(self.bnd_markers)
-        print('The mesh has the following codimension 2 domains:')
+        print('The mesh has the following codimension-2 domains:')
         print(self.vol_markers)
         print('Mesh characteristics are:')
         print('\t - number of elements: ', self.ne)

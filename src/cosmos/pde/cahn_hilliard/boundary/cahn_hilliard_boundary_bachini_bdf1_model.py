@@ -211,4 +211,11 @@ class CahnHilliardBoundaryBachiniBDF1Model(BasePDEModel):
     def potential(self, cf):
         self.gfu_w.Set(cf, definedon = self.domain)
 
+    @property
+    def energy(self):
+        energy = Integrate(self.input_params['sigma']/self.input_params['epsilon']*0.25*(self.phase**2-1)**2
+                           +self.input_params['sigma']*self.input_params['epsilon']/2*Norm(grad(self.phase).Trace())**2, 
+                           self._solver.ngsmesh, VOL_or_BND = BND)
+        return energy
+
         

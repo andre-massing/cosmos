@@ -74,52 +74,63 @@ class Solver:
                 print('Results printing sample rate is: ', self.output_sample_rate, '\n')
 
         start_time = time.time()
-        self._save_pdes_solutions()
 
-        with TaskManager():
-            while self.time.t.Get()<self.time.final_t:
+        try:
+            self._save_pdes_solutions()
+            with TaskManager():
+                while self.time.t.Get()<self.time.final_t:
 
-                self.time.preprocess()
-                self.iterator.preprocess()
-                self.iterator.solve_step()
-                self.iterator.postprocess()
-                self.time.postprocess()
-                self._save_pdes_solutions()
+                    self.time.preprocess()
+                    self.iterator.preprocess()
+                    self.iterator.solve_step()
+                    self.iterator.postprocess()
+                    self.time.postprocess()
+                    self._save_pdes_solutions()
 
-                elapsed_hms = time.strftime("%H:%M:%S", time.gmtime(time.time() - start_time))
-                elapsed = time.time() - start_time
-                dt = self.time.dt.Get()
+                    elapsed_hms = time.strftime("%H:%M:%S", time.gmtime(time.time() - start_time))
+                    elapsed = time.time() - start_time
+                    dt = self.time.dt.Get()
 
-                if self.printing:
-                    print(f"t = {self.time.t.Get():.3e} | Δt = {dt:.3e} | Iter {self.time.iter}"
-                        f" | Elapsed = {elapsed_hms}  | Avg. Iter Time = {elapsed/self.time.iter:.3e}", end = '\r')
+                    if self.printing:
+                        print(f"t = {self.time.t.Get():.3e} | Δt = {dt:.3e} | Iter {self.time.iter}"
+                            f" | Elapsed = {elapsed_hms}  | Avg. Iter Time = {elapsed/self.time.iter:.3e}", end = '\r')
 
-                yield
-        
-        if self.printing:
-            print('\n\n !!! SIMULATION CONCLUDED SUCCESSFULLY !!!')
+                    yield
+            
+            if self.printing:
+                print('\n\n !!! SIMULATION CONCLUDED SUCCESSFULLY !!! \n')
+        except Exception as e:
+            self._save_pdes_solutions()
+            print('\n\n !!! SIMULATION CONCLUDED WITH ERROR !!!')
+            folder = os.path.join(self.output_folder, self.name)
+            os.makedirs(folder, exist_ok = True)
+            file = os.path.join(self.output_folder, self.name, self.name +'.err')
+            with open(file, 'w') as fw:
+                fw.write('Simulation terminated with error\n')
+                fw.write('Time: ' +  str(self.time.t.Get()) +', iter: '+ str(self.time.iter) + '\n')
+                fw.write('Cause: ' + str(e))
 
     def run(self):
         for step in self(): 
                 pass
 
-    def save_model_solution(self, pde:str, output_field:str, subdivision = 0):
+    def save_model_solution(self, pde_name:str, output_field:str, subdivision = 0):
 
-        if pde in self.pdes.keys():
-            if output_field in self.pdes[pde].output_fields.keys():
+        if pde_name in self.pdes.keys():
+            if output_field in self.pdes[pde_name].output_fields.keys():
 
-                field = self.pdes[pde].output_fields[output_field]
+                field = self.pdes[pde_name].output_fields[output_field]
                 field.save = True
-                folder = self.output_folder + '/' + self.name + '/' + pde + '/' + field.name
+                folder = os.path.join(self.output_folder, self.name, pde_name, field.name)
                 os.makedirs(folder, exist_ok = True)
-                filename = folder + '/' + field.name + '_vtk'
+                filename = os.path.join(folder, 'vtk_' + field.name)
                 field.vtk = VTKOutput(self.ngsmesh, coefs=[field._coef], names =[field.name],
                                       filename= filename, subdivision = subdivision)
                 field.sample_rate = self.output_sample_rate
             else:
-                raise Exception('Output field ' + output_field + ' to be saved is not in PDE model ' + pde)
+                raise Exception('Output field ' + output_field + ' to be saved is not in PDE model ' + pde_name)
         else:
-            raise Exception('PDE ' + pde + ' is not registered as a Model in Solver ' + self.name)
+            raise Exception('PDE ' + pde_name + ' is not registered as a Model in Solver ' + self.name)
         
     def _save_pdes_solutions(self):
         for _, pde in self.pdes.items():
