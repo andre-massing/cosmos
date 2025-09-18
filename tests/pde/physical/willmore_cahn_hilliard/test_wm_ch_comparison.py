@@ -154,7 +154,7 @@ def generate_random_points_on_sphere(maxh):
         (CahnHilliardBoundaryBachiniBDF1Model, 2),
         (CahnHilliardBoundaryBachiniBDF1Model, 3),
         (CahnHilliardBoundaryPolBDF1Model, 1),
-        (CahnHilliardBoundaryPolBDF1Model, 2)
+        (CahnHilliardBoundaryPolBDF1Model, 2),
         (CahnHilliardBoundaryPolBDF1Model, 3)
     ]
     )
