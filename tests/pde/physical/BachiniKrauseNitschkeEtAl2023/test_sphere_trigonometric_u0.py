@@ -33,7 +33,7 @@ def solver_time_params(dt):
 @pytest.mark.parametrize("kappa, dt", [(0.5, 1e-4), (0.1, 1e-4), (0.02, 2.5e-5)])
 @pytest.mark.parametrize("maxh", [0.08, 0.04])
 @pytest.mark.parametrize("pp", ["DuanLi", "MDR"])
-def test_sphere_random_u0(
+def test_sphere_trigonometric_u0(
         request,
         artifacts_path,
         maxh, 
