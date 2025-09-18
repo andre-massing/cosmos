@@ -16,7 +16,7 @@ def maxh():
     return 0.4 
 
 @pytest.mark.parametrize('redistribute, redistribute_type', [(False, 'DuanLi'), (True, 'DuanLi')])
-def test_helfrich_blood_cell_411(
+def test_helfrich_blood_cell_441(
         request,
         artifacts_path,
         time_params,
@@ -36,7 +36,7 @@ def test_helfrich_blood_cell_411(
 
     willmore = WillmoreBoundaryAPVPBDF1Model(solver, 1, input_params = {"autoupdate": True})
 
-    ale = ALEModel(solver, 3)
+    ale = ALEModel(solver, 2)
     ale.set_bnd_displacement(willmore.displacement, 'default', redistribute=redistribute,
                              redistribute_type=redistribute_type)
 
@@ -54,7 +54,7 @@ def test_helfrich_blood_cell_411(
         f.write(str(solver.time.t.Get()) + '\t' + str(area) + '\t' + str(volume) + '\t' + str(energy) +'\n')
 
 @pytest.mark.parametrize('redistribute, redistribute_type', [(False, 'DuanLi'), (True, 'DuanLi')])
-def test_helfrich_blood_cell_511(
+def test_helfrich_blood_cell_551(
         request,
         artifacts_path,
         time_params,
@@ -74,7 +74,7 @@ def test_helfrich_blood_cell_511(
 
     willmore = WillmoreBoundaryAPVPBDF1Model(solver, 1, input_params = {"autoupdate": True})
 
-    ale = ALEModel(solver, 3)
+    ale = ALEModel(solver, 2)
     ale.set_bnd_displacement(willmore.displacement, 'default', redistribute=redistribute,
                              redistribute_type=redistribute_type)
 

@@ -23,45 +23,22 @@ def ch_default_params(maxh):
     return params
 
 @pytest.fixture
-def solver_time_params(dt):
+def solver_time_params():
     params = {}
-    params['dt'] = dt
+    params['dt'] = 1e-3
     params['initial_t'] = 0
     params['final_t'] = 5
     return params
 
-@pytest.fixture
-def generate_random_points_on_sphere(maxh):
-
-    mesh = generate_boundary_sphere(R=1, maxh = maxh)
-
-    N = 250 # Number of random points
-    points = np.random.normal(size=(N, mesh.dim))  # Gaussian samples
-    points /= np.linalg.norm(points, axis=1)[:, None] 
-
-    ch = GridFunction(H1(mesh))
-    coords = GridFunction(VectorH1(mesh))
-    coords.Set((x, y, z), definedon = mesh.Boundaries('.*'), dual = True)
-    size = len(ch.vec.data)
-    for i in range(size):
-        ch.vec.data[i] = -1
-        meshpoint = np.array([coords.vec.data[i], coords.vec.data[i+size], coords.vec.data[i+2*size]])
-        for j in range(N):
-            ch.vec.data[i] += np.exp(-50*np.linalg.norm(meshpoint-points[j])**2)
-    ch.vec.data[:] = np.clip(ch.vec.data[:], -1, 1)
-
-    return ch.vec.data
-
-@pytest.mark.parametrize("kappa, dt", [(0.5, 1e-3), (0.1, 1e-3), (0.02, 2.5e-4)])
+@pytest.mark.parametrize("kappa", [0.5, 0.1, 0.02])
 @pytest.mark.parametrize("maxh", [0.08])
 @pytest.mark.parametrize("pp", ["DuanLi", "MDR"])
-def test_sphere_random_u0(
+def test_sphere_tanh_u0(
         request,
         artifacts_path,
         maxh, 
         solver_time_params,
         ch_default_params,
-        generate_random_points_on_sphere,
         kappa, 
         pp):
     
@@ -108,7 +85,7 @@ def test_sphere_random_u0(
     ch.set_input_fields({
         "b": ale.wind-Ps*grad(willmore.multiplier).Trace()
     })
-    ch.phase.vec.data = generate_random_points_on_sphere
+    ch.phase.Set(sinh(x/sqrt(2))*cosh(x/sqrt(2)), definedon = mesh.Boundaries('.*'), dual = True)
 
     solver.save_model_solution(ch.name, "phase")
     solver.save_model_solution(ch.name, "potential")

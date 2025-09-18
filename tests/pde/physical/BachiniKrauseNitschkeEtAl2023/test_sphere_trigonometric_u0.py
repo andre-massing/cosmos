@@ -17,6 +17,9 @@ def ch_default_params(maxh):
     elif maxh == 0.08:
         params['epsilon'] = 0.05
     params['sigma'] = 1.5*sqrt(2)
+    params['fes_order'] = 1
+    params['bounds'] = [-1, 1]
+    params['mass_preserving'] = True
     return params
 
 @pytest.fixture
@@ -28,7 +31,7 @@ def solver_time_params(dt):
     return params
 
 @pytest.mark.parametrize("kappa, dt", [(0.5, 1e-4), (0.1, 1e-4), (0.02, 2.5e-5)])
-@pytest.mark.parametrize("maxh", [0.08, 0.04])
+@pytest.mark.parametrize("maxh", [0.08])
 @pytest.mark.parametrize("pp", ["DuanLi", "MDR"])
 def test_sphere_random_u0(
         request,
@@ -36,7 +39,6 @@ def test_sphere_random_u0(
         maxh, 
         solver_time_params,
         ch_default_params,
-        generate_random_points_on_sphere,
         kappa, 
         pp):
     
@@ -52,7 +54,7 @@ def test_sphere_random_u0(
 
     willmore = WillmoreBoundaryInexBDF1Model(solver, 1, input_params = {"autoupdate": True})
     ale = ALEModel(solver, 2)
-    ch = CahnHilliardBoundaryBachiniBDF1Model(solver, 2, input_params=ch_default_params)
+    ch = CahnHilliardBoundaryBachiniBDF1Model(solver, 3, input_params=ch_default_params)
 
     ns = specialcf.normal(3)
     Ps = Id(3) - OuterProduct(ns, ns)

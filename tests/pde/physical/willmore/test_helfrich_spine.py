@@ -7,7 +7,7 @@ from cosmos.utils.generate_meshes import generate_boundary_ellipse
 def time_params():
     time_params = {}
     time_params['dt'] = 1e-6
-    time_params['final_t'] = 1e-6
+    time_params['final_t'] = 0.05
     time_params['initial_t'] = 0
     return time_params
 
@@ -32,7 +32,7 @@ def test_helfrich_spine_apvp(
 
     willmore = WillmoreBoundaryAPVPBDF1Model(solver, 1, input_params = {"autoupdate": True})
 
-    ale = ALEModel(solver, 3)
+    ale = ALEModel(solver, 2)
     ale.set_bnd_displacement(willmore.displacement, 'default', redistribute=redistribute,
                              redistribute_type=redistribute_type)
 
@@ -70,11 +70,11 @@ def test_helfrich_spine_inex(
     solvermesh = SolverMesh(mesh)
     solver = Solver(solvermesh, solvertime, iter=False,
                     name = filename, printing=True)
-    solver.output_params(out, sample_rate=2)
+    solver.output_params(out, sample_rate=10)
 
     willmore = WillmoreBoundaryInexBDF1Model(solver, 1, input_params = {"autoupdate": True})
 
-    ale = ALEModel(solver, 3)
+    ale = ALEModel(solver, 2)
     ale.set_bnd_displacement(willmore.displacement, 'default', redistribute=redistribute,
                              redistribute_type=redistribute_type)
 
