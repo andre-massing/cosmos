@@ -223,15 +223,14 @@ class WillmoreBoundaryAPBDF1Model(BasePDEModel):
     @property
     def displacement(self):
         return self.gfu_D
-    
-    @displacement.setter
-    def phase(self, cf):
-        self.gfu_D.Set(cf, definedon = self.domain)
 
     @property
     def mean_curvature(self):
         return self.gfu_k
-    
-    @mean_curvature.setter
-    def potential(self, cf):
-        self.gfu_k.Set(cf, definedon = self.domain)
+
+    @property
+    def energy(self):
+        energy = Integrate(0.5*self.input_fields['elasticity_modulus'].gfu*Norm(self.mean_curvature\
+                            -self.input_fields['spontaneous_curvature'].gfu*specialcf.normal(self._solver.ngsmesh.dim))**2, 
+                            self._solver.ngsmesh, VOL_or_BND = BND)
+        return energy
