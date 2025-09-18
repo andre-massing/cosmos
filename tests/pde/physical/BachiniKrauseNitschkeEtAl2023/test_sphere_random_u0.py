@@ -13,9 +13,9 @@ def ch_default_params(maxh):
     params = {}
     params['M'] = 0.001
     if maxh == 0.04:
-        params['epsilon'] = 0.1
-    elif maxh == 0.08:
         params['epsilon'] = 0.05
+    elif maxh == 0.08:
+        params['epsilon'] = 0.1
     params['sigma'] = 1.5*sqrt(2)
     params['fes_order'] = 1
     params['bounds'] = [-1, 1]
@@ -53,7 +53,7 @@ def generate_random_points_on_sphere(maxh):
     return ch.vec.data
 
 @pytest.mark.parametrize("kappa, dt", [(0.5, 1e-3), (0.1, 1e-3), (0.02, 2.5e-4)])
-@pytest.mark.parametrize("maxh", [0.08])
+@pytest.mark.parametrize("maxh", [0.08, 0.04])
 @pytest.mark.parametrize("pp", ["DuanLi", "MDR"])
 def test_sphere_random_u0(
         request,
