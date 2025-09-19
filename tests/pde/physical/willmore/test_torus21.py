@@ -21,7 +21,7 @@ def test_torus(
     out = artifacts_path
     filename = request.function.__name__
 
-    Tend = 1e-3
+    Tend = 2
 
     dt = 1e-3
     n = 200
