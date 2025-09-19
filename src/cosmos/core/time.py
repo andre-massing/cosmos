@@ -23,7 +23,7 @@ class SolverTime:
         self.t_coef = t_coef
 
         if isinstance(dt, Parameter):
-            self.dt = dt
+            self.dt = Parameter(dt.Get())
             self.dynamic = True
         elif isinstance(dt, list):
             self.dt = Parameter(dt[self.iter])
@@ -70,14 +70,14 @@ class SolverTime:
 
         if isinstance(self.input_params["dt"], list):
             self.dt.Set( self.input_params["dt"][self.iter] )
-            if self.dt.Get() <= 0:
-                raise Exception("Time-step has been set to negative value")
         elif isinstance(self.input_params["dt"], np.ndarray):
             self.dt.Set(self.input_params["dt"][self.iter])
-            if self.dt.Get() <= 0:
-                raise Exception("Time-step has been set to negative value")
+        elif isinstance(self.input_params["dt"], Parameter):
+            self.dt.Set(self.input_params["dt"].Get())
         else:
             self.dt.Set(self.input_params["dt"])
+        if self.dt.Get() <= 0:
+                raise Exception("Time-step has been set to negative value")
 
         self.prev_dt.append(self.dt.Get())
         if len(self.prev_dt)>self.buffer:

@@ -71,11 +71,6 @@ class ALEField(Field):
                 self.mat_def = GridFunction(self._solver.mesh.curr_deformation.space)
                 deform = self._solver.mesh.prev_deformation[-1]
 
-                ir_segm = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
-                ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-                
-                ds_lumped = ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = self.mat_def)
-
                 self.ale_displ = GridFunction(V)
                 V2 = Compress(H1(self._solver.ngsmesh, order = self._solver.ngsmesh.GetCurveOrder(),
                         definedon = self._solver.ngsmesh.Boundaries(domain)))
@@ -91,8 +86,8 @@ class ALEField(Field):
                 Ps = Id(self._solver.ngsmesh.dim) - OuterProduct(ns, ns)
                 
                 self.A_pp += (InnerProduct(grad(w).Trace()/self._solver.time.dt, grad(eta).Trace()))*ds(deformation = deform)
-                self.A_pp += (-1*InnerProduct(eta*ns, kappa))*ds_lumped
-                self.A_pp += (-1*InnerProduct(w*ns, mu))*ds_lumped
+                self.A_pp += (-1*InnerProduct(eta*ns, kappa))*ds(deformation = self.mat_def)
+                self.A_pp += (-1*InnerProduct(w*ns, mu))*ds(deformation = self.mat_def)
                 self.A_pp.Assemble()
                 self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
 

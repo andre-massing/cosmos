@@ -1,13 +1,12 @@
 import pytest
 from ngsolve import *
 from cosmos import *
-from cosmos.utils.generate_meshes import generate_boundary_ellipse
 
 @pytest.fixture
 def time_params():
     time_params = {}
-    time_params['dt'] = 1e-4
-    time_params['final_t'] = 5
+    time_params['dt'] = 1e-3
+    time_params['final_t'] = 20
     time_params['initial_t'] = 0
     return time_params
 
@@ -15,7 +14,8 @@ def time_params():
 def ch_params(ch_params_type):
     params = {}
     params['M'] = 0.001
-    params['sigma'] = 1.5*sqrt(2)
+    params['epsilon'] = 0.05
+    params['sigma'] = 1
     if ch_params_type == 1:
         params['fes_order'] = 1
     if ch_params_type == 2:
@@ -24,14 +24,6 @@ def ch_params(ch_params_type):
         params['mass_preserving'] = True
     if ch_params_type == 3:
         params['fes_order'] = 2
-    return params
-
-@pytest.fixture
-def solver_time_params():
-    params = {}
-    params['dt'] = 1e-3
-    params['initial_t'] = 0
-    params['final_t'] = 5
     return params
 
 @pytest.mark.parametrize("ch_solver, ch_params_type", 
@@ -49,18 +41,17 @@ def test_cahn_hilliard_spine(
     out = artifacts_path
     filename = request.function.__name__
 
-    sample_rate = 50
+    sample_rate = 10
     
     solvertime = SolverTime(**time_params)
     mesh = Mesh(os.path.join(cosmos_root, 'data/geometries',  'spine_fine.vol'))
     solvermesh = SolverMesh(mesh)
     solver = Solver(solvermesh, solvertime, iter=False,
                     name = filename, printing=True)
-    solver.output_params(out, sample_rate=50)
+    solver.output_params(out, sample_rate=20)
 
     ch = ch_solver(solver, 3, input_params=ch_params)
-
-    f = open(os.path.join(out, filename, 'simulation.txt'), "w")
+    ch.phase.Set(sin(1e7*x), definedon = mesh.Boundaries('.*'), dual = True)
 
     def timestep_f(t):
         return 1e-2 - (1e-2 - time_params['dt'])*exp(-50*t) 
