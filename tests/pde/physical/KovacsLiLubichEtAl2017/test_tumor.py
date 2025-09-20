@@ -28,6 +28,7 @@ def params():
 def test_tumor3D(
         request,
         artifacts_path,
+        cosmos_root,
         adr_solver,
         redistribute,
         params):
@@ -51,8 +52,8 @@ def test_tumor3D(
     u = adr_solver(solver, 2, name = 'u_adr_boundary_bdf1')
     w = adr_solver(solver, 3, name = 'w_adr_boundary_bdf1')
     ale = ALEModel(solver, 3, name = 'ale_model')
-    u0 = np.load('test_kovacs_3D_u0_vec.npy')
-    w0 = np.load('test_kovacs_3D_w0_vec.npy')
+    u0 = np.load(os.path.join(cosmos_root, 'tests/pde/physical/KovacsLiLubichEtAl2017/test_kovacs_3D_u0_vec.npy'), allow_pickle=False)
+    w0 = np.load(os.path.join(cosmos_root, 'tests/pde/physical/KovacsLiLubichEtAl2017/test_kovacs_3D_w0_vec.npy'), allow_pickle=False)
     u.sol.vec.data = u0
     w.sol.vec.data = w0
 
