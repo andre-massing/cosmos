@@ -94,10 +94,7 @@ class MeanCurvatureBoundaryBDF1Model(BasePDEModel):
         self.gfu.vec.data = self.invA*self.F.vec
 
     def PostProcess(self):
-        
-        for field in self.output_fields.values():
-            if field.vtk and self._solver.time.iter % field.sample_rate == 0:
-                field.vtk.Do(time = self._solver.time.t.Get(), vb = field.domain)
+        pass
 
     @property
     def displacement(self):
