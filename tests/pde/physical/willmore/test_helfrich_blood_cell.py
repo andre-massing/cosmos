@@ -40,7 +40,7 @@ def test_helfrich_blood_cell_441(
     ale.set_bnd_displacement(willmore.displacement, 'default', redistribute=redistribute,
                              redistribute_type=redistribute_type)
 
-    solver.save_model_solution(willmore.name, "mean_curvature")
+    solver.save_model_solution(willmore)
     f = open(os.path.join(out, filename, 'simulation.txt'), "w")
 
     f.write('Time\tArea\tVolume\tEnergy\n')

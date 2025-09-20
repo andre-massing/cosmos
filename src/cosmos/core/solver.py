@@ -93,7 +93,7 @@ class Solver:
                     dt = self.time.dt.Get()
 
                     if self.printing:
-                        print(f"t = {self.time.t.Get():.3e} | Δt = {dt:.3e} | Iter {self.time.iter}"
+                        print(f"t = {self.time.t.Get():.3e} | time-step = {dt:.3e} | Iter {self.time.iter}"
                             f" | Elapsed = {elapsed_hms}  | Avg. Iter Time = {elapsed/self.time.iter:.3e}", end = '\r')
 
                     yield
