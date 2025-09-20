@@ -92,8 +92,8 @@ def test_sphere_trigonometric_u0(
 
     solver.save_model_solution(ch)
     solver.save_model_solution(willmore)
-    f_ch = open(os.path.join(out, filename, ch.name, 'ch_simulation.txt'), "w")
-    f_wm = open(os.path.join(out, filename, willmore.name, 'wm_simulation.txt'), "w")
+    f_ch = open(os.path.join(out, 'ch_simulation.txt'), "w")
+    f_wm = open(os.path.join(out, 'wm_simulation.txt'), "w")
     sample_rate = 20
     f_ch.write('Time\tMass\tEnergy\tMaxValue\tMinValue\n')
     f_wm.write('Time\tEnergy\tArea\tVolume\tTotEnergy\n')

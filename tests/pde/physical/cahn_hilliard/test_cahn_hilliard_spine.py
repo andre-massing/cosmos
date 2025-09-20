@@ -58,7 +58,7 @@ def test_cahn_hilliard_spine(
     
     solver.save_model_solution(ch)
 
-    f_ch = open(os.path.join(out, filename, ch.name, 'ch_simulation.txt'), "w")
+    f_ch = open(os.path.join(out, 'ch_simulation.txt'), "w")
     f_ch.write('Time\tMass\tEnergy\tMaxValue\tMinValue\n')
     for _ in solver():
         solver.time.input_params["dt"] = timestep_f(solver.time.t.Get())

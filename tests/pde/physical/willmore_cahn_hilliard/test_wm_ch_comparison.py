@@ -105,8 +105,8 @@ def test_sphere_tanh_u0(
     ch.phase.Set(sinh(x/sqrt(2))*cosh(x/sqrt(2)), definedon = mesh.Boundaries('.*'), dual = True)
 
     solver.save_model_solution(ch)
-    f_ch = open(os.path.join(out, filename, ch.name, 'ch_simulation.txt'), "w")
-    f_wm = open(os.path.join(out, filename, willmore.name, 'wm_simulation.txt'), "w")
+    f_ch = open(os.path.join(out, 'ch_simulation.txt'), "w")
+    f_wm = open(os.path.join(out, 'wm_simulation.txt'), "w")
     sample_rate = 20
     f_ch.write('Time\tMass\tEnergy\tMaxValue\tMinValue\n')
     f_wm.write('Time\tEnergy\tArea\tVolume\tTotEnergy\n')
@@ -219,12 +219,9 @@ def test_sphere_tanh_u0(
 #     else:
 #         ch.phase.Set(generate_random_points_on_sphere, definedon = mesh.Boundaries('.*'), dual = True)
 
-#     solver.save_model_solution(ch.name, "phase")
-#     solver.save_model_solution(ch.name, "potential")
-#     solver.save_model_solution(willmore.name, "displacement")
-#     solver.save_model_solution(willmore.name, "mean_curvature")
-#     f_ch = open(os.path.join(out, filename, ch.name, 'ch_simulation.txt'), "w")
-#     f_wm = open(os.path.join(out, filename, willmore.name, 'wm_simulation.txt'), "w")
+#     solver.save_model_solution(ch)
+#     f_ch = open(os.path.join(out, filename, 'ch_simulation.txt'), "w")
+#     f_wm = open(os.path.join(out, filename, 'wm_simulation.txt'), "w")
 #     sample_rate = 20
 #     f_ch.write('Time\tMass\tEnergy\tMaxValue\tMinValue\n')
 #     f_wm.write('Time\tEnergy\tArea\tVolume\tTotEnergy\n')
