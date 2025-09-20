@@ -21,6 +21,7 @@ class ADRBoundaryStabBDF2Model(BasePDEModel):
         
         super().__init__()
         
+        self.VorB = BND
         self.name = name
         self._solver = solver
         self.model_order = model_order

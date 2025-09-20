@@ -60,8 +60,7 @@ def test_sigar(
             "spontaneous_curvature": -3
         })
 
-    solver.save_model_solution(pde.name, 'displacement')
-    solver.save_model_solution(pde.name, 'mean_curvature')
+    solver.save_model_solution(pde)
 
     energy = []
     time = []

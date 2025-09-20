@@ -95,7 +95,7 @@ def test_boundary_layer(
         "gradu_bnd": CF((0, 0, 0))
     })
 
-    solver.save_model_solution(pde.name, 'sol')
+    solver.save_model_solution(pde)
 
     for sol in solver():
         mesh.SetDeformation(solver.mesh.curr_deformation)

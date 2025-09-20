@@ -80,8 +80,10 @@ class OutputField(Field):
         self.dims = self().dims
         self.name = name
         self.domain = domain
-        self.save = False
-        self.vtk = None
         self.sample_rate = 1
+
+    @property
+    def cf(self):
+        return self._eval()
 
     

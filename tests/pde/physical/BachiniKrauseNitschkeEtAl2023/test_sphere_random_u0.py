@@ -73,7 +73,10 @@ def test_sphere_random_u0(
     solver = Solver(solvermesh, solvertime, iter=False,
                     name = filename, printing=True)
     
-    solver.output_params(out, sample_rate=50)
+    if kappa == 0.02:
+        solver.output_params(out, sample_rate=10)
+    else:
+        solver.output_params(out, sample_rate=50)
 
     willmore = WillmoreBoundaryInexBDF1Model(solver, 1, input_params = {"autoupdate": True})
     ale = ALEModel(solver, 2)
@@ -110,10 +113,8 @@ def test_sphere_random_u0(
     })
     ch.phase.vec.data = generate_random_points_on_sphere
 
-    solver.save_model_solution(ch.name, "phase")
-    solver.save_model_solution(ch.name, "potential")
-    solver.save_model_solution(willmore.name, "displacement")
-    solver.save_model_solution(willmore.name, "mean_curvature")
+    solver.save_model_solution(ch)
+    solver.save_model_solution(willmore)
     f_ch = open(os.path.join(out, filename, ch.name, 'ch_simulation.txt'), "w")
     f_wm = open(os.path.join(out, filename, willmore.name, 'wm_simulation.txt'), "w")
     sample_rate = 20

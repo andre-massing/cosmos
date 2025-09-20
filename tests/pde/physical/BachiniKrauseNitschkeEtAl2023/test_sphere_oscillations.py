@@ -87,10 +87,8 @@ def test_sphere_oscillations(
         })
     ch.phase.Set(sin(pi*x)*sin(pi*y)*sin(pi*z), definedon = mesh.Boundaries('.*'), dual = True)
 
-    solver.save_model_solution(ch.name, "phase")
-    solver.save_model_solution(ch.name, "potential")
-    solver.save_model_solution(willmore.name, "displacement")
-    solver.save_model_solution(willmore.name, "mean_curvature")
+    solver.save_model_solution(ch)
+    solver.save_model_solution(willmore)
     f_ch = open(os.path.join(out, filename, ch.name, 'ch_simulation.txt'), "w")
     f_wm = open(os.path.join(out, filename, willmore.name, 'wm_simulation.txt'), "w")
     sample_rate = 20

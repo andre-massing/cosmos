@@ -114,29 +114,26 @@ class Solver:
         for step in self(): 
                 pass
 
-    def save_model_solution(self, pde_name:str, output_field:str, subdivision = 0):
+    def save_model_solution(self, pde: BasePDEModel, subdivision = 0):
 
-        if pde_name in self.pdes.keys():
-            if output_field in self.pdes[pde_name].output_fields.keys():
-
-                field = self.pdes[pde_name].output_fields[output_field]
-                field.save = True
-                folder = os.path.join(self.output_folder, self.name, pde_name, field.name)
-                os.makedirs(folder, exist_ok = True)
-                filename = os.path.join(folder, 'vtk_' + field.name)
-                field.vtk = VTKOutput(self.ngsmesh, coefs=[field._coef], names =[field.name],
-                                      filename= filename, subdivision = subdivision)
-                field.sample_rate = self.output_sample_rate
-            else:
-                raise Exception('Output field ' + output_field + ' to be saved is not in PDE model ' + pde_name)
+        if pde.name in self.pdes.keys():
+            pde.save = True
+            folder = os.path.join(self.output_folder, self.name, pde.name)
+            os.makedirs(folder, exist_ok = True)
+            filename = os.path.join(folder, 'vtk_' + pde.name)
+            pde.vtk = VTKOutput(self.ngsmesh,
+                                coefs=[out_f.cf for out_f in pde.output_fields.values()],
+                                names =[out_f.name for out_f in pde.output_fields.values()],
+                                filename= filename, 
+                                subdivision = subdivision)
         else:
-            raise Exception('PDE ' + pde_name + ' is not registered as a Model in Solver ' + self.name)
+            raise Exception('PDE ' + pde.name + ' is not registered as a Model in Solver ' + self.name)
         
     def _save_pdes_solutions(self):
         for _, pde in self.pdes.items():
-            for field in pde.output_fields.values():
-                if field.vtk and self.time.iter % field.sample_rate == 0:
-                    field.vtk.Do(time = self.time.t.Get(), vb = field.domain)
+            if pde.save:
+                if self.time.iter % self.output_sample_rate == 0:
+                    pde.vtk.Do(time = self.time.t.Get(), vb = pde.VorB)
 
     def output_params(self, folder, sample_rate):
         self.output_folder = folder

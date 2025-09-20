@@ -14,6 +14,9 @@ class BasePDEModel(ABC):
         self.input_fields: Dict[str, InputField] = {}
         self.output_fields: Dict[str, OutputField] = {}
         self.cfg = get_config()
+        self.save = False
+        self.vtk = None
+        self.VorB = None
 
     @abstractmethod
     def PreProcess(self):

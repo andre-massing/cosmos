@@ -102,10 +102,8 @@ def test_tumor3D(
             return term1
         mc.set_input_fields({"rhs": mc_rhs})
     mc.set_input_fields({"rhs": mc_rhs})
-
-    solver.save_model_solution(ale.name, "displacement")
-    solver.save_model_solution(u.name, "sol")
-    solver.save_model_solution(w.name, "sol")
+    
+    solver.save_model_solution(u)
 
     with open(os.path.join(out, 'simulation.txt'), "w") as f:
         f.write('Area\tVolume\n')

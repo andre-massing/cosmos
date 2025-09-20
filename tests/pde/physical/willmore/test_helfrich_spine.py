@@ -39,8 +39,7 @@ def test_helfrich_spine(
     ale.set_bnd_displacement(willmore.displacement, 'default', redistribute=redistribute,
                              redistribute_type=redistribute_type)
 
-    solver.save_model_solution(willmore.name, "displacement")
-    solver.save_model_solution(willmore.name, "mean_curvature")
+    solver.save_model_solution(willmore)
     f = open(os.path.join(out, filename, 'simulation.txt'), "w")
 
     def timestep_f(t):

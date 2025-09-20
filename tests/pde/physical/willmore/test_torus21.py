@@ -41,8 +41,7 @@ def test_torus(
         pde = WillmoreBoundaryBDF1Model(solver, 1)
         ale.set_bnd_displacement(pde.displacement, domain='default')
 
-    solver.save_model_solution(pde.name, 'displacement')
-    solver.save_model_solution(pde.name, 'mean_curvature')
+    solver.save_model_solution(pde)
 
     energy = []
     time = []
