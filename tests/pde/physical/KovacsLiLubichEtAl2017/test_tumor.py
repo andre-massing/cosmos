@@ -44,7 +44,7 @@ def test_tumor3D(
     Tend = params['Tend']
     solvertime = SolverTime(dt = dt, initial_t=0, final_t=Tend)
     solver = Solver(solvermesh, solvertime, iter=True,
-                    name = filename)
+                    name = filename, printing=True)
     solver.output_params(out, sample_rate=30)
 
     mc = MeanCurvatureBoundaryBDF1Model(solver, 1, name = 'mc_boundary_bdf1', input_params={'kappa': 0.01})

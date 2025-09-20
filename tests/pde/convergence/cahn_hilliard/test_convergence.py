@@ -64,7 +64,7 @@ def test_convergence(
         solvertime = SolverTime(dt = dt, initial_t=0, final_t=Tend, t_coef=t)
         solvermesh = SolverMesh(mesh)
         solver = Solver(solvermesh, solvertime, iter=False,
-                        name = filename)
+                        name = filename, printing=True)
         ch = ch_solver(solver, 1, input_params=input_params)
         ch.set_input_fields({
             "rhs_u": rhs_u,

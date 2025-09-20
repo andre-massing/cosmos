@@ -40,7 +40,7 @@ def test_sigar(
 
     solvertime = SolverTime(dt = dt, initial_t=0, final_t=Tend)
     solvermesh = SolverMesh(mesh)
-    solver = Solver(solvermesh, solvertime)
+    solver = Solver(solvermesh, solvertime, printing=True)
     solver.output_params(out, sample_rate=50)
     
     ale = ALEModel(solver, 2)

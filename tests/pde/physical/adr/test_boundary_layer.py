@@ -64,7 +64,7 @@ def test_boundary_layer(
     t = Parameter(0.0)
     solvertime = SolverTime(dt = dt, initial_t=0, final_t=T, t_coef=t)
     solvermesh = SolverMesh(mesh)
-    solver = Solver(solvermesh, solvertime)
+    solver = Solver(solvermesh, solvertime, printing=True)
     solver.output_params(out, sample_rate)
 
     mass = []

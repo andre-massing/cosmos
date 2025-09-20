@@ -68,7 +68,7 @@ def test_convergence(
         # Running Simulation
         solvertime = SolverTime(dt = dt, initial_t=0, final_t=T, t_coef=t)
         solvermesh = SolverMesh(mesh)
-        solver = Solver(solvermesh, solvertime)
+        solver = Solver(solvermesh, solvertime, printing=True)
 
         def A_B(t):
             A = CF((cos(t), -sin(t), 0,\
