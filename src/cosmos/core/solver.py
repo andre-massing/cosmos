@@ -110,6 +110,7 @@ class Solver:
                 fw.write('Simulation terminated with error\n')
                 fw.write('Time: ' +  str(self.time.t.Get()) +', iter: '+ str(self.time.iter) + '\n')
                 fw.write('Cause: ' + str(e))
+                traceback.print_exc(file=fw)
 
     def run(self):
         for step in self(): 
