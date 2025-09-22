@@ -6,7 +6,7 @@ from cosmos import *
 def time_params():
     time_params = {}
     time_params['dt'] = 1e-3
-    time_params['final_t'] = 20
+    time_params['final_t'] = 50
     time_params['initial_t'] = 0
     return time_params
 
@@ -54,7 +54,7 @@ def test_cahn_hilliard_spine(
     ch.phase.Set(sin(1e7*x), definedon = mesh.Boundaries('.*'), dual = True)
 
     def timestep_f(t):
-        return 1e-2 - (1e-2 - time_params['dt'])*exp(-50*t) 
+        return 1e-1 - (1e-1 - time_params['dt'])*exp(-50*t) 
     
     solver.save_model_solution(ch)
 

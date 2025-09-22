@@ -233,7 +233,7 @@ class WillmoreBoundaryInexBDF1Model(BasePDEModel):
         self.gfu.vec.data = self.invA*self.F.vec
         self.gfu_k.Set(1/self.input_fields["elasticity_modulus"].gfu*self.gfu_Y + self.input_fields["spontaneous_curvature"].gfu*self.ns, dual = True, definedon = self.domain)
 
-        if abs(self.area-self.area0)/self.area0>0.5:
+        if abs(self.area-self.area0)/self.area0>0.1:
             raise Exception('Area of the simulation has exceeded accepted limit')
 
     def PostProcess(self):

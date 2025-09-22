@@ -67,7 +67,7 @@ def test_sphere_tanh_u0(
     if kappa == 0.5:
         solver.output_params(out, sample_rate=50)
     else:
-        solver.output_params(out, sample_rate=10)
+        solver.output_params(out, sample_rate=50)
 
     willmore = WillmoreBoundaryInexBDF1Model(solver, 1, input_params = {"autoupdate": True})
     ale = ALEModel(solver, 2)

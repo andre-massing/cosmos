@@ -31,7 +31,7 @@ def test_helfrich_spine(
     solvermesh = SolverMesh(mesh)
     solver = Solver(solvermesh, solvertime, iter=False,
                     name = filename, printing=True)
-    solver.output_params(out, sample_rate=10)
+    solver.output_params(out, sample_rate=200)
 
     willmore = wm_solver_type(solver, 1, input_params = {"autoupdate": True})
 
@@ -43,14 +43,16 @@ def test_helfrich_spine(
     f = open(os.path.join(out, filename, 'simulation.txt'), "w")
 
     def timestep_f(t):
-        return 1e-4 - (1e-4 - time_params['dt'])*exp(-50*t) 
+        return 1e-5 - (1e-5 - time_params['dt'])*exp(-50*t) 
 
     f.write('Time\tArea\tVolume\tEnergy\n')
     Id = CF((x, 0, 0))
     n = specialcf.normal(3)
+    sample_rate = 100
     for _ in solver():
-        solver.time.input_params["dt"] = timestep_f(solver.time.t.Get())
-        area = Integrate(1, mesh, VOL_or_BND = BND)
-        volume = Integrate(Id*n, mesh, VOL_or_BND = BND)
-        energy = willmore.energy
-        f.write(str(solver.time.t.Get()) + '\t' + str(area) + '\t' + str(volume) + '\t' + str(energy) +'\n')
+        if solver.time.iter%sample_rate == 0:
+            solver.time.input_params["dt"] = timestep_f(solver.time.t.Get())
+            area = Integrate(1, mesh, VOL_or_BND = BND)
+            volume = Integrate(Id*n, mesh, VOL_or_BND = BND)
+            energy = willmore.energy
+            f.write(str(solver.time.t.Get()) + '\t' + str(area) + '\t' + str(volume) + '\t' + str(energy) +'\n')

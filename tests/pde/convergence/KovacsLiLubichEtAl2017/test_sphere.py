@@ -56,7 +56,6 @@ def test_sphere(
         solver = Solver(solvermesh, solvertime, iter = False, printing=True)
         solver.output_params(out, sample_rate=50)
 
-
         mean_curvature = MeanCurvatureBoundaryBDF1Model(solver, 1, input_params = {})
         ale = ALEModel(solver, 2)
         adr = adr_solver(solver, 3, input_params={'u0': u0})

@@ -41,7 +41,10 @@ def test_sigar(
     solvertime = SolverTime(dt = dt, initial_t=0, final_t=Tend)
     solvermesh = SolverMesh(mesh)
     solver = Solver(solvermesh, solvertime, printing=True)
-    solver.output_params(out, sample_rate=50)
+    if shape == '31':
+        solver.output_params(out, sample_rate=50)
+    elif shape =='51':
+        solver.output_params(out, sample_rate=20)
     
     ale = ALEModel(solver, 2)
     if redistribute:

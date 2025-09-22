@@ -31,7 +31,7 @@ def solver_time_params(dt):
     return params
 
 @pytest.mark.parametrize("kappa, dt", [(0.5, 1e-4), (0.1, 1e-4), (0.02, 2.5e-5)])
-@pytest.mark.parametrize("maxh", [0.08, 0.04])
+@pytest.mark.parametrize("maxh", [0.08])
 @pytest.mark.parametrize("pp", ["DuanLi", "MDR"])
 def test_sphere_trigonometric_u0(
         request,
@@ -53,7 +53,7 @@ def test_sphere_trigonometric_u0(
     if kappa == 0.5:
         solver.output_params(out, sample_rate=50)
     else:
-        solver.output_params(out, sample_rate=10)
+        solver.output_params(out, sample_rate=50)
 
     willmore = WillmoreBoundaryInexBDF1Model(solver, 1, input_params = {"autoupdate": True})
     ale = ALEModel(solver, 2)

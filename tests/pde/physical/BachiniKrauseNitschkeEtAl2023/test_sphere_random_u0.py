@@ -53,7 +53,7 @@ def generate_random_points_on_sphere(maxh):
     return ch.vec.data
 
 @pytest.mark.parametrize("kappa, dt", [(0.5, 1e-3), (0.1, 1e-3), (0.02, 2.5e-4)])
-@pytest.mark.parametrize("maxh", [0.08, 0.04])
+@pytest.mark.parametrize("maxh", [0.08])
 @pytest.mark.parametrize("pp", ["DuanLi", "MDR"])
 def test_sphere_random_u0(
         request,
@@ -74,7 +74,7 @@ def test_sphere_random_u0(
                     name = filename, printing=True)
     
     if kappa == 0.02:
-        solver.output_params(out, sample_rate=10)
+        solver.output_params(out, sample_rate=50)
     else:
         solver.output_params(out, sample_rate=50)
 

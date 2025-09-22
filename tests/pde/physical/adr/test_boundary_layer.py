@@ -28,13 +28,13 @@ def input_params(params_type, u0):
     elif params_type == 2:
         params = {
             "u0": u0,
-            "bounds": [-1, 1],
+            "bounds": [0, 1e5],
         }
     elif params_type == 3:
         params = {
             "u0": u0,
             "mass_preserving": True,
-            "bounds": [-1, 1],
+            "bounds": [0, 1e5],
         }
     params['Neu_bnd'] = 'bboundary'
     return params
