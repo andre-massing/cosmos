@@ -53,7 +53,7 @@ def test_sphere(
 
         solvertime = SolverTime(dt = dt, initial_t=0, final_t=Tend, t_coef=t)
         solvermesh = SolverMesh(mesh)
-        solver = Solver(solvermesh, solvertime, iter = False, printing=True)
+        solver = Solver(solvermesh, solvertime, iter = True, printing=True)
         solver.output_params(out, sample_rate=50)
 
         mean_curvature = MeanCurvatureBoundaryBDF1Model(solver, 1, input_params = {})

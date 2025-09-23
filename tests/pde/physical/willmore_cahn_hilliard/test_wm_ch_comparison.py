@@ -46,7 +46,7 @@ def solver_time_params():
     ]
     )
 @pytest.mark.parametrize("kappa", [0.5, 0.1, 0.02])
-@pytest.mark.parametrize("maxh", [0.04, 0.08])
+@pytest.mark.parametrize("maxh", [0.08, 0.04])
 def test_sphere_tanh_u0(
         request,
         artifacts_path,
