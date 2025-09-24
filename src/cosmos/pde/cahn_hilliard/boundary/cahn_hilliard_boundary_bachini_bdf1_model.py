@@ -105,7 +105,6 @@ class CahnHilliardBoundaryBachiniBDF1Model(BasePDEModel):
         self.A += b_gfu*grad(trial_u).Trace()*test_u*ds(deformation = deform)
         self.A += self.input_params["M"]*grad(trial_w).Trace()*grad(test_u).Trace()*ds(deformation = deform)
         self.A += trial_w*test_w*ds(deformation = deform)
-        # self.A += -self.input_params["epsilon"]*grad(trial_u).Trace()*grad(test_w).Trace()*ds(deformation = deform)
         self.A += -self.input_params["sigma"]*self.input_params["epsilon"]*grad(trial_u).Trace()*grad(test_w).Trace()*ds(deformation = deform)
         self.A += -self.input_params["sigma"]/self.input_params["epsilon"]*ddW(self.gfu_u_old)*trial_u*test_w*ds(deformation = deform)
 

@@ -11,6 +11,7 @@ from cosmos.pde.adr.boundary.adr_boundary_stab_bdf2_model import ADRBoundaryStab
 from cosmos.pde.cahn_hilliard.volume.cahn_hilliard_volume_aland_bdf1_model import CahnHilliardVolumeAlandBDF1Model
 from cosmos.pde.cahn_hilliard.boundary.cahn_hilliard_boundary_pol_bdf1_model import CahnHilliardBoundaryPolBDF1Model
 from cosmos.pde.cahn_hilliard.boundary.cahn_hilliard_boundary_bachini_bdf1_model import CahnHilliardBoundaryBachiniBDF1Model
+from cosmos.pde.cahn_hilliard.boundary.cahn_hilliard_boundary_bachini_log_bdf1_model import CahnHilliardBoundaryBachiniLogBDF1Model
 from cosmos.pde.cahn_hilliard.boundary.cahn_hilliard_boundary_elliott_bdf1_model import CahnHilliardBoundaryElliottBDF1Model
 from cosmos.pde.mean_curvature.mean_curvature_boundary_bdf1_model import MeanCurvatureBoundaryBDF1Model
 # from cosmos.pde.mean_curvature.mean_curvature_boundary_stab_bdf1_model import MeanCurvatureBoundaryStabBDF1Model
@@ -39,6 +40,7 @@ __all__ = [
     "ADRBoundaryStabBDF2Model",
     "CahnHilliardVolumeAlandBDF1Model",
     "CahnHilliardBoundaryBachiniBDF1Model",
+    "CahnHilliardBoundaryBachiniLogBDF1Model",
     "CahnHilliardBoundaryPolBDF1Model",
     "CahnHilliardBoundaryElliottBDF1Model",
     "MeanCurvatureBoundaryBDF1Model",

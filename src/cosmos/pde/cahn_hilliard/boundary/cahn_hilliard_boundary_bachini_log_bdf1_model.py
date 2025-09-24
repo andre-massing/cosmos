@@ -10,12 +10,12 @@ from cosmos.core.solver import Solver
 from cosmos.core.field import InputField, OutputField
 from cosmos.core.utils import MandBP
 
-class CahnHilliardBoundaryPolBDF1Model(BasePDEModel):
+class CahnHilliardBoundaryBachiniLogBDF1Model(BasePDEModel):
 
     def __init__(self, solver:Solver,
                  model_order:int,
                  domain:str = '.*',
-                 name:str = 'CahnHilliardBoundaryBachiniBDF1Model',
+                 name:str = 'CahnHilliardBoundaryBachiniLogBDF1Model',
                  input_params = {}):
         
         super().__init__()
@@ -81,8 +81,7 @@ class CahnHilliardBoundaryPolBDF1Model(BasePDEModel):
         self.gfu_w.Set(self.input_params['w0'], dual = True, definedon = self.domain)
         self.output_fields["potential"] = OutputField(self.gfu_w, "potential", BND)
 
-        deform_old = self._solver.mesh.prev_deformation[-1]
-        deform_new = self._solver.mesh.curr_deformation
+        deform = self._solver.mesh.prev_deformation[-1]
 
         # Creating GridFunctions for the Fields
         b_gfu = GridFunction(fes_vector)
@@ -97,37 +96,31 @@ class CahnHilliardBoundaryPolBDF1Model(BasePDEModel):
         self.input_fields["grad_potential_bnd"] = InputField(grad_potential_bnd_gfu, CF((0,)*self._solver.ngsmesh.dim), "grad_potential_bnd", self._solver.ngsmesh.Boundaries('.*'))
 
         def dW(phase):
-            return phase**3-phase
+            return log(1+phase)-log(1-phase)-phase 
 
-        def ddW(phase):
-            return 3*phase**2-1
-
-        self.A += 1/self._solver.time.dt*trial_u*test_u*ds(deformation = deform_new)
-        self.A += -1*b_gfu*grad(trial_u).Trace()*test_u*ds(deformation = deform_new)
-        self.A += self.input_params["M"]*grad(trial_w).Trace()*grad(test_u).Trace()*ds(deformation = deform_new)
-        self.A += trial_w*test_w*ds(deformation = deform_new)
-        self.A += -self.input_params["sigma"]*self.input_params["epsilon"]*grad(trial_u).Trace()*grad(test_w).Trace()*ds(deformation = deform_new)
-        self.A += -self.input_params["sigma"]/self.input_params["epsilon"]*ddW(self.gfu_u_old)*trial_u*test_w*ds(deformation = deform_new)
-
+        self.A += 1/self._solver.time.dt*trial_u*test_u*ds(deformation = deform)
+        self.A += b_gfu*grad(trial_u).Trace()*test_u*ds(deformation = deform)
+        self.A += self.input_params["M"]*grad(trial_w).Trace()*grad(test_u).Trace()*ds(deformation = deform)
+        self.A += trial_w*test_w*ds(deformation = deform)
+        self.A += -self.input_params["sigma"]*self.input_params["epsilon"]*grad(trial_u).Trace()*grad(test_w).Trace()*ds(deformation = deform)
 
         self.A.Assemble()
         self.invA = self.A.mat.Inverse(freedofs = fes.FreeDofs())
 
-        self.F += rhs_u_gfu*test_u*ds(deformation = deform_new)
-        self.F += rhs_w_gfu*test_w*ds(deformation = deform_new)
+        self.F += rhs_u_gfu*test_u*ds(deformation = deform)
+        self.F += rhs_w_gfu*test_w*ds(deformation = deform)
         
-        self.F += 1/self._solver.time.dt*self.gfu_u_old*test_u*ds(deformation = deform_old)
-        self.F += self.input_params["sigma"]/self.input_params["epsilon"]*dW(self.gfu_u_old)*test_w*ds(deformation = deform_new)
-        self.F += -1*self.input_params["sigma"]/self.input_params["epsilon"]*ddW(self.gfu_u_old)*self.gfu_u_old*test_w*ds(deformation = deform_new)
+        self.F += 1/self._solver.time.dt*self.gfu_u_old*test_u*ds(deformation = deform)
+        self.F += self.input_params["sigma"]/self.input_params["epsilon"]*dW(self.gfu_u_old)*test_w*ds(deformation = deform)
 
         if self.input_params["Neu_bnd_phase"]:
             neu_bnd_gfu_phase = GridFunction(facet_space)
             neu_bnd_gfu_phase.Set(1, definedon = self._solver.ngsmesh.BBoundaries(self.input_params['Neu_bnd_phase']))
-            self.F += -1*neu_bnd_gfu_phase*self.input_params["sigma"]*self.input_params["epsilon"]*grad_phase_bnd_gfu*nE*test_w*ds(element_boundary = True, deformation = deform_new)
+            self.F += -1*neu_bnd_gfu_phase*self.input_params["sigma"]*self.input_params["epsilon"]*grad_phase_bnd_gfu*nE*test_w*ds(element_boundary = True, deformation = deform)
         if self.input_params["Neu_bnd_potential"]:
             neu_bnd_gfu_potential = GridFunction(facet_space)
             neu_bnd_gfu_potential.Set(1, definedon = self._solver.ngsmesh.BBoundaries(self.input_params['Neu_bnd_potential']))
-            self.F += neu_bnd_gfu_potential*self.input_params["M"]*grad_potential_bnd_gfu*nE*test_u*ds(element_boundary=True, deformation = deform_new)
+            self.F += neu_bnd_gfu_potential*self.input_params["M"]*grad_potential_bnd_gfu*nE*test_u*ds(element_boundary=True, deformation = deform)
 
         if self.input_params["mass_preserving"]:
             ir_segm = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
@@ -157,7 +150,6 @@ class CahnHilliardBoundaryPolBDF1Model(BasePDEModel):
 
     def Solve(self):
 
-        self._solver.time.advance_tcoef()
         self.update_input_fields()
 
         self.A.Assemble()
@@ -177,7 +169,7 @@ class CahnHilliardBoundaryPolBDF1Model(BasePDEModel):
             if hasattr(self._solver.time, 'dt'):
                 dt = self._solver.time.dt.Get()
             else:
-                raise Exception('A time-dependent simulation is needed to impose conservative mass')
+                logger.error('A time-dependent simulation is needed to impose conservative mass')
 
             self.Amp.Assemble()
             rows,cols,vals = self.Amp.mat.COO()
@@ -194,8 +186,6 @@ class CahnHilliardBoundaryPolBDF1Model(BasePDEModel):
 
             self.gfu_u.vec.data = gfu_new
 
-        self._solver.time.reset_tcoef()
-
     def PostProcess(self):
         
         pass
@@ -203,15 +193,24 @@ class CahnHilliardBoundaryPolBDF1Model(BasePDEModel):
     @property
     def phase(self):
         return self.gfu_u
+    
+    @phase.setter
+    def phase(self, cf):
+        self.gfu_u.Set(cf, definedon = self.domain)
 
     @property
     def potential(self):
         return self.gfu_w
     
+    @potential.setter
+    def potential(self, cf):
+        self.gfu_w.Set(cf, definedon = self.domain)
+
     @property
     def energy(self):
         energy = Integrate(self.input_params['sigma']/self.input_params['epsilon']*0.25*(self.phase**2-1)**2
                            +self.input_params['sigma']*self.input_params['epsilon']/2*Norm(grad(self.phase).Trace())**2, 
                            self._solver.ngsmesh, VOL_or_BND = BND)
         return energy
+
         
