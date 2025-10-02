@@ -7,9 +7,9 @@ from cosmos.utils.generate_meshes import generate_boundary_cylinder
 @pytest.fixture
 def time_params():
     time_params = {}
-    time_params['dt'] = 1e-3
+    time_params['dt'] = 2e-3
     time_params['t_coef'] = Parameter(0)
-    time_params['final_t'] = 1
+    time_params['final_t'] = 2
     time_params['initial_t'] = 0
     return time_params
 
@@ -20,7 +20,7 @@ def ch_params(ch_params_type):
     params['Neu_bnd_potential'] = 'bboundary'
     params['M'] = 0.01
     params['epsilon'] = 0.1
-    params['sigma'] = 1
+    params['sigma'] = 10
     if ch_params_type == 1:
         params['fes_order'] = 1
     if ch_params_type == 2:
@@ -37,11 +37,10 @@ def ch_params(ch_params_type):
         params['fes_order'] = 2
     return params
 
-@pytest.mark.parametrize("ch_solver", [CahnHilliardBoundaryBachiniBDF1Model,
-                                       CahnHilliardBoundaryBachiniLogBDF1Model])
+@pytest.mark.parametrize("ch_solver", [CahnHilliardBoundaryBachiniLogBDF1Model])
 @pytest.mark.parametrize("maxh", [0.1, 0.05])
 @pytest.mark.parametrize("ch_params_type", [1, 2, 3, 4, 0])
-def test_cahn_hilliard_cylinder_pol(
+def test_cahn_hilliard_cylinder(
         request,
         cosmos_root,
         artifacts_path,
@@ -54,9 +53,9 @@ def test_cahn_hilliard_cylinder_pol(
     filename = request.function.__name__
 
     def A_B(t):
-        D = CF((1+0.3*sin(pi*t), 0, 0,\
-                    0, 1+0.3*sin(pi*t), 0,\
-                        0, 0, 1/(1+0.3*sin(pi*t))), dims = (3,3))
+        D = CF((1+0.5*sin(pi*t), 0, 0,\
+                    0, 1+0.5*sin(pi*t), 0,\
+                        0, 0, 1/(1+0.5*sin(pi*t))), dims = (3,3))
         # R = CF((cos(2*pi*t), -sin(2*pi*t), 0,\
         #             sin(2*pi*t), cos(2*pi*t), 0,\
         #                 0, 0, 1), dims = (3,3))

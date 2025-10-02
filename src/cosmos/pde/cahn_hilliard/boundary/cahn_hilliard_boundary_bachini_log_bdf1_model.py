@@ -96,7 +96,7 @@ class CahnHilliardBoundaryBachiniLogBDF1Model(BasePDEModel):
         self.input_fields["grad_potential_bnd"] = InputField(grad_potential_bnd_gfu, CF((0,)*self._solver.ngsmesh.dim), "grad_potential_bnd", self._solver.ngsmesh.Boundaries('.*'))
 
         def dW(phase):
-            return log(1+phase)-log(1-phase)-phase 
+            return 0.25*(self.log10(1+phase)-self.log10(1-phase))-phase 
 
         self.A += 1/self._solver.time.dt*trial_u*test_u*ds(deformation = deform)
         self.A += b_gfu*grad(trial_u).Trace()*test_u*ds(deformation = deform)
@@ -190,6 +190,9 @@ class CahnHilliardBoundaryBachiniLogBDF1Model(BasePDEModel):
         
         pass
 
+    def log10(self, a):
+        return log(a)/log(10)
+
     @property
     def phase(self):
         return self.gfu_u
@@ -208,8 +211,9 @@ class CahnHilliardBoundaryBachiniLogBDF1Model(BasePDEModel):
 
     @property
     def energy(self):
-        energy = Integrate(self.input_params['sigma']/self.input_params['epsilon']*0.25*(self.phase**2-1)**2
-                           +self.input_params['sigma']*self.input_params['epsilon']/2*Norm(grad(self.phase).Trace())**2, 
+        energy = Integrate(self.input_params['sigma']*(0.25/self.input_params['epsilon']*((1-self.phase)*self.log10(1-self.phase) 
+                            + (1+self.phase)*self.log10(1+self.phase)) + 0.5/self.input_params['epsilon']*(1-self.phase**2)
+                           + self.input_params['epsilon']/2*Norm(grad(self.phase).Trace())**2), 
                            self._solver.ngsmesh, VOL_or_BND = BND)
         return energy
 

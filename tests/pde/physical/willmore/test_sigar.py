@@ -2,7 +2,6 @@ from ngsolve import *
 from cosmos import *
 from ngsolve.webgui import Draw
 from cosmos.utils.generate_meshes import generate_boundary_sigar
-from scipy.integrate import solve_ivp
 import numpy as np
 import logging
 import pytest
