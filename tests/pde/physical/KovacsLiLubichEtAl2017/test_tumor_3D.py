@@ -49,9 +49,9 @@ def test_tumor3D(
     solver.output_params(out, sample_rate=30)
 
     mc = MeanCurvatureBoundaryBDF1Model(solver, 1, name = 'mc_boundary_bdf1', input_params={'kappa': 0.01})
-    u = adr_solver(solver, 2, name = 'u_adr_boundary_bdf1')
-    w = adr_solver(solver, 3, name = 'w_adr_boundary_bdf1')
-    ale = ALEModel(solver, 3, name = 'ale_model')
+    ale = ALEModel(solver, 2, name = 'ale_model')
+    u = adr_solver(solver, 3, name = 'u_adr_boundary_bdf1')
+    w = adr_solver(solver, 4, name = 'w_adr_boundary_bdf1')
     u0 = np.load(os.path.join(cosmos_root, 'tests/pde/physical/KovacsLiLubichEtAl2017/test_kovacs_3D_u0_vec.npy'), allow_pickle=False)
     w0 = np.load(os.path.join(cosmos_root, 'tests/pde/physical/KovacsLiLubichEtAl2017/test_kovacs_3D_w0_vec.npy'), allow_pickle=False)
     u.sol.vec.data = u0

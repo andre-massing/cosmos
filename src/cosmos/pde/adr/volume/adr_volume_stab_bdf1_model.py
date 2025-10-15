@@ -51,12 +51,12 @@ class ADRVolumeStabBDF1Model(BasePDEModel):
         
         if self.input_params["periodic"]:
             fes = Compress(Periodic(H1(self._solver.ngsmesh, order = self.input_params["fes_order"], 
-                                            definedon = self.domain)))
+                                            definedon = self.domain, dgjumps = True)))
             fes_vector = Compress(Periodic(VectorH1(self._solver.ngsmesh, order = self.input_params["fes_order"], 
                                             definedon = self.domain)))
         else:
             fes = Compress(H1(self._solver.ngsmesh, order = self.input_params["fes_order"], 
-                                   definedon = self.domain))
+                                   definedon = self.domain, dgjumps = True))
             fes_vector = Compress(VectorH1(self._solver.ngsmesh, order = self.input_params["fes_order"], 
                                    definedon = self.domain))
           
@@ -107,7 +107,7 @@ class ADRVolumeStabBDF1Model(BasePDEModel):
                 + d_gfu*alpha/h*trial*test*ds(definedon = self.input_params['Dir_bnd'], skeleton = True, deformation = deform)\
 
         self.A += -b_gfu*grad(test) * trial*dx(deformation = deform)
-        stab = Norm(b_gfu)*h**2
+        stab = (Norm(b_gfu))*h**2
         jump_u = grad(trial)-grad(trial).Other()
         jump_v = grad(test)-grad(test).Other()
         self.A += stab*jump_u*jump_v*dx(deformation = deform, skeleton = True)

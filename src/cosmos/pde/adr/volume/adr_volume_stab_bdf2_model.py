@@ -109,7 +109,7 @@ class ADRVolumeStabBDF2Model(BasePDEModel):
                 + d_gfu*alpha/h*trial*test*ds(definedon = self.input_params['Dir_bnd'], skeleton = True, deformation = deform)\
 
         self.A += -b_gfu*grad(test) * trial*dx(deformation = deform)
-        stab = Norm(b_gfu)*h**2
+        stab = (Norm(b_gfu))*h**2
         jump_u = grad(test)-grad(test).Other()
         jump_v = grad(trial)-grad(trial).Other()
         self.A += stab*jump_u*jump_v*dx(deformation = deform, skeleton = True)

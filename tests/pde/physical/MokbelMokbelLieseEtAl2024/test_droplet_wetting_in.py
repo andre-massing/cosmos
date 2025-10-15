@@ -3,9 +3,15 @@ import numpy as np
 from ngsolve import *
 from ngsolve.webgui import Draw
 from cosmos import *
-from cosmos.utils.generate_meshes import generate_volume_circle
+import netgen.occ as occ
 
-mesh = generate_volume_circle(maxh = 0.05)
+face = occ.WorkPlane(occ.Axes((0,0,0), n=occ.Z, h=occ.X)).Circle(0, 0, 1).Face()
+face.edges.name = 'boundary'
+face.edges[0].maxh = 0.01
+geo = occ.OCCGeometry(face, dim = 2)
+mesh = geo.GenerateMesh(maxh=0.2, optsteps2d=3)
+mesh = Mesh(mesh)
+
 solvermesh = SolverMesh(mesh)
 
 dt = 1e-4
@@ -15,23 +21,22 @@ solvertime = SolverTime(dt=dt, initial_t=t0, final_t=T)
 
 solver = Solver(solvermesh, solvertime, iter=False, printing = True)
 
-sigma_f = 30
+sigma_f = 20
 sigma1 = 30
 sigma0 = 15
 
 wm_input_params = {
     "autoupdate": True,
 }
-wm = WillmoreBoundaryVPBDF1Model(solver, 1, input_params=wm_input_params)
-ale = ALEModel(solver, 2)
+wm = WillmoreBoundaryInexBDF1Model(solver, 2, input_params=wm_input_params)
+ale = ALEModel(solver, 3)
 ch_input_params = {
     "mass_preserving": True,
     "bounds" : [0, 1],
-    "M": 0.001,
+    "M": 0.01,
     "epsilon": 0.05,
     "sigma": sigma_f*6*sqrt(2),
     "Neu_bnd_phase": 'boundary',
-    "Neu_bnd_potential": 'boundary'
 }
 ch = CahnHilliardVolumeAlandBDF1Model(solver, 1, input_params=ch_input_params)
 ch.phase.Set(IfPos(sqrt(x**2+(y-1)**2)-0.5, 0, 1))
@@ -53,18 +58,16 @@ ch.set_input_fields({
     "b": ale.wind
 })
 
-K_B = 1e-10
+K_B = 1e-2
 wm.set_input_fields({
     "elasticity_modulus": K_B,
-    # "rhs": lambda: sigma(ch.phase)*wm.mean_curvature
+    "rhs": lambda: sigma(ch.phase)*wm.mean_curvature+Dsigma(ch.gfu_u_old)*grad(ch.phase).Trace()
 })
-ale.set_bnd_displacement(lambda: Qs*(wm.displacement), 'boundary', redistribute=True)
+ale.set_bnd_displacement(lambda: wm.displacement, 'boundary', redistribute=True)
 
 # scene = Draw(mesh.deformation, mesh)
 scene1 = Draw(ch.phase, mesh)
-scene2 = Draw(sigma(ch.phase), mesh)
 for _ in solver():
     # scene.Redraw()
     scene1.Redraw()
-    scene2.Redraw()
 # %%

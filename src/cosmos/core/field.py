@@ -51,6 +51,8 @@ class InputField(Field):
         self.name = name
         self.domain = domain
 
+        self.update()
+
     @property
     def cf(self):
         return self._eval()
