@@ -42,10 +42,7 @@ class SolverIterator:
             while np.max(errors)>tol and self.subiter_count < 20:
                 for i, pde in enumerate(self._ordered_pdes.values()):
                     pde.Solve()
-                    if Norm(old_sol[i]) != 0:
-                        errors[i] = Norm(pde.gfu.vec-old_sol[i])/Norm(old_sol[i])
-                    else:
-                        errors[i] = Norm(pde.gfu.vec-old_sol[i])
+                    errors[i] = Norm(pde.gfu.vec-old_sol[i])/len(pde.gfu.vec)
                     old_sol[i] = pde.gfu.vec.Copy()
                 self.subiter_count += 1
                 logger.debug(f'Step subiter_bool count: {self.subiter_count} | Max error {np.max(np.array(errors)):.2e}')

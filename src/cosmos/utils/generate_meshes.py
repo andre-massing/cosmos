@@ -100,16 +100,11 @@ def generate_boundary_circle(maxh=0.1, order_g = 1, R = 1.0, bbnd_name = "bbound
 '''
 def generate_volume_circle(maxh=0.1, order_g = 1, center=occ.Pnt(0,0,0), R = 1.0, bnd_name = "boundary"):
 
-    wp = occ.WorkPlane()
-    wp.Arc(R, 180)
-    wp.Arc(R, 180)
-    synapse = wp.Face()
-    synapse.edges.name = bnd_name
-    synapse.edges.col = (0, 0, 0)
-    synapse = synapse.Move((0,-R,0))
-    synapse = synapse.Move((center[0], center[1], center[2]))
+    face = occ.WorkPlane(occ.Axes((0,0,0), n=occ.Z, h=occ.X)).Circle(0, 0, R).Face()
+    face.edges.name = bnd_name
+    face = face.Move((center[0], center[1], center[2]))
+    geo = occ.OCCGeometry(face, dim = 2)
 
-    geo = occ.OCCGeometry(synapse, dim = 2)
     mesh = Meshing(geo, maxh, order_g, 'VOL')
     return mesh
 

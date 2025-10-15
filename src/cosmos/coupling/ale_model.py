@@ -5,7 +5,7 @@ import numpy as np
 from ngsolve import *
 from cosmos.config.parameters import get_config
 from cosmos.pde.base import BasePDEModel
-from cosmos.core.field import InputField, OutputField, Field
+from cosmos.core.field import OutputField, Field
 from cosmos.core.solver import Solver
 from ngsolve.webgui import Draw
 import numbers
@@ -26,13 +26,13 @@ class ALEField(Field):
         self.VorB = VorB
 
         if self.VorB == BND:
-            V = Compress(VectorH1(self._solver.ngsmesh, order = self._solver.ngsmesh.GetCurveOrder(), 
+            V = VectorH1(self._solver.ngsmesh, order = self._solver.ngsmesh.GetCurveOrder(), 
                          definedon = self._solver.ngsmesh.Boundaries(domain),
-                         dirichlet_bbnd = self._solver.ngsmesh.BBoundaries(clamped_bnd)))
+                         dirichlet_bbnd = self._solver.ngsmesh.BBoundaries(clamped_bnd))
             self.ale_displ = GridFunction(V)
         elif self.VorB == VOL:
-            V = Compress(VectorH1(self._solver.ngsmesh, order = self._solver.ngsmesh.GetCurveOrder(), 
-                         definedon = self._solver.ngsmesh.Materials(domain)))
+            V = VectorH1(self._solver.ngsmesh, order = self._solver.ngsmesh.GetCurveOrder(), 
+                         definedon = self._solver.ngsmesh.Materials(domain))
             self.ale_displ = GridFunction(V)
 
         if self.redistribute:
@@ -43,8 +43,9 @@ class ALEField(Field):
                 self.mat_def = GridFunction(self._solver.mesh.curr_deformation.space)
 
                 self.ale_displ = GridFunction(V)
-                V2 = Compress(H1(self._solver.ngsmesh, order = self._solver.ngsmesh.GetCurveOrder(),
-                        definedon = self._solver.ngsmesh.Boundaries(domain)))
+                V2 = H1(self._solver.ngsmesh, order = self._solver.ngsmesh.GetCurveOrder(),
+                        definedon = self._solver.ngsmesh.Boundaries(domain),
+                         dirichlet_bbnd = self._solver.ngsmesh.BBoundaries(clamped_bnd))
 
                 fes_pp = V*V2
                 self.A_pp = BilinearForm(fes_pp, symmetric = True)
@@ -72,8 +73,9 @@ class ALEField(Field):
                 deform = self._solver.mesh.prev_deformation[-1]
 
                 self.ale_displ = GridFunction(V)
-                V2 = Compress(H1(self._solver.ngsmesh, order = self._solver.ngsmesh.GetCurveOrder(),
-                        definedon = self._solver.ngsmesh.Boundaries(domain)))
+                V2 = H1(self._solver.ngsmesh, order = self._solver.ngsmesh.GetCurveOrder(),
+                        definedon = self._solver.ngsmesh.Boundaries(domain),
+                        dirichlet_bbnd = self._solver.ngsmesh.BBoundaries(clamped_bnd))
 
                 fes_pp = V*V2
                 self.A_pp = BilinearForm(fes_pp, symmetric = True)
@@ -211,7 +213,7 @@ class ALEModel(BasePDEModel):
     def set_bnd_displacement(self, coef, domain, clamped_bnd='', redistribute=False, redistribute_type = 'DuanLi'):
 
         if self.vol_is_prescribed:
-            raise Exception('Cannot prescribe boundary displcement if volume displacement is already prescribed')
+            raise Exception('Cannot prescribe boundary displacement if volume displacement is already prescribed')
         else:
             self.bnd_is_prescribed = True
 
@@ -219,7 +221,7 @@ class ALEModel(BasePDEModel):
             raise Exception('Boundary not present in list of boundary for the mesh')
         if clamped_bnd:
             if not all(word in self._solver.mesh.bbnd_markers for word in clamped_bnd.split('|')):
-                raise Exception('Clamped boudnary not present in list of boundaries for the mesh')
+                raise Exception('Clamped boundary not present in list of boundaries for the mesh')
         
         self.bnd_fields[domain] = ALEField(self._solver, coef, domain, BND, clamped_bnd=clamped_bnd,
                                            redistribute=redistribute, redistribute_type = redistribute_type)
@@ -227,7 +229,7 @@ class ALEModel(BasePDEModel):
     def set_vol_displacement(self, coef, domain):
 
         if self.bnd_is_prescribed:
-            raise Exception('Cannot prescribe volume displacement if volume displacement is already prescribed')
+            raise Exception('Cannot prescribe volume displacement if boundary displacement is already prescribed')
         else:
             self.vol_is_prescribed = True
         

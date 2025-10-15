@@ -73,7 +73,7 @@ class WillmoreBoundaryBDF1Model(BasePDEModel):
         ds_lumped = ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = deform)
         ds_el_lumped = ds(element_boundary=True, intrules = { SEGM : ir_segm, TRIG: ir_trig })
 
-        fes_mc = Compress(V2)
+        fes_mc = V2
         kappa_mc, eta_mc = fes_mc.TnT()
         self.A_mc = BilinearForm(fes_mc, symmetric = True)
         self.A_mc += (kappa_mc*eta_mc)*ds_lumped
@@ -85,18 +85,17 @@ class WillmoreBoundaryBDF1Model(BasePDEModel):
         #     if self._solver.ngsmesh.dim == 2:
         #         gfBB = GridFunction(H1(self._solver.ngsmesh, order =1,\
         #                 definedon=self.domain))
-        #         gfBB.Set(1, definedon=self._solver.ngsmesh.BBoundaries(self.clamped_bnd))
+        #         gfBB.Set(1, definedon=self._solver.ngsmesh.BBoundaries(self.input_params["clamped_bnd"]))
         #         self.F_mc += InnerProduct(gfBB*nE, eta_mc)*ds_el_lumped
         #     elif self._solver.ngsmesh.dim == 3:
         #         gfBB = GridFunction(FacetSurface(self._solver.ngsmesh, order=0, definedon = self.domain))
-        #         gfBB.Set(1, definedon=self._solver.ngsmesh.BBoundaries(self.clamped_bnd))
+        #         gfBB.Set(1, definedon=self._solver.ngsmesh.BBoundaries(self.input_params["clamped_bnd"]))
         #         self.F_mc += InnerProduct(nE, eta_mc)*gfBB*ds_el_lumped
         if self.input_params["clamped_bnd"]:
             if self._solver.ngsmesh.dim == 2:
-                gfBB = GridFunction(H1(self._solver.ngsmesh, order =1,\
-                        definedon=self.domain))
+                gfBB = GridFunction(H1(self._solver.ngsmesh, order=1, definedon=self.domain))
                 gfBB.Set(1, definedon=self._solver.ngsmesh.BBoundaries(self.input_params["clamped_bnd"]))
-                self.F_mc += InnerProduct(gfBB*self.input_params["clamped_conormal"], eta_mc)*ds_el_lumped
+                self.F_mc += InnerProduct(self.input_params["clamped_conormal"], eta_mc)*gfBB*ds_el_lumped
             elif self._solver.ngsmesh.dim == 3:
                 gfBB = GridFunction(FacetSurface(self._solver.ngsmesh, order=0, definedon = self.domain))
                 gfBB.Set(1, definedon=self._solver.ngsmesh.BBoundaries(self.input_params["clamped_bnd"]))
@@ -167,6 +166,11 @@ class WillmoreBoundaryBDF1Model(BasePDEModel):
             self.F_mc.Assemble()
             self.gfu_k_old.vec.data = self.invA_mc*self.F_mc.vec
             self.gfu_Y_old.Set(self.input_fields["elasticity_modulus"].gfu*(self.gfu_k_old - self.input_fields["spontaneous_curvature"].gfu*self.ns), dual = True, definedon = self.domain)
+
+            # temporary testing
+            # prova = GridFunction(H1(self._solver.ngsmesh))
+            # prova.Set(Norm(self.gfu_k_old), definedon = self.domain)
+            # Draw(prova)
 
     def Solve(self):
 

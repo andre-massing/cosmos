@@ -7,6 +7,7 @@ import numpy as np
 from cosmos import *
 
 from test_dendritic_spine_geom import generate_synapse2d
+
 mesh, _ = generate_synapse2d(maxh=0.02)
 mip = mesh(0.3, 0.7)
 

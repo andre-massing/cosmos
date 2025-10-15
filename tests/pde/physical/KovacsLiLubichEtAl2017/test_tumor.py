@@ -22,6 +22,7 @@ def params():
 
 @pytest.mark.parametrize("redistribute", [None, 'DuanLi', 'MDR'])
 @pytest.mark.parametrize("adr_solver", [
+    ADRBoundaryBDF1Model,
     ADRBoundaryStabBDF1Model
 ])
 def test_tumor3D(

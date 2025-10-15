@@ -19,7 +19,7 @@ import numpy as np
 
 import os
 
-T = 40
+T = 60
 dt = 0.02
 n = 200
 sample_rate = np.maximum(int(T/dt/n), 1)
@@ -38,7 +38,7 @@ def solve_lomakin(i, angle):
     ###################  Solver  ##################################
     solvermesh = SolverMesh(mesh)
     solvertime = SolverTime(dt=dt, initial_t=0, final_t=T)
-    solver = Solver(solvermesh, solvertime, iter = False, printing=True)
+    solver = Solver(solvermesh, solvertime, iter = False, printing=False)
 
 
     ###################  SURFACE REACTIONS  ##################################
@@ -58,7 +58,7 @@ def solve_lomakin(i, angle):
     ns = specialcf.normal(mesh.dim)
     def displ():
         return V()*dt*ns
-    ale.set_bnd_displacement(displ, 'boundary', redistribute=False)
+    ale.set_bnd_displacement(displ, 'boundary', redistribute=True)
 
     def u_rhs():
         term1 = kappa1*V()*u.sol - u.sol**2 - a_12*u.sol*w.sol
@@ -66,6 +66,7 @@ def solve_lomakin(i, angle):
     u.set_input_fields({
         'd': 0.1,
         'c': -1,
+        'b': ale.wind,
         'rhs': u_rhs
     })
     
@@ -75,11 +76,12 @@ def solve_lomakin(i, angle):
     w.set_input_fields({
         'd': 0.1,
         'c': -1,
-        'rhs': w_rhs
+        'rhs': w_rhs,
+        'b': ale.wind
     })
 
     depletion = False
-    scene = Draw(x, mesh)
+    scene = Draw(x, mesh, min = 0, max = 3)
     for i, sol in enumerate(solver()):
         if solver.current_time>10 and depletion == False:
             gfu = GridFunction(w.gfu_old.space)

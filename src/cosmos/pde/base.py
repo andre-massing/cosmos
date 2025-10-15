@@ -42,7 +42,7 @@ class BasePDEModel(ABC):
             if key in self.input_params.keys():
                 self.input_params[key] = value
             else:
-                raise Exception('No such parameter in Model  ' + self.name, key)
+                raise Exception('No such parameter in Model  ' + self.name + ': ' + key)
 
     def update_input_fields(self):
         for value in self.input_fields.values():

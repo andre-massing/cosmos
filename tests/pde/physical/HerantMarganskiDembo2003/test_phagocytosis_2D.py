@@ -1,10 +1,11 @@
 # %%
 
-from cosmos.utils.generate_surface_meshes import generate_circle
+from cosmos.utils.generate_meshes import generate_boundary_circle
 from ngsolve import *
 from ngsolve.webgui import Draw
 from netgen.webgui import Draw as DrawGeo
 import netgen.occ as occ
+from cosmos import *
 
 R = 1
 maxh = 0.1
@@ -32,17 +33,8 @@ print(mesh.ne)
 print(mesh.nv)
 
 
-from cosmos.pdes.pde_adr_vol import VolADR
-from cosmos.pdes.pde_mc_bgn_stab import MCBGNStab
-from cosmos.pdes.pde_mc_bgn import MCBGN
-from cosmos.pdes.pde_willmore_dziuk import WillmoreDziuk
-from cosmos.solvers.time_schemes import BDF1, BDF2
-from cosmos.pdes.pde_tools import SaveSolution
 import numpy as np
 
-import os
-folderpath = './herant_2d'
-os.makedirs(folderpath, exist_ok = True)
 
 T = 3
 dt = 2e-3
@@ -51,47 +43,44 @@ sample_rate = np.maximum(int(T/dt/n), 1)
 dt = Parameter(dt)
 t = Parameter(0)
 
-ns = specialcf.normal(2)
-neu_d = {'bnd1': -1*ns}
-###################  SURFACE REACTIONS  ##################################
-u = VolADR(d = 1, c= 1, neu_d= neu_d,  time_scheme=BDF1())
-sol_save = SaveSolution(folderpath = folderpath,
-                        filename = 'herant_2d_u',
-                        sample_rate = sample_rate)
-u.SaveSol(sol_save)
-
-###################  MEAN CURVATURE FLOW  ##################################
-# mc = MCBGN(time_scheme=BDF1(), postprocess=True, alpha=0.01)
-mc = WillmoreDziuk(time_scheme=BDF1(), postprocess=True, kappa=1)
-sol_save = SaveSolution(folderpath = folderpath,
-                        filename = 'herant_2d_mc',
-                        sample_rate = sample_rate)
-mc.SaveSol(sol_save)
-
 ###################  Solver  ##################################
-from cosmos.solvers.solvers import Dynamic
-solver = Dynamic(mesh = mesh, t = t, T = T, dt = dt)
+solvermesh = SolverMesh(mesh)
+solvertime = SolverTime(dt = dt, initial_t=0, final_t=T)
+solver = Solver(solvermesh, solvertime, iter=True,
+                printing=True)
+
+###################  SURFACE REACTIONS  ##################################
+ns = specialcf.normal(2)
+u = ADRVolumeBDF1Model(solver, 1, input_params={'Neu_bnd': 'bnd1'})
+u.set_input_fields({
+    'd': 1,
+    'c': 1,
+    'gradu_bnd': ns
+})
+
+################### GRADIENT FLOW  ##################################
+# mc = MeanCurvatureBoundaryBDF1Model(solver, 2, input_params={'kappa': 0.01})
+# F0 = -1
+# mc.set_input_fields({
+#     'rhs': lambda: F0*u.sol*ns
+# })
+willmore = WillmoreBoundaryInexBDF1Model(solver, 2)
+F0 = -1
+willmore.set_input_fields({
+    'rhs': lambda: F0*u.sol*ns,
+    'elasticity_modulus': 1e-3
+
+})
 
 ###################  ALE  ##################################
-
-###################  Couplings  ##################################
-from cosmos.pdes.coupling_weak import WeakCoupling
-cpl = WeakCoupling(tol = 1e-5, type = 'implicit')
-cpl.AddPDEs(u, mc)
-solver.AddPDE(cpl)
-
-F0 = -1
-mc.rhs.value = lambda: F0*u.solute*ns
-solver.ale.deformation_field = lambda: mc.displacement
-solver.ale.velocity_field = lambda : mc.displacement/dt
-solver.ale.mat_velocity_field = lambda : mc.displacement/dt
+ale = ALEModel(solver, 3)
+ale.set_bnd_displacement(willmore.displacement, 'bnd1|bnd2', redistribute=True, redistribute_type='DuanLi')
 
 
-scene1 = Draw(u.solute, mesh, deformation = solver.ale.deformation)
-scene2 = Draw(solver.ale.deformation, mesh, deformation = solver.ale.deformation)
+scene1 = Draw(u.sol, mesh, deformation = ale.displacement)
+scene2 = Draw(ale.displacement, mesh, deformation = ale.displacement)
 for i, sol in enumerate(solver()):
     scene1.Redraw()
     scene2.Redraw()
-# %%
 
 # %%

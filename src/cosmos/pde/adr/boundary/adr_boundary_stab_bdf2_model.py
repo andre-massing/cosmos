@@ -139,12 +139,11 @@ class ADRBoundaryStabBDF2Model(BasePDEModel):
         elif self._solver.ngsmesh.dim == 3:
             jump_dudn = (trial.Trace().Deriv() - trial_d.Trace())*nE
             jump_dvdn = (test.Trace().Deriv() - test_d.Trace())*nE
-        stab = h**2
+        stab = (h+Norm(b_gfu))*h**2
         self.A +=  stab*InnerProduct(jump_dudn,jump_dvdn)\
                 *ds(element_boundary=True, deformation = deform)
         self.A +=  -1*stab*bnd_gfu*InnerProduct(jump_dudn,jump_dvdn)\
                 *ds(element_boundary=True, deformation = deform)
-
         self.A +=  bnd_gfu*InnerProduct(trial_d.Trace(),test_d.Trace())\
                 *ds(element_boundary=True, deformation = deform)
         

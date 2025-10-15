@@ -58,7 +58,7 @@ class CahnHilliardVolumeAlandBDF1Model(BasePDEModel):
             fes_vector = Compress(Periodic(VectorH1(self._solver.ngsmesh, order = self.input_params["fes_order"], 
                                             definedon = self.domain)))
         else:
-            fes = CompressCompound(_fes*_fes)
+            fes = _fes*_fes
             fes_vector = Compress(VectorH1(self._solver.ngsmesh, order = self.input_params["fes_order"], 
                                    definedon = self.domain))
           
@@ -77,13 +77,6 @@ class CahnHilliardVolumeAlandBDF1Model(BasePDEModel):
 
         deform = self._solver.mesh.prev_deformation[-1]
 
-        def dW(phase):
-            return (phase-1)*phase*(2*phase-1)/2
-
-        def ddW(phase):
-            return (6*phase**2-6*phase+1)/2
-
-
         # Creating GridFunctions for the Fields
         b_gfu = GridFunction(fes_vector)
         rhs_u_gfu = GridFunction(_fes)
@@ -95,6 +88,12 @@ class CahnHilliardVolumeAlandBDF1Model(BasePDEModel):
         self.input_fields["rhs_w"] = InputField(rhs_w_gfu, CF(0), "rhs_w", self._solver.ngsmesh.Materials('.*'))
         self.input_fields["grad_phase_bnd"] = InputField(grad_phase_bnd_gfu, CF((0,)*self._solver.ngsmesh.dim), "grad_phase_bnd", self._solver.ngsmesh.Boundaries('.*'))
         self.input_fields["grad_potential_bnd"] = InputField(grad_potential_bnd_gfu, CF((0,)*self._solver.ngsmesh.dim), "grad_potential_bnd", self._solver.ngsmesh.Boundaries('.*'))
+
+        def dW(phase):
+            return (4*phase**3-6*phase**2+2*phase)/4
+
+        def ddW(phase):
+            return (12*phase**2-12*phase+2)/4
 
         self.A += 1/self._solver.time.dt*trial_u*test_u*dx(deformation = deform)
         self.A += b_gfu*grad(trial_u)*test_u*dx(deformation = deform)
@@ -111,7 +110,7 @@ class CahnHilliardVolumeAlandBDF1Model(BasePDEModel):
 
         self.F += 1/self._solver.time.dt*self.gfu_u_old*test_u*dx(deformation = deform)
         self.F += self.input_params["sigma"]/self.input_params["epsilon"]*dW(self.gfu_u_old)*test_w*dx(deformation = deform)
-        self.F += -1*self.input_params["sigma"]/self.input_params["epsilon"]*ddW(self.gfu_u_old)*self.gfu_u_old*dx(deformation = deform)
+        self.F += -1*self.input_params["sigma"]/self.input_params["epsilon"]*ddW(self.gfu_u_old)*self.gfu_u_old*test_w*dx(deformation = deform)
 
         if self.input_params["Neu_bnd_phase"]:
             self.F += -1*self.input_params["sigma"]*self.input_params["epsilon"]*grad_phase_bnd_gfu*ns*test_w*ds(definedon = self.input_params["Neu_bnd_phase"], deformation = deform)

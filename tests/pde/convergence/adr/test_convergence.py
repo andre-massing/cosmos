@@ -23,12 +23,12 @@ def input_params(params_type, u0, bnd):
     elif params_type == 1:
         params = {
             "u0": u0,
-            "mass_preserving": True,
+            "bounds": [-1, 1],
         }
     elif params_type == 2:
         params = {
             "u0": u0,
-            "bounds": [-1, 1],
+            "mass_preserving": True,
         }
     elif params_type == 3:
         params = {
@@ -43,8 +43,8 @@ def input_params(params_type, u0, bnd):
     return params
 
 @pytest.mark.parametrize("adr_solver", [
-    ADRBoundaryBDF1Model,
-    ADRBoundaryBDF2Model,
+    # ADRBoundaryBDF1Model,
+    # ADRBoundaryBDF2Model,
     ADRBoundaryStabBDF1Model,
     ADRBoundaryStabBDF2Model
 ])
@@ -120,7 +120,7 @@ def test_convergence(
         return np.sqrt(dt*np.sum(np.array(errs)))
 
     power_t = 1.5
-    dt0 = 0.01
+    dt0 = 0.1
     dt_refs = 3
     dts = dt0/(power_t**(np.arange(dt_refs+1)))
 

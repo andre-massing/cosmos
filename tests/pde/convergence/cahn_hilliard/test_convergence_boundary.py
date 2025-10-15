@@ -33,7 +33,7 @@ def input_params(bnd, u0):
     CahnHilliardBoundaryElliottBDF1Model,
 ])
 @pytest.mark.parametrize("bnd", [None, 'neu'])
-def test_convergence(
+def test_convergence_boundary(
         request,
         artifacts_path,
         u0,

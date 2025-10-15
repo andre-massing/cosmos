@@ -58,7 +58,7 @@ class WillmoreBoundaryInexBDF1Model(BasePDEModel):
         else:
             V1 = VectorH1(self._solver.ngsmesh, order=1,
                         definedon=self.domain)
-        V2 = VectorH1(self._solver.ngsmesh, order=1,definedon=self.domain)
+        V2 = VectorH1(self._solver.ngsmesh, order=1, definedon=self.domain)
         V3 = H1(self._solver.ngsmesh, order=1, definedon=self.domain)
 
         fes = CompressCompound(V1*V2*V3)
@@ -73,7 +73,7 @@ class WillmoreBoundaryInexBDF1Model(BasePDEModel):
         ds_lumped = ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = deform)
         ds_el_lumped = ds(element_boundary=True, intrules = { SEGM : ir_segm, TRIG: ir_trig })
 
-        fes_mc = Compress(V2)
+        fes_mc = V2
         kappa_mc, eta_mc = fes_mc.TnT()
         self.A_mc = BilinearForm(fes_mc, symmetric = True)
         self.A_mc += (kappa_mc*eta_mc)*ds_lumped
@@ -200,6 +200,11 @@ class WillmoreBoundaryInexBDF1Model(BasePDEModel):
         else:
             self.gfu_k_old.vec.data = self.gfu_k.vec.data
             self.gfu_old.vec.data = self.gfu.vec.data
+
+        # temporary testing
+        # prova = GridFunction(H1(self._solver.ngsmesh))
+        # prova.Set(Norm(self.gfu_k_old), definedon = self.domain)
+        # Draw(prova)
 
     def Solve(self):
 
