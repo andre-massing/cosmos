@@ -1,86 +1,117 @@
 # %%
 
-from cosmos.utils.generate_meshes import generate_boundary_circle
 from ngsolve import *
 from ngsolve.webgui import Draw
-from netgen.webgui import Draw as DrawGeo
 import netgen.occ as occ
 from cosmos import *
-
-R = 1
-maxh = 0.1
-angle = pi/6  # 30 degrees
-
-pnt1 = occ.Pnt(R, 0, 0)
-pnt2 = occ.Pnt(R*cos(angle), R*sin(angle), 0)
-pnt3 = occ.Pnt(R*cos(angle), -R*sin(angle), 0)
-pnt4 = occ.Pnt(-R, 0, 0)
-
-arc1 = occ.ArcOfCircle(pnt2, pnt1, pnt3)
-arc2 = occ.ArcOfCircle(pnt3, pnt4, pnt2)
-
-w = occ.Wire([arc1, arc2])
-f = occ.Face(w)
-
-geo = occ.OCCGeometry(f, dim = 2)
-ngmesh = geo.GenerateMesh(maxh=maxh)
-ngmesh.SetBCName(0, 'bnd1')
-ngmesh.SetBCName(1, 'bnd2')
-mesh = Mesh(ngmesh)
-
-Draw(mesh)
-print(mesh.ne)
-print(mesh.nv)
-
-
 import numpy as np
+import logging
+import pytest
 
+logging.getLogger().setLevel(logging.INFO)
 
-T = 3
-dt = 2e-3
-n = 200
-sample_rate = np.maximum(int(T/dt/n), 1)
-dt = Parameter(dt)
-t = Parameter(0)
+@pytest.fixture
+def solver_time_params():
+    params = {}
+    params['dt'] = 2e-3
+    params['initial_t'] = 0
+    params['final_t'] = 30
+    return params
 
-###################  Solver  ##################################
-solvermesh = SolverMesh(mesh)
-solvertime = SolverTime(dt = dt, initial_t=0, final_t=T)
-solver = Solver(solvermesh, solvertime, iter=True,
-                printing=True)
+@pytest.mark.parametrize("angle_deg", [30, 45, 60, 90])
+@pytest.mark.parametrize("kappa", [1, 0.01, 0.0001])
+def test_phagocyosis_2D(
+        request,
+        artifacts_path,
+        solver_time_params,
+        kappa, 
+        angle_deg,
+    ):
 
-###################  SURFACE REACTIONS  ##################################
-ns = specialcf.normal(2)
-u = ADRVolumeBDF1Model(solver, 1, input_params={'Neu_bnd': 'bnd1'})
-u.set_input_fields({
-    'd': 1,
-    'c': 1,
-    'gradu_bnd': ns
-})
+    out = artifacts_path
+    filename = request.function.__name__
 
-################### GRADIENT FLOW  ##################################
-# mc = MeanCurvatureBoundaryBDF1Model(solver, 2, input_params={'kappa': 0.01})
-# F0 = -1
-# mc.set_input_fields({
-#     'rhs': lambda: F0*u.sol*ns
-# })
-willmore = WillmoreBoundaryInexBDF1Model(solver, 2)
-F0 = -1
-willmore.set_input_fields({
-    'rhs': lambda: F0*u.sol*ns,
-    'elasticity_modulus': 1e-3
+    R = 1
+    maxh = 0.2
 
-})
+    angle = angle_deg/180*pi
 
-###################  ALE  ##################################
-ale = ALEModel(solver, 3)
-ale.set_bnd_displacement(willmore.displacement, 'bnd1|bnd2', redistribute=True, redistribute_type='DuanLi')
+    pnt1 = occ.Pnt(R, 0, 0)
+    pnt2 = occ.Pnt(R*cos(angle), R*sin(angle), 0)
+    pnt3 = occ.Pnt(R*cos(angle), -R*sin(angle), 0)
+    pnt4 = occ.Pnt(-R, 0, 0)
 
+    arc1 = occ.ArcOfCircle(pnt3, pnt1, pnt2)
+    arc2 = occ.ArcOfCircle(pnt2, pnt4, pnt3)
 
-scene1 = Draw(u.sol, mesh, deformation = ale.displacement)
-scene2 = Draw(ale.displacement, mesh, deformation = ale.displacement)
-for i, sol in enumerate(solver()):
-    scene1.Redraw()
-    scene2.Redraw()
+    w = occ.Wire([arc1, arc2])
+    f = occ.Face(w)
+    f.maxh = maxh
+    f.edges.maxh = 0.05
+    f.edges[0].name = 'bnd1'
+    f.edges[1].name = 'bnd2'
+
+    geo = occ.OCCGeometry(f, dim = 2)
+
+    ngmesh = geo.GenerateMesh(maxh=maxh,
+        uselocalh=True,
+        optsteps2d=3 )
+    mesh = Mesh(ngmesh)
+
+    ###################  Solver  ##################################
+    
+    solvermesh = SolverMesh(mesh)
+    solvertime = SolverTime(**solver_time_params)
+    solver = Solver(solvermesh, solvertime, iter=True,
+                    printing=True, name = filename)
+    solver.output_params(out, sample_rate=150)
+
+    ###################  SURFACE REACTIONS  ##################################
+    ns = specialcf.normal(2)
+    u = ADRVolumeBDF1Model(solver, 1, input_params={'Neu_bnd': 'bnd1'})
+
+    ################### GRADIENT FLOW  ##################################
+    willmore = WillmoreBoundaryInexBDF1Model(solver, 2)
+    willmore.set_input_fields({
+        'rhs': lambda: u.sol*ns,
+        'elasticity_modulus': kappa
+
+    })
+
+    ###################  ALE  ##################################
+    ale = ALEModel(solver, 3)
+    ale.set_bnd_displacement(willmore.displacement, 'bnd1|bnd2', 
+                            redistribute=True, 
+                            redistribute_type='DuanLi')
+
+    u.set_input_fields({
+        'd': 1,
+        'c': 1,
+        'gradu_bnd': ns,
+        'b': ale.wind
+    })
+
+    solver.save_model_solution(u)
+    # solver.save_model_solution(ale)
+
+    f_ch = open(os.path.join(out, 'u_simulation.txt'), "w")
+    f_wm = open(os.path.join(out, 'wm_simulation.txt'), "w")
+    sample_rate = 60
+    f_ch.write('Time\tMass\tMaxValue\tMinValue\n')
+    f_wm.write('Time\tEnergy\tArea\tVolume\n')
+    for _ in solver():
+        wm_area = Integrate(1, mesh, VOL_or_BND = BND)
+        if solver.time.iter%sample_rate == 0:
+            u_mass = Integrate(u.sol, mesh, VOL_or_BND = BND)
+            u_minvalue = u.sol.vec.FV().NumPy().min()
+            u_maxvalue = u.sol.vec.FV().NumPy().max()
+            f_ch.write(str(solver.time.t.Get()) + '\t' + str(u_mass) + '\t' 
+                       + str(u_maxvalue) + '\t' + str(u_minvalue) + '\n')
+            wm_energy = willmore.energy
+            wm_volume = Integrate(CF((x,0,0))*specialcf.normal(3), mesh, VOL_or_BND = BND)
+            f_wm.write(str(solver.time.t.Get()) + '\t' + str(wm_energy) + '\t' + str(wm_area)+ '\t' 
+                       + str(wm_volume) + '\n')
+    
+    assert 1
 
 # %%

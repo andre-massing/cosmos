@@ -12,7 +12,7 @@ import numbers
 
 class ALEField(Field):
 
-    def __init__(self, solver:Solver, coef: CoefficientFunction, domain:str, VorB,  clamped_bnd:str='', redistribute = False, redistribute_type = 'DuanLi'):
+    def __init__(self, solver:Solver, coef: CoefficientFunction, domain:str, VorB=None,  clamped_bnd:str='', redistribute = False, redistribute_type = 'DuanLi'):
 
         super().__init__(coef)
         
@@ -147,6 +147,7 @@ class ALEModel(BasePDEModel):
         self.aux_tot_wind = GridFunction(self._solver.mesh.curr_deformation.space)
 
         if self._solver.ngsmesh.ne != 0:
+            self.VorB = VOL
             self.output_fields["displacement"] = OutputField(self.gfu, "displacement", VOL)
             vol_space = VectorH1(self._solver.ngsmesh, order=self._solver.ngsmesh.GetCurveOrder(),
                                 definedon = self._solver.ngsmesh.Materials('.*'), dirichlet = self._solver.ngsmesh.Boundaries('.*'))
@@ -157,6 +158,7 @@ class ALEModel(BasePDEModel):
             self.A.Assemble()
             self.invA = self.A.mat.Inverse(freedofs = vol_space.FreeDofs())
         else:
+            self.VorB = BND
             self.output_fields["displacement"] = OutputField(self.gfu, "displacement", BND)
 
         self.bnd_fields = {}
@@ -223,7 +225,7 @@ class ALEModel(BasePDEModel):
             if not all(word in self._solver.mesh.bbnd_markers for word in clamped_bnd.split('|')):
                 raise Exception('Clamped boundary not present in list of boundaries for the mesh')
         
-        self.bnd_fields[domain] = ALEField(self._solver, coef, domain, BND, clamped_bnd=clamped_bnd,
+        self.bnd_fields[domain] = ALEField(self._solver, coef, domain, VorB=BND, clamped_bnd=clamped_bnd,
                                            redistribute=redistribute, redistribute_type = redistribute_type)
 
     def set_vol_displacement(self, coef, domain):
@@ -238,7 +240,7 @@ class ALEModel(BasePDEModel):
         if not all(word in self._solver.mesh.vol_markers for word in domain.split('|')) and not self._solver.ngsmesh.ne == 0:
             raise Exception('Material not present in list of materials for the mesh')
         
-        self.vol_fields[domain] = ALEField(self._solver, coef, domain, VOL)
+        self.vol_fields[domain] = ALEField(self._solver, coef, domain, VorB=VOL)
 
     @property
     def displacement(self):

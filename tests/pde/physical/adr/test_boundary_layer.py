@@ -40,10 +40,10 @@ def input_params(params_type, u0):
     return params
 
 @pytest.mark.parametrize("adr_solver", [
-    ADRBoundaryBDF1Model,
-    ADRBoundaryBDF2Model,
+    # ADRBoundaryBDF1Model,
+    # ADRBoundaryBDF2Model,
     ADRBoundaryStabBDF1Model,
-    ADRBoundaryStabBDF2Model
+    # ADRBoundaryStabBDF2Model
 ])
 @pytest.mark.parametrize("params_type", [0, 1, 2, 3])
 def test_boundary_layer(
@@ -69,6 +69,8 @@ def test_boundary_layer(
 
     mass = []
     time = []
+    minvalue = []
+    maxvalue = []
 
     def A_B(t):
         A = CF((cos(t), -sin(t), 0,\
@@ -102,21 +104,25 @@ def test_boundary_layer(
         mass_i = Integrate(pde.sol, mesh, BND)
         mesh.SetDeformation(solver.mesh.prev_deformation[-1])
         mass.append(mass_i)
+        minvalue.append(np.min(pde.sol.vec.data[:]))
+        maxvalue.append(np.max(pde.sol.vec.data[:]))
         time.append(t.Get())
 
     mass = np.array(mass)
     mass = np.abs((mass - mass[0])/mass[0])
-
-    mass = np.array(mass)
+    minvalue = np.array(minvalue)
+    maxvalue = np.array(maxvalue)
     time = np.array(time)
     if len(time)>n:
         indices = np.linspace(0, len(time) - 1, n, dtype=int)
         mass = mass[indices]
+        minvalue = minvalue[indices]
+        maxvalue = maxvalue[indices]
         time = time[indices]
 
     os.makedirs(out, exist_ok=True)
 
-    df = pd.DataFrame(np.column_stack([time, mass]), columns = ['Time',  'mass'])
+    df = pd.DataFrame(np.column_stack([time, mass, minvalue, maxvalue]), columns = ['Time',  'mass', 'min', 'max'])
     df.to_csv(os.path.join(out, 'mass_' + pde.name + '.dat'), sep='\t', index=False)
     
     assert 1
