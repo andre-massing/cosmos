@@ -136,7 +136,6 @@ class ADRBoundaryStabBDF1Model(BasePDEModel):
         elif self._solver.ngsmesh.dim == 3:
             jump_dudn = (trial.Trace().Deriv() - trial_d.Trace())*nE
             jump_dvdn = (test.Trace().Deriv() - test_d.Trace())*nE
-        # stab = (Norm(b_gfu))*h**2
         stab = Norm(b_gfu)*h**2
         epsilon = 1e-8
         if self._solver.ngsmesh.dim == 2:
