@@ -150,7 +150,7 @@ def generate_boundary_ellipse(maxh = 0.1, order_g = 1, a=1, b=1, c=1):
 '''
 Sigar
 '''
-def generate_boundary_sigar(maxh=0.1, order_g = 1, center=csg.Pnt(0,0,0), r = 1.0, h= 2):
+def generate_boundary_cigar(maxh=0.1, order_g = 1, center=csg.Pnt(0,0,0), r = 1.0, h= 2):
 
     cyl = occ.Cylinder((0,-h/2,0), occ.Y, r=r, h=h)
     sphere1 = occ.Sphere( (0,h/2,0), r)

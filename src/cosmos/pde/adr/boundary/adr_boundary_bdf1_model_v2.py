@@ -13,14 +13,14 @@ from cosmos.core.utils import MandBP
 from ngsolve.webgui import Draw
 import time
 
-class ADRVolumeStabBDF1Model(BasePDEModel):
+class ADRBoundaryBDF1Model(BasePDEModel):
 
-    def __init__(self, name:str = 'ADRVolumeStabBDF1Model', model:CosmosModel = None, compartment:CosmosCompartment = None):
+    def __init__(self, name:str = 'ADRBoundaryBDF1Model', model:CosmosModel = None, compartment:CosmosCompartment = None):
         
         super().__init__(name=name, model = model, compartment=compartment)
         
-        self.is_bnd = False
-        self.is_vol = True
+        self.is_bnd = True
+        self.is_vol = False
         self.name = name
         self.model = model
         self.compartment = compartment
@@ -34,16 +34,13 @@ class ADRVolumeStabBDF1Model(BasePDEModel):
         self.params["subdivision"] = 0
 
         self.fes = H1(model.parentmesh, order = self.params["fes_order"], 
-                                definedon = compartment.domain, dgjumps = True)
+                                definedon = compartment.domain)
         fes_vector = VectorH1(model.parentmesh, order = self.params["fes_order"], 
                                 definedon = compartment.domain)
         
         self.gfu = GridFunction(self.fes)
         self.gfu_old = GridFunction(self.fes)
-        self.output_fields["sol"] = OutputField(self.gfu, "sol", VOL)
-
-        self.deform = GridFunction(self.model.dX.space)
-        self.deform.vec.data = self.model.dX.vec.data
+        self.output_fields["sol"] = OutputField(self.gfu, "sol", BND)
 
         # Creating GridFunctions for the Fields
         self.b_gfu = GridFunction(fes_vector)
@@ -65,19 +62,75 @@ class ADRVolumeStabBDF1Model(BasePDEModel):
 
         self.gfu.Set(self.params['u0'], definedon = self.compartment.domain, dual = True)
 
+        trial, test = self.fes.TnT()
+        self.A = BilinearForm(self.fes)
+        self.F = LinearForm(self.fes)
+
+        n = specialcf.normal(self.model.dim)
+        Ps = Id(self.model.dim) - OuterProduct(n, n)
+        h = self.cfg.h
+        alpha = 5 * self.params["fes_order"] * (self.params["fes_order"]+1)
+        tE = specialcf.tangential(self.model.dim)
+        if self.model.dim == 2:
+            facet_space = self.fes
+            nE = specialcf.tangential(self.model.dim)
+        else:
+            facet_space = FacetSurface(self.model.parentmesh, order = 0)
+            nE = Cross(n, tE)
+
+        ##############################################
+        # AAA this has to be updated carefully in the new version
+        self.deform = GridFunction(self.model.dX.space)
+        deform_old = self.model.dX 
+        ##############################################
+
+        self.A += self.c_gfu*trial*test*ds(deformation = self.deform)
+        self.A += self.d_gfu*grad(trial).Trace()*grad(test).Trace()*ds(deformation = self.deform)
+                
+        if self.params['Dir_bnd']:
+            dir_bnd_gfu = GridFunction(facet_space)
+            dir_bnd_gfu.Set(1, definedon = self.model.parentmesh.BBoundaries(self.params['Dir_bnd']))
+            self.A += - dir_bnd_gfu*self.d_gfu*InnerProduct(nE, grad(trial).Trace())*test*ds(element_boundary=True, deformation = self.deform) \
+                - dir_bnd_gfu*self.d_gfu*InnerProduct(nE, grad(test).Trace())*trial*ds(element_boundary=True, deformation = self.deform)\
+                + dir_bnd_gfu*self.d_gfu*alpha/h*trial*test*ds(element_boundary=True, deformation = self.deform)
+
+        self.A += -self.b_gfu*grad(test).Trace() * trial*ds(deformation = self.deform)
+        bnd_gfu = GridFunction(facet_space)
+        bnd_gfu.Set(1, definedon = self.model.parentmesh.BBoundaries(self.params['Dir_bnd']+'|'+self.params['Neu_bnd']))
+        self.A += bnd_gfu*IfPos(self.b_gfu*nE, self.b_gfu*nE*trial, CF(0))*test\
+            *ds(element_boundary=True, deformation = self.deform)
+        
+        self.A += 1/self.model.dt*trial*test*ds(deformation = self.deform)
+
+        self.F += self.rhs_gfu*test*ds(deformation = self.deform)
+        
+        if self.params['Dir_bnd']:
+            self.F += dir_bnd_gfu*self.d_gfu*alpha/h*self.u_bnd_gfu*test*ds(element_boundary=True, deformation = self.deform)\
+                - dir_bnd_gfu*self.d_gfu*InnerProduct(nE, grad(test).Trace())*self.u_bnd_gfu*ds(element_boundary=True, deformation = self.deform)
+        if self.params['Neu_bnd']:
+            neu_bnd_gfu = GridFunction(facet_space)
+            neu_bnd_gfu.Set(1, definedon = self.model.parentmesh.BBoundaries(self.params['Neu_bnd']))
+            self.F += neu_bnd_gfu*self.d_gfu*self.gradu_gfu*nE*test*ds(element_boundary=True, deformation = self.deform)
+
+        self.F += -bnd_gfu*IfPos(self.b_gfu*nE, CF(0), self.b_gfu*nE*self.u_bnd_gfu)*test*ds(element_boundary=True, deformation = self.deform)
+
+        self.F += 1/self.model.dt*self.gfu_old*test*ds(deformation = deform_old)
+
+        self.A.Assemble()
+        self.invA = self.A.mat.Inverse(freedofs = self.fes.FreeDofs())
+
         if self.params["mass_preserving"] and self.params["fes_order"]>1:
             raise Exception('Mass preservation not yet implemented for fes_order>1')
         if self.params["bounds"] and self.params["fes_order"]>1:
             raise Exception('Bounds preservation not yet implemented for fes_order>1')
         
         if self.params["mass_preserving"]:
+            ir_segm = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
             ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-            ir_tet = IntegrationRule(points  = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)], \
-                                     weights = [1/24, 1/24, 1/24, 1/24])
-            dx_lumped = dx(intrules = {  TRIG : ir_trig , TET : ir_tet }, deformation = self.deform)
+            ds_lumped = ds(intrules = {  SEGM : ir_segm, TRIG : ir_trig }, deformation = self.model.dX)
             self.Amp = BilinearForm(self.gfu.space, symmetric = True)
             u, v = self.gfu.space.TnT()
-            self.Amp += u*v*dx_lumped
+            self.Amp += u*v*ds_lumped
             self.Amp.Assemble()
             rows,cols,vals = self.Amp.mat.COO()
             weights = sp.csr_matrix((vals,(rows,cols))).diagonal()
@@ -104,66 +157,23 @@ class ADRVolumeStabBDF1Model(BasePDEModel):
         
         self.gfu_old.vec.data = self.gfu.vec.data
 
-        trial, test = self.fes.TnT()
-        self.A = BilinearForm(self.fes)
-        self.F = LinearForm(self.fes)
+    def Solve(self):
 
-        n = specialcf.normal(self.model.dim)
-        h = self.cfg.h
-        alpha = 5 * self.params["fes_order"] * (self.params["fes_order"]+1)
+        self.params['ale_velocity'].update()
 
-        ##############################################
-        # AAA this has to be updated carefully in the new version
-        self.deform.Set(self.model.dX + self.model.dt*self.params['ale_velocity']().Compile(), dual = True, definedon = self.compartment.domain)
-        deform_old = self.model.dX 
-        ##############################################
+        self.deform.Set(self.model.dX + self.ale_velocity_gfu*self.model.dt, definedon = self.compartment.domain)
 
         self.model.time.helper.t.Set(self.model.time.t.Get() + self.model.time.dt.Get())
 
-        c = self.params["c"]().Compile()
-        d = self.params["d"]().Compile()
-        b = self.params["b"]().Compile()
-        rhs = self.params["rhs"]().Compile()
-        u_bnd = self.params["u_bnd"]().Compile()
-        gradu_bnd = self.params["gradu_bnd"]().Compile()
-
-        self.A += c*trial*test*dx(deformation =self.deform)
-        self.A += d*grad(trial)*grad(test)*dx(deformation =self.deform)
-                
-        if self.params['Dir_bnd']:
-            self.A += - d*InnerProduct(n, grad(trial))*test*ds(definedon = self.params['Dir_bnd'], skeleton=True, deformation =self.deform) \
-                - d*InnerProduct(n, grad(test))*trial*ds(definedon = self.params['Dir_bnd'], skeleton=True, deformation =self.deform)\
-                + d*alpha/h*trial*test*ds(definedon = self.params['Dir_bnd'], skeleton = True, deformation =self.deform)\
-
-        self.A += -b*grad(test) * trial*dx(deformation =self.deform)
-        stab = (Norm(b))*h**2
-        jump_u = grad(trial)-grad(trial).Other()
-        jump_v = grad(test)-grad(test).Other()
-        self.A += stab*jump_u*jump_v*dx(deformation = self.deform, skeleton = True)
-        self.A += IfPos(b*n, b*n*trial, CF(0))*test\
-            *ds(deformation =self.deform)
-        
-        self.A += 1/self.model.dt*trial*test*dx(deformation =self.deform)
-
-        self.F += rhs*test*dx(deformation =self.deform)
-        
-        if self.params['Dir_bnd']:
-            self.F += d*alpha/h*u_bnd*test*ds(definedon = self.params['Dir_bnd'], skeleton = True, deformation =self.deform)\
-                - d*InnerProduct(n, grad(test))*u_bnd*ds(definedon = self.params['Dir_bnd'], skeleton=True, deformation =self.deform)
-        if self.params['Neu_bnd']:
-            self.F += d*gradu_bnd*n*test*ds(definedon = self.params['Neu_bnd'], deformation =self.deform)
-
-        self.F += -IfPos(b*n, CF(0), b*n*u_bnd)*test*ds(deformation =self.deform)
-        self.F += 1/self.model.dt*self.gfu_old*test*dx(deformation = deform_old)
-        
-        self.A.Assemble()
-        self.invA = self.A.mat.Inverse(freedofs = self.fes.FreeDofs())
-        self.F.Assemble()
+        for key, field in self.params.items():
+            if isinstance(field, InputField):
+                field.update()
 
         self.model.time.helper.t.Set(self.model.time.t.Get())
 
-    def Solve(self):
-
+        self.A.Assemble()
+        self.invA.Update()
+        self.F.Assemble()
         self.gfu.vec.data = self.invA*self.F.vec
 
         if self.params["bounds"] and not self.params["mass_preserving"]:
@@ -195,5 +205,7 @@ class ADRVolumeStabBDF1Model(BasePDEModel):
             self.gfu.vec.data = gfu_new
 
     def PostProcess(self):
-
+        
         pass
+
+        

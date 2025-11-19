@@ -13,9 +13,9 @@ from cosmos.core.utils import MandBP
 from ngsolve.webgui import Draw
 import time
 
-class ADRBoundaryStabBDF1Model(BasePDEModel):
+class ADRBoundarySystemBDF1Model(BasePDEModel):
 
-    def __init__(self, name:str = 'ADRBoundaryStabBDF1Model', model:CosmosModel = None, compartment:CosmosCompartment = None):
+    def __init__(self, name:str = 'ADRBoundarySystemBDF1Model', model:CosmosModel = None, compartment:CosmosCompartment = None):
         
         super().__init__(name=name, model = model, compartment=compartment)
         

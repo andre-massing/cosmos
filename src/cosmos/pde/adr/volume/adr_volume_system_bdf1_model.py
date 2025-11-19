@@ -13,14 +13,14 @@ from cosmos.core.utils import MandBP
 from ngsolve.webgui import Draw
 import time
 
-class ADRBoundaryStabBDF1Model(BasePDEModel):
+class ADRVolumeSystemBDF1Model(BasePDEModel):
 
-    def __init__(self, name:str = 'ADRBoundaryStabBDF1Model', model:CosmosModel = None, compartment:CosmosCompartment = None):
+    def __init__(self, name:str = 'ADRVolumeSystemBDF1Model', model:CosmosModel = None, compartment:CosmosCompartment = None):
         
         super().__init__(name=name, model = model, compartment=compartment)
         
-        self.is_bnd = True
-        self.is_vol = False
+        self.is_bnd = False
+        self.is_vol = True
         self.name = name
         self.model = model
         self.compartment = compartment
@@ -33,34 +33,25 @@ class ADRBoundaryStabBDF1Model(BasePDEModel):
         self.params["u0"] = CF(0)
         self.params["subdivision"] = 0
 
-        V = H1(model.parentmesh, order = self.params["fes_order"], 
-                                definedon = compartment.domain)
-        if self.model.dim == 2:
-            dV = H1(self.model.parentmesh, order = self.params["fes_order"],
-                definedon=compartment.domain)
-        else:
-            dV = NormalFacetSurface(self.model.parentmesh, order = self.params["fes_order"]-1,
-                definedon=compartment.domain)
-        self.fes = V*dV
+        self.fes = H1(model.parentmesh, order = self.params["fes_order"], 
+                                definedon = compartment.domain, dgjumps = True)
         fes_vector = VectorH1(model.parentmesh, order = self.params["fes_order"], 
                                 definedon = compartment.domain)
         
         self.gfu = GridFunction(self.fes)
         self.gfu_old = GridFunction(self.fes)
-        self.gfu_sol, self.gfu_sol_d = self.gfu.components
-        self.gfu_sol_old = self.gfu_old.components[0]
-        self.output_fields["sol"] = OutputField(self.gfu_sol, "sol", BND)
+        self.output_fields["sol"] = OutputField(self.gfu, "sol", VOL)
 
         self.deform = GridFunction(self.model.dX.space)
         self.deform.vec.data = self.model.dX.vec.data
 
         # Creating GridFunctions for the Fields
         self.b_gfu = GridFunction(fes_vector)
-        self.d_gfu = GridFunction(V)
-        self.c_gfu = GridFunction(V)
-        self.rhs_gfu = GridFunction(V)
+        self.d_gfu = GridFunction(self.fes)
+        self.c_gfu = GridFunction(self.fes)
+        self.rhs_gfu = GridFunction(self.fes)
         self.gradu_gfu = GridFunction(fes_vector)
-        self.u_bnd_gfu = GridFunction(V)
+        self.u_bnd_gfu = GridFunction(self.fes)
         self.ale_velocity_gfu = GridFunction(fes_vector)
         self.params["b"] = InputField(self.b_gfu, CF((0,)*compartment.dim_emd), "b", self.compartment.domain)
         self.params["d"] = InputField(self.d_gfu, CF(0), "d", self.compartment.domain)
@@ -72,7 +63,7 @@ class ADRBoundaryStabBDF1Model(BasePDEModel):
 
     def Initialize(self):
 
-        self.gfu_sol.Set(self.params['u0'], definedon = self.compartment.domain, dual = True)
+        self.gfu.Set(self.params['u0'], definedon = self.compartment.domain, dual = True)
 
         if self.params["mass_preserving"] and self.params["fes_order"]>1:
             raise Exception('Mass preservation not yet implemented for fes_order>1')
@@ -80,16 +71,17 @@ class ADRBoundaryStabBDF1Model(BasePDEModel):
             raise Exception('Bounds preservation not yet implemented for fes_order>1')
         
         if self.params["mass_preserving"]:
-            ir_segm = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
             ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
-            ds_lumped = ds(intrules = {  SEGM : ir_segm, TRIG : ir_trig }, deformation = self.deform)
-            self.Amp = BilinearForm(self.gfu_sol.space, symmetric = True)
-            u, v = self.gfu_sol.space.TnT()
-            self.Amp += u*v*ds_lumped
+            ir_tet = IntegrationRule(points  = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)], \
+                                     weights = [1/24, 1/24, 1/24, 1/24])
+            dx_lumped = dx(intrules = {  TRIG : ir_trig , TET : ir_tet }, deformation = self.deform)
+            self.Amp = BilinearForm(self.gfu.space, symmetric = True)
+            u, v = self.gfu.space.TnT()
+            self.Amp += u*v*dx_lumped
             self.Amp.Assemble()
             rows,cols,vals = self.Amp.mat.COO()
             weights = sp.csr_matrix((vals,(rows,cols))).diagonal()
-            gfu0_vec = self.gfu_sol.vec.Copy().FV().NumPy()
+            gfu0_vec = self.gfu.vec.Copy().FV().NumPy()
             self.mass0 = np.sum(weights*gfu0_vec)
         
         if self.params["bounds"]:
@@ -112,21 +104,13 @@ class ADRBoundaryStabBDF1Model(BasePDEModel):
         
         self.gfu_old.vec.data = self.gfu.vec.data
 
-        (trial, trial_d), (test, test_d) = self.fes.TnT()
+        trial, test = self.fes.TnT()
         self.A = BilinearForm(self.fes)
         self.F = LinearForm(self.fes)
 
         n = specialcf.normal(self.model.dim)
-        Ps = Id(self.model.dim) - OuterProduct(n, n)
         h = self.cfg.h
         alpha = 5 * self.params["fes_order"] * (self.params["fes_order"]+1)
-        tE = specialcf.tangential(self.model.dim)
-        if self.model.dim == 2:
-            facet_space = self.fes
-            nE = specialcf.tangential(self.model.dim)
-        else:
-            facet_space = FacetSurface(self.model.parentmesh, order = 0)
-            nE = Cross(n, tE)
 
         ##############################################
         # AAA this has to be updated carefully in the new version
@@ -143,53 +127,35 @@ class ADRBoundaryStabBDF1Model(BasePDEModel):
         u_bnd = self.params["u_bnd"]().Compile()
         gradu_bnd = self.params["gradu_bnd"]().Compile()
 
-        self.A += c*trial*test*ds(deformation = self.deform)
-        self.A += d*grad(trial).Trace()*grad(test).Trace()*ds(deformation = self.deform)
+        self.A += c*trial*test*dx(deformation =self.deform)
+        self.A += d*grad(trial)*grad(test)*dx(deformation =self.deform)
                 
         if self.params['Dir_bnd']:
-            dir_bnd_gfu = GridFunction(facet_space)
-            dir_bnd_gfu.Set(1, definedon = self.model.parentmesh.BBoundaries(self.params['Dir_bnd']))
-            self.A += - dir_bnd_gfu*d*InnerProduct(nE, grad(trial).Trace())*test*ds(element_boundary=True, deformation = self.deform) \
-                - dir_bnd_gfu*d*InnerProduct(nE, grad(test).Trace())*trial*ds(element_boundary=True, deformation = self.deform)\
-                + dir_bnd_gfu*d*alpha/h*trial*test*ds(element_boundary=True, deformation = self.deform)
+            self.A += - d*InnerProduct(n, grad(trial))*test*ds(definedon = self.params['Dir_bnd'], skeleton=True, deformation =self.deform) \
+                - d*InnerProduct(n, grad(test))*trial*ds(definedon = self.params['Dir_bnd'], skeleton=True, deformation =self.deform)\
+                + d*alpha/h*trial*test*ds(definedon = self.params['Dir_bnd'], skeleton = True, deformation =self.deform)\
 
-        self.A += -b*grad(test).Trace() * trial*ds(deformation = self.deform)
-        bnd_gfu = GridFunction(facet_space)
-        bnd_gfu.Set(1, definedon = self.model.parentmesh.BBoundaries(self.params['Dir_bnd']+'|'+self.params['Neu_bnd']))
-        self.A += bnd_gfu*IfPos(b*nE, b*nE*trial, CF(0))*test\
-            *ds(element_boundary=True, deformation = self.deform)
+        self.A += -b*grad(test) * trial*dx(deformation =self.deform)
+        stab = (Norm(b))*h**2
+        jump_u = grad(trial)-grad(trial).Other()
+        jump_v = grad(test)-grad(test).Other()
+        self.A += stab*jump_u*jump_v*dx(deformation = self.deform, skeleton = True)
+        self.A += IfPos(b*n, b*n*trial, CF(0))*test\
+            *ds(deformation =self.deform)
         
-        if self.model.dim == 2:
-            tEc = CF((-n[1], n[0]))
-            jump_dudn = (trial.Trace().Deriv() - trial_d*tEc)*nE
-            jump_dvdn = (test.Trace().Deriv() - test_d*tEc)*nE
-        elif self.model.dim == 3:
-            jump_dudn = (trial.Trace().Deriv() - trial_d.Trace())*nE
-            jump_dvdn = (test.Trace().Deriv() - test_d.Trace())*nE
-        stab = Norm(b)*h**2
-        self.A +=  stab*InnerProduct(jump_dudn,jump_dvdn)\
-                *ds(element_boundary=True, deformation = self.deform)
-        self.A +=  -1*stab*bnd_gfu*InnerProduct(jump_dudn,jump_dvdn)\
-                *ds(element_boundary=True, deformation = self.deform)
-        self.A +=  bnd_gfu*InnerProduct(trial_d.Trace(),test_d.Trace())\
-                *ds(element_boundary=True, deformation = self.deform)
-        
-        self.A += 1/self.model.dt*trial*test*ds(deformation = self.deform)
+        self.A += 1/self.model.dt*trial*test*dx(deformation =self.deform)
 
-        self.F += rhs*test*ds(deformation = self.deform)
+        self.F += rhs*test*dx(deformation =self.deform)
         
         if self.params['Dir_bnd']:
-            self.F += dir_bnd_gfu*d*alpha/h*u_bnd*test*ds(element_boundary=True, deformation = self.deform)\
-                - dir_bnd_gfu*d*InnerProduct(nE, grad(test).Trace())*u_bnd*ds(element_boundary=True, deformation = self.deform)
+            self.F += d*alpha/h*u_bnd*test*ds(definedon = self.params['Dir_bnd'], skeleton = True, deformation =self.deform)\
+                - d*InnerProduct(n, grad(test))*u_bnd*ds(definedon = self.params['Dir_bnd'], skeleton=True, deformation =self.deform)
         if self.params['Neu_bnd']:
-            neu_bnd_gfu = GridFunction(facet_space)
-            neu_bnd_gfu.Set(1, definedon = self.model.parentmesh.BBoundaries(self.params['Neu_bnd']))
-            self.F += neu_bnd_gfu*d*gradu_bnd*nE*test*ds(element_boundary=True, deformation = self.deform)
+            self.F += d*gradu_bnd*n*test*ds(definedon = self.params['Neu_bnd'], deformation =self.deform)
 
-        self.F += -bnd_gfu*IfPos(b*nE, CF(0), b*nE*u_bnd)*test*ds(element_boundary=True, deformation = self.deform)
-
-        self.F += 1/self.model.dt*self.gfu_sol_old*test*ds(deformation = deform_old)
-
+        self.F += -IfPos(b*n, CF(0), b*n*u_bnd)*test*ds(deformation =self.deform)
+        self.F += 1/self.model.dt*self.gfu_old*test*dx(deformation = deform_old)
+        
         self.A.Assemble()
         self.invA = self.A.mat.Inverse(freedofs = self.fes.FreeDofs())
         self.F.Assemble()
@@ -202,9 +168,9 @@ class ADRBoundaryStabBDF1Model(BasePDEModel):
 
         if self.params["bounds"] and not self.params["mass_preserving"]:
 
-            gfu_vec = self.gfu_sol.vec.Copy().FV().NumPy()
+            gfu_vec = self.gfu.vec.Copy().FV().NumPy()
             gfu_new = MandBP(gfu_vec, BP = self.params["bounds"])
-            self.gfu_sol.vec.data = gfu_new
+            self.gfu.vec.data = gfu_new
 
         elif self.params["mass_preserving"]:
 
@@ -216,7 +182,7 @@ class ADRBoundaryStabBDF1Model(BasePDEModel):
             self.Amp.Assemble()
             rows,cols,vals = self.Amp.mat.COO()
             weights = sp.csr_matrix((vals,(rows,cols))).diagonal()
-            gfu_vec = self.gfu_sol.vec.Copy().FV().NumPy()
+            gfu_vec = self.gfu.vec.Copy().FV().NumPy()
 
             if self.params["bounds"]:
                 BP = self.params["bounds"]
@@ -226,7 +192,7 @@ class ADRBoundaryStabBDF1Model(BasePDEModel):
             gfu_new = MandBP(gfu_vec, weights=weights, BP=BP,
                                 MP=self.params["mass_preserving"], mass0=self.mass0, dt = dt)
 
-            self.gfu_sol.vec.data = gfu_new
+            self.gfu.vec.data = gfu_new
 
     def PostProcess(self):
 
