@@ -13,9 +13,9 @@ from cosmos.core.utils import MandBP
 from ngsolve.webgui import Draw
 import time
 
-class GeometricalFlowModel(BasePDEModel):
+class GeometricalFlowStationaryModel(BasePDEModel):
 
-    def __init__(self, name:str = 'GeometricalFlowModel', model:CosmosModel = None, compartment:CosmosCompartment = None):
+    def __init__(self, name:str = 'GeometricalFlowStationaryModel', model:CosmosModel = None, compartment:CosmosCompartment = None):
         
         super().__init__(name=name, model = model, compartment=compartment)
         
@@ -28,7 +28,6 @@ class GeometricalFlowModel(BasePDEModel):
         self.cn_bboundary = compartment.clamped_bbnd + '|' + compartment.navier_bbnd
         self.navier_bbnd = compartment.navier_bbnd
         self.params["subdivision"] = 0
-        self.params["sp_curv"] = CF(0)
         self.params["rhs"] = Field(CF(0))
         self.params["alpha"] = CF(1)
         self.params["beta"] = CF(0)
@@ -40,12 +39,13 @@ class GeometricalFlowModel(BasePDEModel):
         self.scalarspace_navier_bbnd = H1(model.parentmesh, order = 1, definedon =compartment.domain, dirichlet_bbnd = self.navier_bbnd)
         self.discscalarspace = SurfaceL2(model.parentmesh, order = 0, definedon =compartment.domain)
 
-        self.fes = self.scalarspace_bbnd*self.scalarspace_navier_bbnd
+        self.fes = self.scalarspace_bbnd*self.scalarspace_navier_bbnd*self.scalarspace_navier_bbnd
         self.gfu = GridFunction(self.fes)
-        self.V_h, self.kappa_h = self.gfu.components
+        self.V_h, self.kappa_h, self.sp_curv_h = self.gfu.components
         
         self.output_fields["velocity"] = OutputField(self.V_h, "velocity", BND)
         self.output_fields["mean_curvature"] = OutputField(self.kappa_h, "mean_curvature", BND)
+        self.output_fields["spontaneous_curvature"] = OutputField(self.sp_curv_h, "spontaneous_curvature", BND)
 
         dim = model.dim
         self.ns = specialcf.normal(dim)
@@ -59,10 +59,9 @@ class GeometricalFlowModel(BasePDEModel):
         self.normal = GridFunction(self.vectorspace)
         self.Amap_h = GridFunction(self.vectorspace_bbnd)
         self.kappa_h_old = GridFunction(self.scalarspace_navier_bbnd)
+        self.sp_curv_h_old = GridFunction(self.scalarspace_navier_bbnd)
         self.W_h_old = GridFunction(self.discscalarspace)
         self.J_h_old = GridFunction(self.discscalarspace)
-
-        self.sp_curv_gfu = GridFunction(self.scalarspace_bbnd)
 
     def Initialize(self):
 
@@ -89,14 +88,15 @@ class GeometricalFlowModel(BasePDEModel):
 
         gfu0.vec.data = invA0*F0.vec
         self.kappa_h.vec.data = kappa0_h.vec.data
+        self.sp_curv_h.vec.data = kappa0_h.vec.data
 
         if self.model.io.root != None:
             output_vtk_folder = os.path.join(self.model.io.root, self.name)
             output_vtk_name = os.path.join(output_vtk_folder, self.name)
             os.makedirs(output_vtk_folder, exist_ok=True)
             self.vtk = VTKOutput(self.model.parentmesh,
-                                coefs=[self.V_h, self.kappa_h],
-                                names =['velocity', 'mean_curvature'],
+                                coefs=[self.V_h, self.kappa_h, self.sp_curv_h],
+                                names =['velocity', 'mean_curvature', 'spontaneous_curvature'],
                                 filename= output_vtk_name, 
                                 subdivision = self.params['subdivision'])
             #######################
@@ -105,6 +105,7 @@ class GeometricalFlowModel(BasePDEModel):
     def PreProcess(self):
 
         self.kappa_h_old.vec.data = self.kappa_h.vec.data
+        self.sp_curv_h_old.vec.data = self.sp_curv_h.vec.data
 
         deform = self.model.dX
         dt = self.model.dt.Get()
@@ -120,41 +121,45 @@ class GeometricalFlowModel(BasePDEModel):
         self.Amap_h.Set(self.identity - dt*vectorV_h_old, dual = True, definedon =self.compartment.domain)
         self.J_h_old.Set(sqrt(Det(Grad(self.Amap_h).Trace().trans*Grad(self.Amap_h).Trace() + OuterProduct(self.ns, self.ns))), definedon=self.compartment.domain)
 
-        (V, kappa), (phi, xsi) = self.fes.TnT()
+        (V, kappa, sp_curv), (phi, xsi, zeta) = self.fes.TnT()
         
         self.A = BilinearForm(self.fes)
         self.A += InnerProduct(V, phi)*ds(deformation = deform)
         self.A += -alpha*InnerProduct(grad(kappa).Trace(), grad(phi).Trace())*ds(deformation = deform)
+        self.A += alpha*InnerProduct(grad(sp_curv).Trace(), grad(phi).Trace())*ds(deformation = deform)
         self.A += alpha*InnerProduct(self.W_h_old*kappa, phi)*ds(deformation = deform)
-        self.A += -alpha*0.5*InnerProduct((self.kappa_h_old-self.params['sp_curv'])*self.kappa_h_old*kappa, phi)*ds(deformation = deform)
+        self.A += -alpha*InnerProduct(self.W_h_old*sp_curv, phi)*ds(deformation = deform)
+        self.A += -alpha*0.5*InnerProduct((self.kappa_h_old-self.sp_curv_h_old)*self.kappa_h_old*kappa, phi)*ds(deformation = deform)
+        self.A += alpha*0.5*InnerProduct((self.kappa_h_old-self.sp_curv_h_old)*self.kappa_h_old*sp_curv, phi)*ds(deformation = deform)
         self.A += -beta*InnerProduct(grad(kappa).Trace(), grad(phi).Trace())*ds(deformation = deform)
         self.A += -gamma*InnerProduct(kappa, phi)*ds(deformation = deform)
 
         self.A += InnerProduct(kappa/dt,xsi)*ds(deformation = deform)
+        self.A += -1*InnerProduct(sp_curv/dt,xsi)*ds(deformation = deform)
         self.A += -0.5*(InnerProduct(vectorV_h_old, grad(kappa).Trace()*xsi) - InnerProduct(vectorV_h_old, grad(xsi).Trace()*kappa))*ds(deformation = deform)
+        self.A += 0.5*(InnerProduct(vectorV_h_old, grad(sp_curv).Trace()*xsi) - InnerProduct(vectorV_h_old, grad(xsi).Trace()*sp_curv))*ds(deformation = deform)
         self.A += InnerProduct(grad(V).Trace(), grad(xsi).Trace())*ds(deformation = deform)
         self.A += -InnerProduct(self.W_h_old*V, xsi)*ds(deformation = deform)
-        self.A += 0.5*InnerProduct(V, (self.kappa_h_old - self.params['sp_curv'])*self.kappa_h_old*xsi)*ds(deformation = deform)
+        self.A += 0.5*InnerProduct(V, (self.kappa_h_old - self.sp_curv_h_old)*self.kappa_h_old*xsi)*ds(deformation = deform)
 
-        self.A.Assemble()
-        self.invA = self.A.mat.Inverse(freedofs = self.fes.FreeDofs())
+        self.A += InnerProduct(sp_curv/dt, zeta)*ds(deformation = deform)
+        self.A += InnerProduct(-vectorV_h_old*grad(sp_curv).Trace(), zeta)*ds(deformation = deform)
 
         self.F = LinearForm(self.fes)
 
         self.F += InnerProduct(rhs,phi)*ds(deformation = deform)
 
-        self.F += alpha*InnerProduct(self.W_h_old*self.params['sp_curv'], phi)*ds(deformation = deform)
-        self.F += -alpha*0.5*InnerProduct((self.kappa_h_old-self.params['sp_curv'])*self.kappa_h_old*self.params['sp_curv'], phi)*ds(deformation = deform)
+        self.F += InnerProduct((self.kappa_h_old - self.sp_curv_h_old)/dt*sqrt(self.J_h_old),xsi)*ds(deformation = deform)
+        self.F += InnerProduct(self.sp_curv_h_old/dt, zeta)*ds(deformation = deform)
 
-        self.F += InnerProduct(self.params['sp_curv']/dt,xsi)*ds(deformation = deform)
-        self.F += InnerProduct((self.kappa_h_old - self.params['sp_curv'])/dt*sqrt(self.J_h_old),xsi)*ds(deformation = deform)
-        self.F += -0.5*(- InnerProduct(vectorV_h_old, grad(xsi).Trace()*self.params['sp_curv']))*ds(deformation = deform)
-
+        self.A.Assemble()
+        self.invA = self.A.mat.Inverse(freedofs = self.fes.FreeDofs())
         self.F.Assemble()
 
     def Solve(self):
 
-        self.kappa_h.Set(self.params['sp_curv'], definedon = self.model.parentmesh.BBoundaries(self.navier_bbnd))
+        self.kappa_h.Set(self.sp_curv_h_old, definedon = self.model.parentmesh.BBoundaries(self.navier_bbnd))
+        self.sp_curv_h.Set(self.sp_curv_h_old, definedon = self.model.parentmesh.BBoundaries(self.navier_bbnd))
         self.V_h.vec.data[:] = 0
 
         self.A.Assemble()

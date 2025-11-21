@@ -30,35 +30,34 @@ class CosmosIOManager:
                 self.sample_rate = self.params['sample_rate']
             else:
                 raise Exception(f'Sample rate not set for output in folder {self.root}')
-        else:
-            raise Exception('Root for saving results not set')
 
-        output_model_data = os.path.join(self.root, 'model_data.txt')
-        with open(output_model_data, "w") as f:
-            self.print_model_data(model, file=f)
+            output_model_data = os.path.join(self.root, 'model_data.txt')
+            with open(output_model_data, "w") as f:
+                self.print_model_data(model, file=f)
 
-        self.output_step_data = os.path.join(self.root, 'output_step_data.txt')
-        if 'output_callables' in self.params:
-            if isinstance(self.params['output_callables'], dict):
-                for key in self.params['output_callables'].keys():
-                    self.output_step_headers.append(key)
-            else:
-                raise Exception('output_callables has to be a dictionary of callables')
+            self.output_step_data = os.path.join(self.root, 'output_step_data.txt')
+            if 'output_callables' in self.params:
+                if isinstance(self.params['output_callables'], dict):
+                    for key in self.params['output_callables'].keys():
+                        self.output_step_headers.append(key)
+                else:
+                    raise Exception('output_callables has to be a dictionary of callables')
 
-        with open(self.output_step_data, "w") as f:
-            print(*[x for x in self.output_step_headers], sep="\t", file=f)
+            with open(self.output_step_data, "w") as f:
+                print(*[x for x in self.output_step_headers], sep="\t", file=f)
 
     def save_step_data(self, model: "CosmosModel"):
 
-        if model.time.iter % self.sample_rate == 0:
-            with open(self.output_step_data, "a") as f:
-                self.print_step_data(model, file=f)
+        if self.root != None:
+            if model.time.iter % self.sample_rate == 0:
+                with open(self.output_step_data, "a") as f:
+                    self.print_step_data(model, file=f)
 
-            for pde in model.pdes:
-                if pde.is_bnd:
-                    pde.vtk.Do(time = model.time.t.Get(), vb = BND)
-                else:
-                    pde.vtk.Do(time = model.time.t.Get(), vb = VOL)
+                for pde in model.pdes:
+                    if pde.is_bnd:
+                        pde.vtk.Do(time = model.time.t.Get(), vb = BND)
+                    else:
+                        pde.vtk.Do(time = model.time.t.Get(), vb = VOL)
 
     def print_model_data(self, model: "CosmosModel", file = None):
 

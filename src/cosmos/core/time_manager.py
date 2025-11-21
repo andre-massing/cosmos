@@ -16,7 +16,7 @@ class CosmosTimeManager:
         self.params = kwargs
 
         self.iter = 0
-        self.dt = Parameter(0)
+        self.dt = Parameter(0.1)
         self.t = Parameter(0)
 
         self.prev_dt = []

@@ -3,7 +3,7 @@ logger = logging.getLogger(__name__)
 
 from abc import ABC, abstractmethod
 from typing import Dict
-from cosmos.core.field import InputField, OutputField
+from cosmos.core.field import InputField, OutputField, Field
 from cosmos.config.parameters import get_config
 from cosmos.core.model import CosmosModel
 from cosmos.core.compartment import CosmosCompartment
@@ -42,7 +42,7 @@ class BasePDEModel(ABC):
         
         for key, value in kwargs.items():
             if key in self.params.keys():
-                if isinstance(self.params[key], InputField):
+                if isinstance(self.params[key], Field):
                     self.params[key].cf = value
                 else:
                     self.params[key] = value

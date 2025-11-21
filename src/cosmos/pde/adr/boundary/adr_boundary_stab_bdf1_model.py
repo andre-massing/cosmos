@@ -167,7 +167,7 @@ class ADRBoundaryStabBDF1Model(BasePDEModel):
             jump_dudn = (trial.Trace().Deriv() - trial_d.Trace())*nE
             jump_dvdn = (test.Trace().Deriv() - test_d.Trace())*nE
         stab = Norm(b)*h**2
-        self.A +=  stab*InnerProduct(jump_dudn,jump_dvdn)\
+        self.A +=  IfPos(stab, stab*InnerProduct(jump_dudn,jump_dvdn), InnerProduct(trial_d.Trace(),test_d.Trace()))\
                 *ds(element_boundary=True, deformation = self.deform)
         self.A +=  -1*stab*bnd_gfu*InnerProduct(jump_dudn,jump_dvdn)\
                 *ds(element_boundary=True, deformation = self.deform)

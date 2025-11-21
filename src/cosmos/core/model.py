@@ -109,7 +109,7 @@ class CosmosModel:
         return compartment
     
     def create_pde(self, name, pde_model: "BasePDEModel", compartment:CosmosCompartment, **kwargs):
-        pde = pde_model(name, self, compartment)
+        pde = pde_model(name, self, compartment, **kwargs)
         if pde.is_bnd and compartment.is_vol:
             raise Exception(f'Boundary PDE {pde_model} is trying to be imposed on a non-boundary domain {compartment.name} or the opposite')
         elif pde.is_vol and compartment.is_bnd:
@@ -127,9 +127,9 @@ class CosmosModel:
                 raise Exception(f'Name {name} for ALE motion has already been used. Names must be unique')
             else:
                 if compartment.is_bnd:
-                    ale = CosmosBndALEField(name, self, compartment)
+                    ale = CosmosBndALEField(name, self, compartment, **kwargs)
                 else:
-                    ale = CosmosVolALEField(name, self, compartment)
+                    ale = CosmosVolALEField(name, self, compartment, **kwargs)
                 self.ales.append(ale)
                 compartment.ale = ale
         return ale

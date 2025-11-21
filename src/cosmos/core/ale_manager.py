@@ -187,20 +187,33 @@ class CosmosBndALEField:
         (dX_pp, kappa_pp), (nu_pp, zeta_pp) = fes_pp.TnT()
         self.gfu_pp = GridFunction(fes_pp)
 
-        def deviatoric(u):
-            return Sym(Grad(u).Trace()) - Trace(Sym(Grad(u).Trace()))/model.dim*Id(model.dim)
         ir_segm = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
         ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
 
         self.A_pp = BilinearForm(fes_pp, symmetric = True)
         self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.dX)
         self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.dX)
-        self.A_pp += InnerProduct(deviatoric(dX_pp), deviatoric(nu_pp))*ds(deformation = model.dX)
+        self.A_pp += InnerProduct(1/model.dt*Grad(dX_pp).Trace(), Grad(nu_pp).Trace())*ds(deformation = model.dX)
         self.A_pp.Assemble()
         self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
 
         self.F_pp = LinearForm(fes_pp)
         self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.dX)
+
+        # def deviatoric(u):
+        #     return Sym(Grad(u).Trace()) - Trace(Sym(Grad(u).Trace()))/model.dim*Id(model.dim)
+        # ir_segm = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
+        # ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
+
+        # self.A_pp = BilinearForm(fes_pp, symmetric = True)
+        # self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.dX)
+        # self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.dX)
+        # self.A_pp += InnerProduct(deviatoric(dX_pp), deviatoric(nu_pp))*ds(deformation = model.dX)
+        # self.A_pp.Assemble()
+        # self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
+
+        # self.F_pp = LinearForm(fes_pp)
+        # self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.dX)
         
     def set_normal_velocity(self, coef):
         self.normal_velocity = Field(coef)
@@ -232,7 +245,8 @@ class CosmosBndALEField:
                 self.gfu_pp.vec.data = self.invA_pp*self.F_pp.vec
                 self.ale_displ.vec.data = self.gfu_pp.components[0].vec.data
             else:
-                self.ale_displ.Set((self.normal_velocity()*self.ns + self.Ps*self.tangential_velocity())*model.time.dt, definedon = self.compartment.domain)
+                self.gfu_norm_vel.Set(self.normal_velocity(), definedon = self.compartment.domain, dual = True)
+                self.ale_displ.Set((self.gfu_norm_vel*self.ns + self.Ps*self.tangential_velocity())*model.time.dt, definedon = self.compartment.domain)
             self.mat_displ.Set((self.normal_velocity()*self.ns + self.Ps*self.tangential_velocity())*model.time.dt, definedon = self.compartment.domain)
 
             self.ale_vel.Set(self.ale_displ/model.time.dt, definedon = self.compartment.domain)
