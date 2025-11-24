@@ -79,7 +79,6 @@ class CosmosModel:
             while self.t.Get() + self.dt.Get() <= self.time.t1:
 
                 self.step.solve_step(self)
-                self.ale.solve_ale(self)
                 self.time.next()
 
                 self.io.save_step_data(self)

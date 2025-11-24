@@ -80,9 +80,11 @@ class CosmosALEManager:
         self.gfu_bnd_mat = GridFunction(self.V)
         self.gfu_vol_ale = GridFunction(self.V)
         self.gfu_vol_mat = GridFunction(self.V)
-        self.gfu_tot_ale = GridFunction(self.V)
-        self.gfu_tot_mat = GridFunction(self.V)
+        self.ale_displacement = GridFunction(self.V)
+        self.material_displacement = GridFunction(self.V)
         self.wind = GridFunction(self.V)
+        self.ale_velocity = GridFunction(self.V)
+        self.material_velocity = GridFunction(self.V)
 
     def initialize(self, model:"CosmosModel"):
 
@@ -107,43 +109,48 @@ class CosmosALEManager:
 
         start = time.time()
 
-        self.gfu_tot_ale.vec.data[:] = 0
-        self.gfu_tot_mat.vec.data[:] = 0
+        self.ale_displacement.vec.data[:] = 0
+        self.material_displacement.vec.data[:] = 0
         
         for ale in model.ales:
             ale.update(model, self.redistribute)
 
         if self.bnd_ales:
-            self.gfu_bnd_ale.Set(self.bnd_ale_cf, definedon = model.parentmesh.Boundaries('.*'))
+            self.gfu_bnd_ale.Set(self.bnd_ale_cf, definedon = model.parentmesh.Boundaries('.*'), dual = True)
             if model.is_vol:
                 self._extend_displacement_to_bulk(self.gfu_bnd_ale)
-            self.gfu_tot_ale.vec.data += self.gfu_bnd_ale.vec.data
+            self.ale_displacement.vec.data += self.gfu_bnd_ale.vec.data
 
-            self.gfu_bnd_mat.Set(self.bnd_mat_cf, definedon = model.parentmesh.Boundaries('.*'))
+            self.gfu_bnd_mat.Set(self.bnd_mat_cf, definedon = model.parentmesh.Boundaries('.*'), dual = True)
             if model.is_vol:
                 self._extend_displacement_to_bulk(self.gfu_bnd_mat)
-            self.gfu_tot_mat.vec.data += self.gfu_bnd_mat.vec.data
+            self.material_displacement.vec.data += self.gfu_bnd_mat.vec.data
 
         if self.vol_ales:
-            self.gfu_vol_ale.Set(self.vol_ale_cf)
-            self.gfu_vol_mat.Set(self.vol_mat_cf)
+            self.gfu_vol_ale.Set(self.vol_ale_cf, dual = True)
+            self.gfu_vol_mat.Set(self.vol_mat_cf, dual = True)
 
-            self.gfu_tot_ale.vec.data += self.gfu_vol_ale.vec.data
-            self.gfu_tot_mat.vec.data += self.gfu_vol_mat.vec.data
+            self.ale_displacement.vec.data += self.gfu_vol_ale.vec.data
+            self.material_displacement.vec.data += self.gfu_vol_mat.vec.data
 
         if self.bnd_ales or self.vol_ales:
-            self.wind.Set((self.gfu_tot_mat - self.gfu_tot_ale)/model.dt, definedon = self.domain, dual = True)
+            self.wind.Set((self.material_displacement - self.ale_displacement)/model.dt, definedon = self.domain, dual = True)
+            self.ale_velocity.Set(self.ale_displacement/model.dt, definedon = self.domain, dual = True)
+            self.material_velocity.Set(self.material_displacement/model.dt, definedon = self.domain, dual = True)
 
-            self.dX.vec.data += self.gfu_tot_ale.vec.data
+        stop = time.time()
+
+        self.ale_elapsed_time = stop-start
+
+    def finalize(self, model:"CosmosModel"):
+
+        if self.bnd_ales or self.vol_ales:
+            self.dX.vec.data += self.ale_displacement.vec.data
             model.parentmesh.deformation.vec.data = self.dX.vec.data
 
         self.prev_dX.append(self.dX.vec.Copy())
         if len(self.prev_dX)>6:
             self.prev_dX.pop(0)
-
-        stop = time.time()
-
-        self.ale_elapsed_time = stop-start
 
     def _extend_displacement_to_bulk(self, gfu):
 
@@ -228,7 +235,7 @@ class CosmosBndALEField:
 
         if self.domain_velocity != None:
             self.ale_displ.Set(self.domain_velocity()*model.time.dt, definedon = self.compartment.domain)
-            self.mat_displ.Set(self.domain_velocity()*model.time.dt, definedon = self.compartment.domain)
+            self.mat_displ.vec.data = self.ale_displ.vec.data
         else:
             if self.normal_velocity == None:
                 raise Exception(f'Normal velocity for ALE {self.name} must be set')
@@ -278,7 +285,7 @@ class CosmosVolALEField:
         if self.domain_velocity == None:
             raise Exception(f'Domain velocity for ALE {self.name} must be set')
         
-        self.ale_displ.Set(self.domain_velocity()*model.time.dt, definedon = self.compartment.domain)
-        self.mat_displ.Set(self.domain_velocity()*model.time.dt, definedon = self.compartment.domain)
-        self.ale_vel.Set(self.ale_displ/model.time.dt, definedon = self.compartment.domain)
-        self.mat_vel.Set(self.mat_displ/model.time.dt, definedon = self.compartment.domain)
+        self.ale_displ.Set(self.domain_velocity()*model.time.dt, definedon = self.compartment.domain, dual = True)
+        self.mat_displ.vec.data = self.ale_displ.vec.data
+        self.ale_vel.Set(self.ale_displ/model.time.dt, definedon = self.compartment.domain, dual = True)
+        self.mat_vel.vec.data = self.ale_vel.vec.data
