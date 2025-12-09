@@ -104,6 +104,8 @@ class ADRVolumeBDF1Model(BasePDEModel):
         
         self.gfu_old.vec.data = self.gfu.vec.data
 
+    def Solve(self):
+
         trial, test = self.fes.TnT()
         self.A = BilinearForm(self.fes)
         self.F = LinearForm(self.fes)
@@ -157,8 +159,6 @@ class ADRVolumeBDF1Model(BasePDEModel):
         self.F.Assemble()
 
         self.model.time.helper.t.Set(self.model.time.t.Get())
-
-    def Solve(self):
 
         self.gfu.vec.data = self.invA*self.F.vec
 

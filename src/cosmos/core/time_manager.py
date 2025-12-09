@@ -63,9 +63,9 @@ class CosmosTimeHelper:
             if isinstance(kwargs['dt'], Parameter):
                 self.dt = kwargs['dt']
             elif isinstance(kwargs['dt'], list):
-                self.dt = Parameter(kwargs['dt'][self.iter])
+                self.dt = Parameter(kwargs['dt'][0])
             elif isinstance(kwargs['dt'], np.ndarray):
-                self.dt = Parameter(kwargs['dt'][self.iter])
+                self.dt = Parameter(kwargs['dt'][0])
             elif isinstance(kwargs['dt'], numbers.Number):
                 self.dt = Parameter(kwargs['dt'])
             else:

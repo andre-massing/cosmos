@@ -46,6 +46,8 @@ class CosmosIOManager:
             with open(self.output_step_data, "w") as f:
                 print(*[x for x in self.output_step_headers], sep="\t", file=f)
 
+            self.dX_store = GridFunction(model.ale.dX.space)
+
     def save_step_data(self, model: "CosmosModel"):
 
         if self.root != None:
@@ -55,9 +57,17 @@ class CosmosIOManager:
 
                 for pde in model.pdes:
                     if pde.is_bnd:
-                        pde.vtk.Do(time = model.time.t.Get(), vb = BND)
+                        if model.dim == 2:
+                            pde.vtk.Do(time = model.time.t.Get(), vb = VOL)
+                        else:
+                            pde.vtk.Do(time = model.time.t.Get(), vb = BND)
                     else:
                         pde.vtk.Do(time = model.time.t.Get(), vb = VOL)
+
+                if model.is_bnd:
+                    model.ale.vtk.Do(time = model.time.t.Get(), vb = BND)
+                else:
+                    model.ale.vtk.Do(time = model.time.t.Get(), vb = VOL)
 
     def print_model_data(self, model: "CosmosModel", file = None):
 

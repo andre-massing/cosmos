@@ -40,6 +40,7 @@ class ADRVolumeStabBDF1Model(BasePDEModel):
         
         self.gfu = GridFunction(self.fes)
         self.gfu_old = GridFunction(self.fes)
+        self.sol = self.gfu
         self.output_fields["sol"] = OutputField(self.gfu, "sol", VOL)
 
         self.deform = GridFunction(self.model.dX.space)
@@ -104,6 +105,8 @@ class ADRVolumeStabBDF1Model(BasePDEModel):
         
         self.gfu_old.vec.data = self.gfu.vec.data
 
+    def Solve(self):
+
         trial, test = self.fes.TnT()
         self.A = BilinearForm(self.fes)
         self.F = LinearForm(self.fes)
@@ -161,8 +164,6 @@ class ADRVolumeStabBDF1Model(BasePDEModel):
         self.F.Assemble()
 
         self.model.time.helper.t.Set(self.model.time.t.Get())
-
-    def Solve(self):
 
         self.gfu.vec.data = self.invA*self.F.vec
 

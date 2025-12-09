@@ -67,6 +67,7 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
         self.gfu_old = GridFunction(self.fes)
 
         self.sol = [self.gfu.components[2*i] for i in range(self.sys_dim)]
+        self.sol_old = [self.gfu_old.components[2*i] for i in range(self.sys_dim)]
         for i in range(self.sys_dim):
             self.output_fields["sol_" + str(i+1)] = OutputField(self.gfu.components[2*i], "sol_" + str(i+1), BND)
 
@@ -74,7 +75,6 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
         self.deform.vec.data = self.model.dX.vec.data
 
         self.mass0 = np.zeros(self.sys_dim)
-        
 
     def Initialize(self):
 
@@ -108,8 +108,13 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
             output_vtk_folder = os.path.join(self.model.io.root, self.name)
             output_vtk_name = os.path.join(output_vtk_folder, self.name)
             os.makedirs(output_vtk_folder, exist_ok=True)
+
+            if self.model.dim == 2:
+                self.gfu_vtk = [GridFunction(H1(self.model.parentmesh, order = self.params["fes_order"])) for i in range(self.sys_dim)]
+            else:
+                self.gfu_vtk = self.sol
             self.vtk = VTKOutput(self.model.parentmesh,
-                                coefs=[self.output_fields["sol_" + str(i+1)]._coef for i in range(self.sys_dim)],
+                                coefs=[self.gfu_vtk[i] for i in range(self.sys_dim)],
                                 names =['concentration_' + str(i+1) for i in range(self.sys_dim)],
                                 filename= output_vtk_name, 
                                 subdivision = self.params['subdivision'])
@@ -117,6 +122,8 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
     def PreProcess(self):
         
         self.gfu_old.vec.data = self.gfu.vec.data
+
+    def Solve(self):
 
         trial, test = self.fes.TnT()
         self.A = BilinearForm(self.fes)
@@ -179,7 +186,7 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
                     *ds(element_boundary=True, deformation = self.deform)
             # self.A +=  stab*InnerProduct(jump_dudn,jump_dvdn)\
             #         *ds(element_boundary=True, deformation = self.deform)
-            self.A +=  -1*stab*bnd_gfu*InnerProduct(jump_dudn,jump_dvdn)\
+            self.A +=  -1*bnd_gfu*IfPos(stab, stab*InnerProduct(jump_dudn,jump_dvdn), InnerProduct(trial[2*i +1].Trace(),test[2*i +1].Trace()) )\
                     *ds(element_boundary=True, deformation = self.deform)
             self.A +=  bnd_gfu*InnerProduct(trial[2*i +1].Trace(),test[2*i +1].Trace())\
                     *ds(element_boundary=True, deformation = self.deform)
@@ -205,8 +212,6 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
         self.F.Assemble()
 
         self.model.time.helper.t.Set(self.model.time.t.Get())
-
-    def Solve(self):
 
         self.gfu.vec.data = self.invA*self.F.vec
 
@@ -242,4 +247,6 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
 
     def PostProcess(self):
 
-        pass
+        if self.model.dim == 2:
+            for i, gfu in enumerate(self.gfu_vtk):
+                gfu.Set(self.sol[i], definedon = self.compartment.domain)
