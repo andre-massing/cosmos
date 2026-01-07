@@ -1,356 +1,412 @@
 # %%
 
+from ngsolve import *
+from ngsolve.webgui import Draw
+import netgen as ngen
+from collections import defaultdict, deque, Counter
+import numpy as np
 import re
-import argparse
-from collections import defaultdict, deque
 import math
+import copy
 
-SECTION_NAMES = {
-    "points",
-    "surfaceelements",
+SECTION_HEADERS = [
+    "",
+    "",
+    "# surfnr	domin	domout	tlosurf	bcprop",
+    "# surfnr    bcnr   domin  domout      np      p1      p2      p3",
+    "# surfnr    bcnr   domin  domout      np      p1      p2      p3",
+    "#  matnr      np      p1      p2      p3      p4",
+    "# surfid  0   p1   p2   trignum1    trignum2   domin/surfnr1    domout/surfnr2   ednr1   dist1   ednr2   dist2",
+    "#          X             Y             Z",
+    "#          pnum             index",
+    "",
+    "",
+    "",
+    "",
+    "#   Surfnr     Red     Green     Blue",
+    "",
+]
+
+SECTION_NAMES = [
+    "dimension",
+    "geomtype",
+    "facedescriptors",
     "surfaceelementsuv",
-    "edgesegments",
-    "edgesegmentsgi2",
+    "surfaceelements",
     "volumeelements",
-    "tetrahedra",
-    "hexahedra",
-    "prisms",
-    "pyramids",
+    "edgesegmentsgi2",
+    "points",
     "pointelements",
+    "materials",
+    "bcnames",
     "cd2names",
-}
+    "cd3names",
+    "face_colours",
+    "face_transparencies",
+]
 
-VOL_INT = r"[-+]?\d+"
-VOL_FLOAT = r"[-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?"
+class CosmosAliasMeshSection:
+    
+    def __init__(self, name = '', header = '', dim = 0, entries = None):
 
-def find_section(lines, name):
-    name = name.lower()
-    for i, ln in enumerate(lines):
-        if ln.strip().lower() == name:
-            return i
-    return -1
+        self.name = name
+        self.header = header
+        self.dim = dim
+        self.entries = [] if entries is None else list(entries)
 
-def find_sections(lines):
-    secs = {}
-    for i, ln in enumerate(lines):
-        key = ln.strip().lower()
-        if key in SECTION_NAMES:
-            secs[key] = i
-    return secs
+    def print(self, f = None):
 
-def parse_points(lines):
-    header = "#          X             Y             Z"
-    hidx = next((i for i,l in enumerate(lines) if l.strip()==header), -1)
-    pidx = next((i for i,l in enumerate(lines) if l.strip().lower()=="points"), -1)
-    if pidx < 0:
-        raise RuntimeError("points section not found")
-    n = None
-    if pidx+1 < len(lines) and re.match(r"^\s*\d+\s*$", lines[pidx+1]):
-        n = int(lines[pidx+1].strip())
-        start = pidx+2
-        pts = []
-        for k in range(n):
-            s = lines[start+k].strip()
-            if not s: continue
-            vals = re.findall(VOL_FLOAT, s)
-            if len(vals) < 3:
-                raise RuntimeError(f"Malformed point line: '{s}'")
-            x,y,z = map(float, vals[:3])
-            pts.append((x,y,z))
-        return pts, pidx, pidx+1, start, start+n
-    else:
-        start = pidx+1
-        pts = []
-        j = start
-        while j < len(lines) and lines[j].strip().lower() not in SECTION_NAMES:
-            s = lines[j].strip()
-            if s and not s.startswith("#"):
-                vals = re.findall(VOL_FLOAT, s)
-                if len(vals) >= 3:
-                    pts.append(tuple(map(float, vals[:3])))
-            j += 1
-        return pts, pidx, None, start, j
+        if not f:
+            f = sys.stdout
 
-def parse_surfaceelements(lines):
-    sidx = find_section(lines, "surfaceelements")
-    if sidx < 0:
-        raise RuntimeError("surfaceelements not found")
-    body_start = sidx+1
-    count = None
-    if body_start < len(lines) and re.match(r"^\s*\d+\s*$", lines[body_start]):
-        count = int(lines[body_start].strip())
-        body_start += 1
-        body_end = body_start + count
-    else:
-        end_marker = "#  matnr      np      p1      p2      p3      p4"
-        body_end = body_start
-        while body_end < len(lines):
-            s = lines[body_end].strip()
-            if s == "" or s.startswith("#"):
-                if s.startswith("#") and "matnr" in s:
-                    break
-                body_end += 1
-                continue
-            if s.lower() in SECTION_NAMES:
-                break
-            body_end += 1
-    tris = []
-    for k in range(body_start, body_end):
-        s = lines[k].strip()
-        if not s or s.startswith("#"): 
-            continue
-        ints = re.findall(VOL_INT, s)
-        if len(ints) >= 3:
-            a,b,c = map(int, ints[-3:])
-            tris.append((a,b,c))
-    return tris, sidx, body_start, body_end
+        print(self.header, file = f) 
+        print(self.name, file = f)
+        print(self.dim, file = f)
+        if self.entries:
+            for line in self.entries:
+                print("\t".join(str(num) for num in line), file = f)
+        print('\n', file = f)
 
-def tri_edges_oriented(t):
-    a,b,c = t
-    return ((a,b),(b,c),(c,a))
+    def add_entries(self, entries):
+        self.entries.append(entries)
 
-def undirected(e):
-    i,j = e
-    return (i,j) if i<j else (j,i)
+    def replace_entries(self, entries):
+        self.entries = list(entries)
 
-def reorient_tris_consistent(tris):
-    edge_to_tris = defaultdict(list)
-    for ti, t in enumerate(tris):
-        for e in tri_edges_oriented(t):
-            edge_to_tris[undirected(e)].append((ti, e))
-    n = len(tris)
-    flipped = [False]*n
-    visited = [False]*n
+    def set(self, section):
+        self.dim = section.dim
+        self.entries = list(section.entries)
 
-    for seed in range(n):
-        if visited[seed]: continue
-        q = deque([seed])
-        visited[seed] = True
-        while q:
-            u = q.popleft()
-            tu = tris[u]
-            if flipped[u]:
-                tu = (tu[0], tu[2], tu[1])
-            for e in tri_edges_oriented(tu):
-                ue = undirected(e)
-                neighs = edge_to_tris[ue]
-                for (v, ve) in neighs:
-                    if v == u: 
-                        continue
-                    ui, uj = e
-                    vi, vj = ve
-                    same_dir = (ui==vi and uj==vj)
-                    if not visited[v]:
-                        visited[v] = True
-                        if same_dir:
-                            flipped[v] = not flipped[v]
-                        q.append(v)
-    oriented = []
-    for i,t in enumerate(tris):
-        oriented.append((t[0], t[2], t[1]) if flipped[i] else t)
-    return oriented, flipped
+    def get(self):
+        return self.dim, self.entries
 
-def compute_area_normal(points, tris):
-    import numpy as np
-    nsum = np.zeros(3)
-    for a,b,c in tris:
-        pa = np.array(points[a-1]); pb=np.array(points[b-1]); pc=np.array(points[c-1])
-        nsum += np.cross(pb-pa, pc-pa)
-    return nsum
 
-def pca_third_axis(points):
-    import numpy as np
-    P = np.array(points, dtype=float)
-    c = P.mean(axis=0)
-    X = P - c
-    U, S, Vt = np.linalg.svd(X, full_matrices=False)
-    return Vt[2]
+class CosmosAliasMesh:
 
-def globally_align_sign(points, tris):
-    import numpy as np
-    nsum = compute_area_normal(points, tris)
-    axis = pca_third_axis(points)
-    if np.dot(nsum, axis) < 0:
-        tris = [(a,c,b) for (a,b,c) in tris]
-    return tris
+    def __init__(self, filename: str):
 
-def rewrite_surfaceelements(lines, tris):
-    sidx = find_section(lines, "surfaceelements")
-    if sidx < 0:
-        block = ["surfaceelements\n", f"{len(tris)}\n"] + [f"1 1 0 0 3 {a} {b} {c}\n" for (a,b,c) in tris]
-        lines.extend(block)
-        return lines
-    next_idx = len(lines)
-    for j in range(sidx+1, len(lines)):
-        if lines[j].strip().lower() in SECTION_NAMES:
-            next_idx = j
-            break
-    block = ["surfaceelements\n", f"{len(tris)}\n"] + [f"1 1 0 0 3 {a} {b} {c}\n" for (a,b,c) in tris]
-    return lines[:sidx] + block + lines[next_idx:]
+        self.filename = filename
+        self.sections = {}
+        for section_name, section_header in zip(SECTION_NAMES, SECTION_HEADERS):
+            self.sections[section_name] = CosmosAliasMeshSection(name = section_name, 
+                                                                 header = section_header)
 
-def read_surfaceelements(lines):
-    tris, sidx, bstart, bend = parse_surfaceelements(lines)
-    return tris
+        try:
+            with open(filename, "r", encoding="utf-8", errors="ignore") as f:
+                self.text_lines=f.readlines()
+            self.mesh = Mesh(self.filename)
+            self.ngmesh = self.mesh.ngmesh
 
-def build_boundary_edges(tris):
-    from collections import Counter
-    cnt = Counter()
-    def ek(i,j):
+            self._parse_sections()
+        except Exception as e:
+            print('Error:', e)
+            raise Exception('Impossible to generate NgSolve mesh from given filename')
+
+    def _parse_sections(self):
+
+        for i, line in enumerate(self.text_lines):
+            name = line.strip()
+            if name in self.sections.keys():
+                dim = int(self.text_lines[i+1].strip())
+                self.sections[name].dim = dim
+                if name not in {"dimension", "geomtype"}:
+                    self.sections[name].entries = [str(self.text_lines[i+2+j]).strip().split() for j in range(dim)]
+                else:
+                    pass
+
+    def print_text(self, f = None):
+
+        if not f:
+            f = sys.stdout
+
+        print('mesh3d\n', file = f)
+        for section in self.sections.values():
+            if section.name == 'cd3names' and self.sections['dimension'].dim == 2:
+                pass
+            else:
+                section.print(f = f)
+        print('endmesh\n', file = f)
+
+    def get_points(self):
+
+        points = []
+        try:
+            for points_vals in self.sections['points'].entries:
+                points.append((float(points_vals[0]), float(points_vals[1]), float(points_vals[2])))
+        except Exception as e:
+            print('Mesh does not have points!')
+            print(e)
+
+        return points
+
+    def get_surface_tris(self):
+
+        tris = []
+        if self.sections['geomtype'].dim == 0:
+            for surface_vals in self.sections['surfaceelements'].entries:
+                tris.append((int(surface_vals[5]), int(surface_vals[6]), int(surface_vals[7])))
+        elif self.sections['geomtype'].dim == 12:
+            for surface_vals in self.sections['surfaceelementsuv'].entries:
+                tris.append((int(surface_vals[5]), int(surface_vals[6]), int(surface_vals[7])))
+
+        return tris
+    
+    def set_surface_tris(self, tris):
+
+        if self.sections['geomtype'].dim == 0:
+            for i, surface_vals in enumerate(self.sections['surfaceelements'].entries):
+                surface_vals[5] = tris[i][0]
+                surface_vals[6] = tris[i][1]
+                surface_vals[7] = tris[i][2]
+        elif self.sections['geomtype'].dim == 12:
+            for i, surface_vals in enumerate(self.sections['surfaceelementsuv'].entries):
+                surface_vals[5] = tris[i][0]
+                surface_vals[6] = tris[i][1]
+                surface_vals[7] = tris[i][2]
+
+        return tris
+
+    def reorient_surface_triangles_consistently(self, flip = False):
+
+        tris = self.get_surface_tris()
+        edge_to_tris = defaultdict(list)
+        for ti, t in enumerate(tris):
+            for e in self._tri_edges_oriented(t):
+                edge_to_tris[self._undirected(e)].append((ti, e))
+        n = len(tris)
+        flipped = [False]*n
+        visited = [False]*n
+
+        for seed in range(n):
+            if visited[seed]: continue
+            q = deque([seed])
+            visited[seed] = True
+            while q:
+                u = q.popleft()
+                tu = tris[u]
+                if flipped[u]:
+                    tu = (tu[0], tu[2], tu[1])
+                for e in self._tri_edges_oriented(tu):
+                    ue = self._undirected(e)
+                    neighs = edge_to_tris[ue]
+                    for (v, ve) in neighs:
+                        if v == u: 
+                            continue
+                        ui, uj = e
+                        vi, vj = ve
+                        same_dir = (ui==vi and uj==vj)
+                        if not visited[v]:
+                            visited[v] = True
+                            if same_dir:
+                                flipped[v] = not flipped[v]
+                            q.append(v)
+        oriented = []
+        for i,t in enumerate(tris):
+            if flip:
+                oriented.append((t[0], t[2], t[1]) if not flipped[i] else t)
+            else:
+                oriented.append((t[0], t[2], t[1]) if flipped[i] else t)
+        self.set_surface_tris(oriented)
+    
+    def _tri_edges_oriented(self, t):
+        a,b,c = t
+        return ((a,b),(b,c),(c,a))
+
+    def _undirected(self, e):
+        i,j = e
         return (i,j) if i<j else (j,i)
-    for a,b,c in tris:
-        cnt[ek(a,b)] += 1
-        cnt[ek(b,c)] += 1
-        cnt[ek(c,a)] += 1
-    return [e for e,n in cnt.items() if n==1]
+    
+    def _compute_area_normal(self, points, tris):
+        nsum = np.zeros(3)
+        for a,b,c in tris:
+            pa = np.array(points[a-1]); pb=np.array(points[b-1]); pc=np.array(points[c-1])
+            nsum += np.cross(pb-pa, pc-pa)
+        return nsum
 
-def build_boundary_loops(points, boundary_edges):
-    from collections import defaultdict, deque
-    import math
-    adj = defaultdict(list)
-    for u,v in boundary_edges:
-        adj[u].append(v)
-        adj[v].append(u)
-    visited_v = set()
-    loops = []
-    for start in list(adj.keys()):
-        if start in visited_v:
-            continue
-        comp = set(); dq = deque([start]); visited_v.add(start); comp.add(start)
-        while dq:
-            x = dq.popleft()
-            for y in adj[x]:
-                if y not in visited_v:
-                    visited_v.add(y); comp.add(y); dq.append(y)
-        compE = [(u,v) for (u,v) in boundary_edges if u in comp and v in comp]
-        if not compE: continue
-        ladj = defaultdict(list)
-        for u,v in compE:
-            ladj[u].append(v); ladj[v].append(u)
-        endpoints = [v for v in comp if len(ladj[v])==1]
-        start_v = endpoints[0] if endpoints else next(iter(comp))
-        order=[start_v]; used=set(); cur=start_v; prev=None
-        while True:
-            nxt=None
-            for nb in ladj[cur]:
-                e=(min(cur,nb),max(cur,nb))
-                if e in used: continue
-                if nb!=prev: nxt=nb; break
-            if nxt is None: break
-            used.add((min(cur,nxt),max(cur,nxt)))
-            order.append(nxt)
-            prev,cur=cur,nxt
-            if not endpoints and cur==start_v:
-                break
-        if not endpoints and order[0]!=order[-1]:
-            order.append(order[0])
-        loops.append(order)
-    # distances
-    def P(i): return points[i-1]
-    loop_edges_params=[]
-    for order in loops:
-        total=0.0
-        segs=[]
-        for i in range(len(order)-1):
-            u,v=order[i],order[i+1]
-            du=P(u); dv=P(v)
-            d=math.dist(du,dv)
-            segs.append(((u,v),d)); total+=d
-        s=0.0; entries=[]
-        for (u,v),d in segs:
-            s0=0.0 if total==0 else s/total
-            s+=d
-            s1=1.0 if total==0 else s/total
-            entries.append((u,v,s0,s1))
-        loop_edges_params.append(entries)
-    return loops, loop_edges_params
+    def _pca_third_axis(self, points):
+        P = np.array(points, dtype=float)
+        c = P.mean(axis=0)
+        X = P - c
+        U, S, Vt = np.linalg.svd(X, full_matrices=False)
+        return Vt[2]
 
-def write_edgesegmentsgi2(lines, loops, loop_edges_params):
-    edge_lines=[]
-    for loop_id,entries in enumerate(loop_edges_params, start=1):
-        for (u,v,s0,s1) in entries:
-            edge_lines.append(f"{loop_id}       0       {u}       {v}       -1       -1        0        0        {loop_id} {s0:.16g}        {loop_id} {s1:.16g}")
-    header="edgesegmentsgi2"
-    hdr_idx=find_section(lines, header)
-    block=[header+"\n", f"{len(edge_lines)}\n"]+[ln+"\n" for ln in edge_lines]+["\n"]
-    if hdr_idx<0:
-        lines.extend(block); return lines
-    next_idx=len(lines)
-    for j in range(hdr_idx+1,len(lines)):
-        if lines[j].strip().lower() in SECTION_NAMES:
-            next_idx=j; break
-    return lines[:hdr_idx]+block+lines[next_idx:]
+    def globally_align_sign(self, points, tris):
+        nsum = self._compute_area_normal(points, tris)
+        axis = self._pca_third_axis(points)
+        if np.dot(nsum, axis) < 0:
+            tris = [(a,c,b) for (a,b,c) in tris]
+        return tris
+    
+    def flip_normal_orientation(self):
 
-def find_section_block(lines, header):
-    hdr_idx=find_section(lines, header)
-    if hdr_idx<0: return None,None,None
-    body_start=hdr_idx+1
-    if body_start<len(lines) and re.match(r"^\s*\d+\s*$", lines[body_start]):
-        n=int(lines[body_start].strip()); body_start+=1
-        body_end=min(body_start+n, len(lines))
-        return hdr_idx, body_start, body_end
-    j=body_start
-    while j<len(lines) and lines[j].strip().lower() not in SECTION_NAMES:
-        j+=1
-    return hdr_idx, body_start, j
+        tris = self.get_surface_tris()
+        tris = [(a,c,b) for (a,b,c) in tris]
+        self.set_surface_tris(tris)
 
-def write_cd2names_after_pointelements(lines, loop_count, base_name="bboundary", header="cd2names"):
-    hdr_idx, body_start, body_end = find_section_block(lines, "pointelements")
-    insert_at = len(lines)
-    if hdr_idx is not None:
-        insert_at = body_end
-        k = insert_at
-        while k < len(lines) and lines[k].strip()=="":
-            k += 1
-        del lines[insert_at:k]
-        lines[insert_at:insert_at] = ["\n","\n"]
-        insert_at += 2
-    else:
-        while len(lines)>0 and lines[-1].strip()=="":
-            lines.pop()
-        lines.extend(["\n","\n"])
-        insert_at = len(lines)
-    block=[header+"\n", f"{loop_count}\n"]
-    for i in range(1, loop_count+1):
-        block.append(f"{i}\t{base_name}{i}\n")
-    lines[insert_at:insert_at] = block
-    return lines
+    def export_mesh(self, name):
 
-def ensure_points_header(lines):
-    coord_header = "#          X             Y             Z\n"
-    pidx = find_section(lines, "points")
-    if pidx>=0:
-        if pidx==0 or lines[pidx-1].strip()!=coord_header.strip():
-            lines.insert(pidx, coord_header)
-    return lines
+        name = name.replace('.vol', '')
+        filename = name + '.vol'
+        with open(filename, 'w') as f:
+            self.print_text(f=f)
 
-input = "../../../data/geometries/spine_whole_closed_fixed_fine.vol"
-output = "../../../data/geometries/dummy.vol"
+    def build_boundary_edges(self, tris):
+        cnt = Counter()
+        def ek(i,j):
+            return (i,j) if i<j else (j,i)
+        for a,b,c in tris:
+            cnt[ek(a,b)] += 1
+            cnt[ek(b,c)] += 1
+            cnt[ek(c,a)] += 1
+        return [e for e,n in cnt.items() if n==1]
 
-with open(input, "r", encoding="utf-8", errors="ignore") as f:
-    lines=f.readlines()
+    def build_boundary_loops(self, points, boundary_edges):
 
-points, p_hdr_idx, p_cnt_idx, p_start, p_end = parse_points(lines)
-tris_raw, sidx, sbegin, send = parse_surfaceelements(lines)
+        adj = defaultdict(list)
+        for u,v in boundary_edges:
+            adj[u].append(v)
+            adj[v].append(u)
+        visited_v = set()
+        loops = []
+        for start in list(adj.keys()):
+            if start in visited_v:
+                continue
+            comp = set(); dq = deque([start]); visited_v.add(start); comp.add(start)
+            while dq:
+                x = dq.popleft()
+                for y in adj[x]:
+                    if y not in visited_v:
+                        visited_v.add(y); comp.add(y); dq.append(y)
+            compE = [(u,v) for (u,v) in boundary_edges if u in comp and v in comp]
+            if not compE: continue
+            ladj = defaultdict(list)
+            for u,v in compE:
+                ladj[u].append(v); ladj[v].append(u)
+            endpoints = [v for v in comp if len(ladj[v])==1]
+            start_v = endpoints[0] if endpoints else next(iter(comp))
+            order=[start_v]; used=set(); cur=start_v; prev=None
+            while True:
+                nxt=None
+                for nb in ladj[cur]:
+                    e=(min(cur,nb),max(cur,nb))
+                    if e in used: continue
+                    if nb!=prev: nxt=nb; break
+                if nxt is None: break
+                used.add((min(cur,nxt),max(cur,nxt)))
+                order.append(nxt)
+                prev,cur=cur,nxt
+                if not endpoints and cur==start_v:
+                    break
+            if not endpoints and order[0]!=order[-1]:
+                order.append(order[0])
+            loops.append(order)
+        # distances
+        def P(i): return points[i-1]
+        loop_edges_params=[]
+        for order in loops:
+            total=0.0
+            segs=[]
+            for i in range(len(order)-1):
+                u,v=order[i],order[i+1]
+                du=P(u); dv=P(v)
+                d=math.dist(du,dv)
+                segs.append(((u,v),d)); total+=d
+            s=0.0; entries=[]
+            for (u,v),d in segs:
+                s0=0.0 if total==0 else s/total
+                s+=d
+                s1=1.0 if total==0 else s/total
+                entries.append((u,v,s0,s1))
+            loop_edges_params.append(entries)
 
-tris_cons, flipped = reorient_tris_consistent(tris_raw)
-tris_cons = globally_align_sign(points, tris_cons)
-flip = True
-if flip: 
-    tris_cons = [(a,c,b) for (a,b,c) in tris_cons]
+        return loops, loop_edges_params
+    
+    def fix_dim2_boundary(self, override = False):
 
-lines = rewrite_surfaceelements(lines, tris_cons)
+        if self.sections["edgesegmentsgi2"].dim != 0 and not override:
+            raise Exception('BBoundary list is non-empty, use the flag override to add them')
+        elif self.sections["edgesegmentsgi2"].dim != 0 and override:
+            self.sections["edgesegmentsgi2"].dim = 0
+            self.sections["edgesegmentsgi2"].entries = []
+            self.sections["cd2names"].dim = 0
+            self.sections["cd2names"].entries = []
+            
+        tris = self.get_surface_tris()
+        points = self.get_points()
+        boundary_edges = self.build_boundary_edges(tris)
+        loops, loop_edges_params = self.build_boundary_loops(points, boundary_edges)
+        counter = 0
 
-# boundary edges and loops
-boundary_edges = build_boundary_edges(tris_cons)
-loops, loop_edges_params = build_boundary_loops(points, boundary_edges)
+        for loop_id,entries in enumerate(loop_edges_params, start=1):
+            for (u,v,s0,s1) in entries:
+                counter += 1
+                self.sections["edgesegmentsgi2"].entries.append([str(loop_id), str(0), str(u), str(v), str(-1), str(-1), str(0), str(0), str(loop_id), str(s0), str(loop_id), str(s1)])
+        self.sections["edgesegmentsgi2"].dim = counter
+        
+        for i in range(loop_id):
+            self.sections["cd2names"].entries.append([str(int(i+1)), 'bboundary' + str(int(i+1))])
+        self.sections["cd2names"].dim = loop_id
 
-lines = write_edgesegmentsgi2(lines, loops, loop_edges_params)
-lines = ensure_points_header(lines)
-lines = write_cd2names_after_pointelements(lines, loop_count=len(loops), base_name="bboundary", header="cd2names")
+    def mark_cd_elements(self, mesh_to_mark):
 
-outp = output or input
-with open(outp, "w", encoding="utf-8") as f:
-    f.writelines(lines)
+        pnts_old_to_new = []
+        for i, point_new in enumerate(self.sections['points'].entries, start = 1):
+            found = False
+            for j, point_old in enumerate(mesh_to_mark.sections['points'].entries, start = 1):
+                if all(any(math.isclose(float(m), float(n)) for m in point_old) for n in point_new):
+                    found = True
+                    pnts_old_to_new.append(j)
+            if not found:
+                pnts_old_to_new.append(0)
 
-print(f"Triangles: {len(tris_raw)} -> oriented: {len(tris_cons)}. Loops: {len(loops)}. Output: {outp}")
+        bnd_mark_id = max(self.sections['bcnames'].dim+1, 2)
+        bnd_mark_name = 'boundary' + str(bnd_mark_id)
 
+        bbnd_mark_id = max(self.sections['cd2names'].dim+1, 2)
+        bbnd_mark_name = 'bboundary' + str(bbnd_mark_id)
+
+        for i, surfel_new in enumerate(self.sections['surfaceelements'].entries, start = 1):
+            for j, surfel_old in enumerate(mesh_to_mark.sections['surfaceelements'].entries, start = 1):
+
+                set1 = (int(surfel_old[5]), int(surfel_old[6]), int(surfel_old[7]))
+                set2 = (pnts_old_to_new[int(surfel_new[5])-1], pnts_old_to_new[int(surfel_new[6])-1], pnts_old_to_new[int(surfel_new[7])-1])
+                if all(el in set2 for el in set1):
+                    surfel_new[1] = str(bnd_mark_id)
+
+        if self.sections['bcnames'].dim == 0:
+            self.sections['bcnames'].dim = 2
+            self.sections['bcnames'].entries.append(['1', 'default'])
+            self.sections['bcnames'].entries.append(['2', 'boundary2'])
+        else:
+            self.sections['bcnames'].dim += 1
+            self.sections['bcnames'].entries.append([str(bnd_mark_id),  bnd_mark_name])
+
+        self.sections['edgesegmentsgi2'].entries = []
+        for j, edge_el_old in enumerate(mesh_to_mark.sections['edgesegmentsgi2'].entries, start = 1):
+            edge_el_new = [cmp for cmp in edge_el_old]
+            edge_el_new[2] = pnts_old_to_new.index(int(edge_el_old[2]))+1
+            edge_el_new[3] = pnts_old_to_new.index(int(edge_el_old[3]))+1
+            self.sections['edgesegmentsgi2'].entries.append(edge_el_new)
+        self.sections['edgesegmentsgi2'].dim = mesh_to_mark.sections['edgesegmentsgi2'].dim
+        self.sections['cd2names'].dim = copy.deepcopy(mesh_to_mark.sections['cd2names'].dim)
+        self.sections['cd2names'].entries = copy.deepcopy(mesh_to_mark.sections['cd2names'].entries)
+
+def fill_mesh(old_mesh):
+
+    new_mesh = ngen.meshing.Mesh()
+    fd_outside = new_mesh.Add (ngen.meshing.FaceDescriptor(bc=1,domin=1,surfnr=1))
+
+    pmap1 = { }
+    m1 = old_mesh.ngmesh
+    for e in m1.Elements2D():
+        for v in e.vertices:
+            if (v not in pmap1):
+                pmap1[v] = new_mesh.Add (m1[v])
+
+    for e in m1.Elements2D():
+        new_mesh.Add (ngen.meshing.Element2D (fd_outside, [pmap1[v] for v in e.vertices]))
+
+    new_mesh.GenerateVolumeMesh(maxh = 0.1)
+    new_mesh = Mesh(new_mesh)
+
+    return new_mesh

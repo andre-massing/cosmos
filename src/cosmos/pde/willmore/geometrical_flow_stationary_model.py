@@ -113,21 +113,19 @@ class GeometricalFlowStationaryModel(BasePDEModel):
         self.kappa_h_old.vec.data = self.kappa_h.vec.data
         self.sp_curv_h_old.vec.data = self.sp_curv_h.vec.data
 
+        self.pre_normal.Set(self.ns, dual = True, definedon=self.compartment.domain)
+        self.normal.Set(Normalize(self.pre_normal), dual = True, definedon =self.compartment.domain)
+        self.W_h_old.Set(Norm(grad(self.normal).Trace())**2, definedon =self.compartment.domain)
+        self.Amap_h.Set(self.identity - self.model.dt*self.model.ale.ale_velocity, dual = True, definedon =self.compartment.domain)
+        self.J_h_old.Set(sqrt(Det(Grad(self.Amap_h).Trace().trans*Grad(self.Amap_h).Trace() + OuterProduct(self.ns, self.ns))), definedon=self.compartment.domain)
+
     def Solve(self):
 
         deform = self.model.dX
-        dt = self.model.dt.Get()
-        vectorV_h_old = self.compartment.ale.ale_vel
         rhs = self.params['rhs']()
         alpha = self.params['alpha']
         beta = self.params['beta']
         gamma = self.params['gamma']
-
-        self.pre_normal.Set(self.ns, dual = True, definedon=self.compartment.domain)
-        self.normal.Set(Normalize(self.pre_normal), dual = True, definedon =self.compartment.domain)
-        self.W_h_old.Set(Norm(grad(self.normal).Trace())**2, definedon =self.compartment.domain)
-        self.Amap_h.Set(self.identity - dt*vectorV_h_old, dual = True, definedon =self.compartment.domain)
-        self.J_h_old.Set(sqrt(Det(Grad(self.Amap_h).Trace().trans*Grad(self.Amap_h).Trace() + OuterProduct(self.ns, self.ns))), definedon=self.compartment.domain)
 
         (V, kappa, sp_curv), (phi, xsi, zeta) = self.fes.TnT()
         
@@ -142,18 +140,18 @@ class GeometricalFlowStationaryModel(BasePDEModel):
         self.A += -beta*InnerProduct(grad(kappa).Trace(), grad(phi).Trace())*ds(deformation = deform)
         self.A += -gamma*InnerProduct(kappa, phi)*ds(deformation = deform)
 
-        self.A += InnerProduct(kappa/dt,xsi)*ds(deformation = deform)
-        self.A += -1*InnerProduct(sp_curv/dt,xsi)*ds(deformation = deform)
-        self.A += -0.5*(InnerProduct(vectorV_h_old, grad(kappa).Trace()*xsi) - InnerProduct(vectorV_h_old, grad(xsi).Trace()*kappa))*ds(deformation = deform)
-        self.A += 0.5*(InnerProduct(vectorV_h_old, grad(sp_curv).Trace()*xsi) - InnerProduct(vectorV_h_old, grad(xsi).Trace()*sp_curv))*ds(deformation = deform)
+        self.A += InnerProduct(kappa/self.model.dt,xsi)*ds(deformation = deform)
+        self.A += -1*InnerProduct(sp_curv/self.model.dt,xsi)*ds(deformation = deform)
+        self.A += -0.5*(InnerProduct(self.model.ale.ale_velocity, grad(kappa).Trace()*xsi) - InnerProduct(self.model.ale.ale_velocity, grad(xsi).Trace()*kappa))*ds(deformation = deform)
+        self.A += 0.5*(InnerProduct(self.model.ale.ale_velocity, grad(sp_curv).Trace()*xsi) - InnerProduct(self.model.ale.ale_velocity, grad(xsi).Trace()*sp_curv))*ds(deformation = deform)
         self.A += InnerProduct(grad(V).Trace(), grad(xsi).Trace())*ds(deformation = deform)
         self.A += -InnerProduct(self.W_h_old*V, xsi)*ds(deformation = deform)
         self.A += 0.5*InnerProduct(V, (self.kappa_h_old - self.sp_curv_h_old)*self.kappa_h_old*xsi)*ds(deformation = deform)
 
         self.A += -1*InnerProduct(self.lam*kappa, phi)*ds(deformation = deform)
 
-        self.A += InnerProduct(sp_curv/dt, zeta)*ds(deformation = deform)
-        self.A += InnerProduct(-vectorV_h_old*grad(sp_curv).Trace(), zeta)*ds(deformation = deform)
+        self.A += InnerProduct(sp_curv/self.model.dt, zeta)*ds(deformation = deform)
+        self.A += InnerProduct(-self.model.ale.ale_velocity*grad(sp_curv).Trace(), zeta)*ds(deformation = deform)
 
         self.A.Assemble()
         self.invA = self.A.mat.Inverse(freedofs = self.fes.FreeDofs())
@@ -162,8 +160,8 @@ class GeometricalFlowStationaryModel(BasePDEModel):
 
         self.F += InnerProduct(rhs,phi)*ds(deformation = deform)
 
-        self.F += InnerProduct((self.kappa_h_old - self.sp_curv_h_old)/dt*sqrt(self.J_h_old),xsi)*ds(deformation = deform)
-        self.F += InnerProduct(self.sp_curv_h_old/dt, zeta)*ds(deformation = deform)
+        self.F += InnerProduct((self.kappa_h_old - self.sp_curv_h_old)/self.model.dt*sqrt(self.J_h_old),xsi)*ds(deformation = deform)
+        self.F += InnerProduct(self.sp_curv_h_old/self.model.dt, zeta)*ds(deformation = deform)
 
         self.F += InnerProduct(self.mu, phi)*ds(deformation = deform)
 

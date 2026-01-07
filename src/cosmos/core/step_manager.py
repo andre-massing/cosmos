@@ -28,12 +28,6 @@ class CosmosStepManager:
                 self.coupling_type = self.params['coupling_type']
             else:
                 raise Exception('Coupling type must be either implicit or explicit')
-            
-        if 'iterate_ale' in  self.params.keys():
-            if {self.params['iterate_ale']} <= {True, False}:
-                self.iterate_ale = self.params['iterate_ale']
-            else:
-                raise Exception('ALE iteration must be either True or False')
 
         for pde in model.pdes:
             pde.Initialize() 
@@ -53,7 +47,6 @@ class CosmosStepManager:
         for i, pde in enumerate(model.pdes):
             pde.Solve()
             old_sol.append(pde.gfu.vec.Copy())
-        model.ale.solve_ale(model)
 
         if self.coupling_type == 'implicit' and len(model.pdes)>0:
             self.iter = 0
@@ -62,17 +55,13 @@ class CosmosStepManager:
                     pde.Solve()
                     errors[i] = Norm(pde.gfu.vec-old_sol[i])/len(pde.gfu.vec)
                     old_sol[i] = pde.gfu.vec.Copy()
-                if self.iterate_ale:
-                    model.ale.solve_ale(model)
                 self.iter += 1
                 logger.debug(f'Step subiter_bool count: {self.iter} | Max error {np.max(np.array(errors)):.2e}')
-            
-            if not self.iterate_ale:
-                model.ale.solve_ale(model)
 
             if self.iter == 20:
                 raise Exception('Internal solver iteration exceeded max number of 20 iterations')
-            
+        
+        model.ale.solve_ale(model)
         model.ale.finalize(model)
             
         logger.debug(f'Subiter solved successfully')

@@ -35,7 +35,7 @@ class CosmosALEManager:
             model.parentmesh.SetDeformation(gfu)
         
         self.dX = GridFunction(self.V)
-        self.prev_dX = []
+        self.prev_dX = [self.dX.vec.Copy(), self.dX.vec.Copy()]
 
         if 'redistribute' in  self.params.keys():
             if isinstance(self.params['redistribute'], bool):

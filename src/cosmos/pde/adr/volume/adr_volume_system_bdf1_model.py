@@ -39,23 +39,7 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
         self.params["Dir_bnd"] = ''
         self.params["fes_order"] = 1
         self.params["subdivision"] = 0
-
-        V = H1(model.parentmesh, order = self.params["fes_order"], 
-                                definedon = compartment.domain, dgjumps = True)
-        self.fes = V
-        for i in range(self.sys_dim-1):
-            self.fes = self.fes*V
-        
-        self.gfu = GridFunction(self.fes)
-        self.gfu_old = GridFunction(self.fes)
-        self.sol = self.gfu.components
-        for i in range(self.sys_dim):
-            self.output_fields["sol_" + str(i+1)] = OutputField(self.gfu.components[i], "sol_" + str(i+1), VOL)
-
-        self.deform = GridFunction(self.model.dX.space)
-        self.deform.vec.data = self.model.dX.vec.data
-
-        self.params["ale_velocity"] = Field(CF((0,)*compartment.dim_emd))
+        self.params["conservative"] = False
         for i in range(self.sys_dim):
             self.params["mass_preserving_" + str(i+1)] = False
             self.params["bounds_" + str(i+1)] = None
@@ -66,10 +50,39 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
             self.params["rhs_" + str(i+1)] = Field(CF(0))
             self.params["gradu_bnd_" + str(i+1)] = Field(CF((0,)*compartment.dim_emd))
             self.params["u_bnd_" + str(i+1)] = Field(CF(0))
+            self.params["tot_flux_bnd_" + str(i+1)] = Field(CF(0))
 
-        self.mass0 = []
+        V = H1(model.parentmesh, order = self.params["fes_order"], 
+                                definedon = compartment.domain, dgjumps = True)
+        self.fes = V
+        for i in range(self.sys_dim-1):
+            self.fes = self.fes*V
+        
+        self.gfu = GridFunction(self.fes)
+        self.gfu_old = GridFunction(self.fes)
+        if self.sys_dim>1:
+            self.sol = self.gfu.components
+            for i in range(self.sys_dim):
+                self.output_fields["sol_" + str(i+1)] = OutputField(self.gfu.components[i], "sol_" + str(i+1), VOL)
+        else:
+            self.sol = [self.gfu]
+            self.output_fields["sol_1"] = OutputField(self.gfu, "sol_1", VOL)
+
+        self.vectorspace = VectorH1(model.parentmesh, order = 1, definedon = compartment.domain)
+        self.Amap_h = GridFunction(self.vectorspace)
+        self.discscalarspace = L2(model.parentmesh, order = 0, definedon =compartment.domain)
+        self.J_h_old = GridFunction(self.discscalarspace)
+        if model.dim == 2:
+            self.identity = CF((x,y))
+        else:
+            self.identity = CF((x,y,z))
+
+        self.mass0 = np.zeros(self.sys_dim)
 
     def Initialize(self):
+
+        self.dX_new = GridFunction(self.model.dX.space)
+        self.dX_old = GridFunction(self.model.dX.space)
 
         ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
         ir_tet = IntegrationRule(points  = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)], \
@@ -78,14 +91,14 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
         for i in range(self.sys_dim):
             self.output_fields["sol_" + str(i+1)]._coef.Set(self.params["u0_" + str(i+1)], definedon = self.compartment.domain, dual = True)
 
-            if self.params["mass_preserving_" + str(i+1)] and self.params["fes_order_" + str(i+1)]>1:
+            if self.params["mass_preserving_" + str(i+1)] and self.params["fes_order"]>1:
                 raise Exception('Mass preservation not yet implemented for fes_order>1')
-            if self.params["bounds_" + str(i+1)] and self.params["fes_order_" + str(i+1)]>1:
+            if self.params["bounds_" + str(i+1)] and self.params["fes_order"]>1:
                 raise Exception('Bounds preservation not yet implemented for fes_order>1')
             
             if self.params["mass_preserving_" + str(i+1)]:
-                dx_lumped = dx(intrules = {  TRIG : ir_trig , TET : ir_tet }, deformation = self.deform)
-                self.Amp = BilinearForm(self.output_fields["sol_" + str(i+1)]._coef, symmetric = True)
+                dx_lumped = dx(intrules = {  TRIG : ir_trig , TET : ir_tet }, deformation = self.dX_new)
+                self.Amp = BilinearForm(self.output_fields["sol_" + str(i+1)]._coef.space, symmetric = True)
                 u, v = self.output_fields["sol_" + str(i+1)]._coef.space.TnT()
                 self.Amp += u*v*dx_lumped
                 self.Amp.Assemble()
@@ -102,22 +115,31 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
             output_vtk_folder = os.path.join(self.model.io.root, self.name)
             output_vtk_name = os.path.join(output_vtk_folder, self.name)
             os.makedirs(output_vtk_folder, exist_ok=True)
-            if self.compartment.dim == 2:
-                self.vtk = VTKOutput(self.model.parentmesh,
-                                    coefs=[self.output_fields["sol_" + str(i+1)]._coef for i in range(self.sys_dim)],
-                                    names =['concentration_' + str(i+1) for i in range(self.sys_dim)],
-                                    filename= output_vtk_name, 
-                                    subdivision = self.params['subdivision'])
-            else:
-                raise Exception('Not yet implemented!')
+            self.vtk = VTKOutput(self.model.parentmesh,
+                                coefs=[self.output_fields["sol_" + str(i+1)]._coef for i in range(self.sys_dim)],
+                                names =['concentration_' + str(i+1) for i in range(self.sys_dim)],
+                                filename= output_vtk_name, 
+                                subdivision = self.params['subdivision'])
 
     def PreProcess(self):
         
         self.gfu_old.vec.data = self.gfu.vec.data
 
+        vectorV_h_old = self.model.ale.ale_velocity
+        dt = self.model.dt.Get()
+        # self.Amap_h.Set(self.identity - dt*vectorV_h_old, dual = True, definedon =self.compartment.domain)
+        # self.J_h_old.Set(Det(Grad(self.Amap_h).trans*Grad(self.Amap_h)), definedon=self.compartment.domain)
+
+        self.dX_new.vec.data = 2*self.model.dX.vec.data - self.model.ale.prev_dX[-2].data
+        self.dX_old.vec.data = self.model.dX.vec.data
+
     def Solve(self):
 
-        trial, test = self.fes.TnT()
+        if self.sys_dim>1:
+            trial, test = self.fes.TnT()
+        else:
+            trial = [self.fes.TrialFunction()]
+            test = [self.fes.TestFunction()]
         self.A = BilinearForm(self.fes)
         self.F = LinearForm(self.fes)
 
@@ -125,13 +147,9 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
         h = self.cfg.h
         alpha = 5 * self.params["fes_order"] * (self.params["fes_order"]+1)
 
-        ##############################################
-        # AAA this has to be updated carefully in the new version
-        self.deform.Set(self.model.dX + self.model.dt*self.params['ale_velocity']().Compile(), dual = True, definedon = self.compartment.domain)
-        deform_old = self.model.dX 
-        ##############################################
-
-        self.model.time.helper.t.Set(self.model.time.t.Get() + self.model.time.dt.Get())
+        ############### Do I actually need this? Getting rid of it for now
+        ############### might be a problem for manufactured solutions
+        # self.model.time.helper.t.Set(self.model.time.t.Get() + self.model.time.dt.Get())
 
         for i in range(self.sys_dim):
 
@@ -141,41 +159,50 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
             rhs = self.params["rhs_" + str(i+1)]().Compile()
             u_bnd = self.params["u_bnd_" + str(i+1)]().Compile()
             gradu_bnd = self.params["gradu_bnd_" + str(i+1)]().Compile()
+            tot_flux_bnd = self.params["tot_flux_bnd_" + str(i+1)]().Compile()
 
-            self.A += c*trial[i]*test[i]*dx(deformation =self.deform)
-            self.A += d*grad(trial[i])*grad(test[i])*dx(deformation =self.deform)
+            self.A += c*trial[i]*test[i]*dx(deformation = self.dX_new)
+            self.A += d*grad(trial[i])*grad(test[i])*dx(deformation = self.dX_new)
                     
             if self.params['Dir_bnd']:
-                self.A += - d*InnerProduct(n, grad(trial[i]))*test[i]*ds(definedon = self.params['Dir_bnd'], skeleton=True, deformation =self.deform) \
-                    - d*InnerProduct(n, grad(test[i]))*trial[i]*ds(definedon = self.params['Dir_bnd'], skeleton=True, deformation =self.deform)\
-                    + d*alpha/h*trial[i]*test[i]*ds(definedon = self.params['Dir_bnd'], skeleton = True, deformation =self.deform)\
+                self.A += - d*InnerProduct(n, grad(trial[i]))*test[i]*ds(definedon = self.params['Dir_bnd'], skeleton=True, deformation = self.dX_new) \
+                    - d*InnerProduct(n, grad(test[i]))*trial[i]*ds(definedon = self.params['Dir_bnd'], skeleton=True, deformation = self.dX_new)\
+                    + d*alpha/h*trial[i]*test[i]*ds(definedon = self.params['Dir_bnd'], skeleton = True, deformation = self.dX_new)\
 
-            self.A += -b*grad(test[i]) * trial[i]*dx(deformation =self.deform)
+            self.A += -b*grad(test[i]) * trial[i]*dx(deformation = self.dX_new)
             stab = (Norm(b))*h**2
             jump_u = grad(trial[i])-grad(trial[i]).Other()
             jump_v = grad(test[i])-grad(test[i]).Other()
-            self.A += stab*jump_u*jump_v*dx(deformation = self.deform, skeleton = True)
+            self.A += stab*jump_u*jump_v*dx(deformation = self.dX_new, skeleton = True)
             self.A += IfPos(b*n, b*n*trial[i], CF(0))*test[i]\
-                *ds(deformation =self.deform)
-            
-            self.A += 1/self.model.dt*trial[i]*test[i]*dx(deformation =self.deform)
+                *ds(deformation = self.dX_new)
 
-            self.F += rhs*test[i]*dx(deformation =self.deform)
+            self.F += rhs*test[i]*dx(deformation = self.dX_new)
             
             if self.params['Dir_bnd']:
-                self.F += d*alpha/h*u_bnd*test[i]*ds(definedon = self.params['Dir_bnd'], skeleton = True, deformation =self.deform)\
-                    - d*InnerProduct(n, grad(test[i]))*u_bnd*ds(definedon = self.params['Dir_bnd'], skeleton=True, deformation =self.deform)
+                self.F += d*alpha/h*u_bnd*test[i]*ds(definedon = self.params['Dir_bnd'], skeleton = True, deformation = self.dX_new)\
+                    - d*InnerProduct(n, grad(test[i]))*u_bnd*ds(definedon = self.params['Dir_bnd'], skeleton=True, deformation = self.dX_new)
             if self.params['Neu_bnd']:
-                self.F += d*gradu_bnd*n*test[i]*ds(definedon = self.params['Neu_bnd'], deformation =self.deform)
+                self.F += d*gradu_bnd*n*test[i]*ds(definedon = self.params['Neu_bnd'], deformation = self.dX_new)
 
-            self.F += -IfPos(b*n, CF(0), b*n*u_bnd)*test[i]*ds(deformation =self.deform)
-            self.F += 1/self.model.dt*self.gfu_old.components[i]*test[i]*dx(deformation = deform_old)
+            self.F += tot_flux_bnd*test[i]*ds(deformation = self.dX_new)
+
+            self.F += -IfPos(b*n, CF(0), b*n*u_bnd)*test[i]*ds(deformation = self.dX_new)
+
+            self.A += 1/self.model.dt*trial[i]*test[i]*dx(deformation = self.dX_new)
+
+            if self.sys_dim > 1:
+                self.F += 1/self.model.dt*self.gfu_old.components[i]*test[i]*dx(deformation = self.dX_old)
+            elif self.sys_dim == 1:
+                self.F += 1/self.model.dt*self.gfu_old*test[0]*dx(deformation = self.dX_old)
         
         self.A.Assemble()
         self.invA = self.A.mat.Inverse(freedofs = self.fes.FreeDofs())
         self.F.Assemble()
 
-        self.model.time.helper.t.Set(self.model.time.t.Get())
+        ############### Do I actually need this? Getting rid of it for now
+        ############### might be a problem for manufactured solutions
+        # self.model.time.helper.t.Set(self.model.time.t.Get())
 
         self.gfu.vec.data = self.invA*self.F.vec
 
@@ -184,7 +211,7 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
             if self.params["bounds_" + str(i+1)] and not self.params["mass_preserving_" + str(i+1)]:
 
                 gfu_vec = self.output_fields["sol_" + str(i+1)]._coef.vec.Copy().FV().NumPy()
-                gfu_new = MandBP(gfu_vec, BP = self.params["bounds"])
+                gfu_new = MandBP(gfu_vec, BP = self.params["bounds_" + str(i+1)])
                 self.output_fields["sol_" + str(i+1)]._coef.vec.data = gfu_new
 
             elif self.params["mass_preserving_" + str(i+1)]:
@@ -211,4 +238,6 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
 
     def PostProcess(self):
 
-        pass
+        del self.A
+        del self.invA
+        del self.F
