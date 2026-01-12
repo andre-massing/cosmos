@@ -49,6 +49,7 @@ class CosmosStepManager:
             old_sol.append(pde.gfu.vec.Copy())
 
         if self.coupling_type == 'implicit' and len(model.pdes)>0:
+            print('ok')
             self.iter = 0
             while np.max(errors)>tol and self.iter < 20:
                 for i, pde in enumerate(model.pdes):
@@ -57,6 +58,7 @@ class CosmosStepManager:
                     old_sol[i] = pde.gfu.vec.Copy()
                 self.iter += 1
                 logger.debug(f'Step subiter_bool count: {self.iter} | Max error {np.max(np.array(errors)):.2e}')
+                print(errors)
 
             if self.iter == 20:
                 raise Exception('Internal solver iteration exceeded max number of 20 iterations')

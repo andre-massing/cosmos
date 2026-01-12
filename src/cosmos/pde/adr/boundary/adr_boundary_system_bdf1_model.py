@@ -65,12 +65,12 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
         
         self.gfu = GridFunction(self.fes)
         self.gfu_old = GridFunction(self.fes)
+        self.sol = [self.gfu.components[2*i] for i in range(self.sys_dim)]
         if self.model.dim == 2:
             self.gfu_vtk = [GridFunction(H1(self.model.parentmesh, order = self.params["fes_order"])) for i in range(self.sys_dim)]
         else:
             self.gfu_vtk = self.sol
 
-        self.sol = [self.gfu.components[2*i] for i in range(self.sys_dim)]
         self.sol_old = [self.gfu_old.components[2*i] for i in range(self.sys_dim)]
         for i in range(self.sys_dim):
             self.output_fields["sol_" + str(i+1)] = OutputField(self.gfu.components[2*i], "sol_" + str(i+1), BND)

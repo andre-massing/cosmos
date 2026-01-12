@@ -26,6 +26,8 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
         self.model = model
         self.compartment = compartment
 
+        self.nonlinearities = []
+
         if 'dim' in kwargs.keys():
             if isinstance(kwargs['dim'], numbers.Number):
                 self.sys_dim = kwargs['dim']
@@ -77,16 +79,23 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
         else:
             self.identity = CF((x,y,z))
 
-        self.mass0 = np.zeros(self.sys_dim)
-
-    def Initialize(self):
-
         self.dX_new = GridFunction(self.model.dX.space)
         self.dX_old = GridFunction(self.model.dX.space)
-
+        self.mass0 = np.zeros(self.sys_dim)
         ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
         ir_tet = IntegrationRule(points  = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)], \
                                         weights = [1/24, 1/24, 1/24, 1/24])
+        dx_lumped = dx(intrules = {  TRIG : ir_trig , TET : ir_tet }, deformation = self.dX_new)
+        space = H1(model.parentmesh, order = self.params["fes_order"], 
+                                definedon = compartment.domain)
+        self.Amp = BilinearForm(space, symmetric = True)
+        u, v = space.TnT()
+        self.Amp += u*v*dx_lumped
+        self.Amp.Assemble()
+        rows,cols,vals = self.Amp.mat.COO()
+        self.weights0 = sp.csr_matrix((vals,(rows,cols))).diagonal()
+
+    def Initialize(self):
 
         for i in range(self.sys_dim):
             self.output_fields["sol_" + str(i+1)]._coef.Set(self.params["u0_" + str(i+1)], definedon = self.compartment.domain, dual = True)
@@ -97,15 +106,8 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
                 raise Exception('Bounds preservation not yet implemented for fes_order>1')
             
             if self.params["mass_preserving_" + str(i+1)]:
-                dx_lumped = dx(intrules = {  TRIG : ir_trig , TET : ir_tet }, deformation = self.dX_new)
-                self.Amp = BilinearForm(self.output_fields["sol_" + str(i+1)]._coef.space, symmetric = True)
-                u, v = self.output_fields["sol_" + str(i+1)]._coef.space.TnT()
-                self.Amp += u*v*dx_lumped
-                self.Amp.Assemble()
-                rows,cols,vals = self.Amp.mat.COO()
-                weights = sp.csr_matrix((vals,(rows,cols))).diagonal()
-                gfu0_vec = self.gfu.vec.Copy().FV().NumPy()
-                self.mass0[i] = np.sum(weights*gfu0_vec)
+                gfu0_vec = self.sol[i].vec.Copy().FV().NumPy()
+                self.mass0[i] = np.sum(self.weights0*gfu0_vec)
             
             if self.params["bounds_" + str(i+1)]:
                 self.output_fields["sol_" + str(i+1)]._coef.vec.data[:] = np.clip(self.output_fields["sol_" + str(i+1)]._coef.vec.FV().NumPy(),
@@ -241,3 +243,19 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
         del self.A
         del self.invA
         del self.F
+
+    def _base_env(self):
+        # whitelist of functions (extend as needed)
+        return {
+            "sin": sin, "cos": cos, "exp": exp, "log": log, "sqrt": sqrt,
+            "IfPos": IfPos,
+        }
+
+    def add_nonlinearity(self, target, expression, map):
+
+        nonlin = {}
+        nonlin["expr"] = expression
+        nonlin["map"] = map
+        nonlin["target"] = target
+
+        self.nonlinearities.append(nonlin)

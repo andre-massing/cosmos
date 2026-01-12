@@ -104,7 +104,7 @@ def test_herant_2D_v2_vp(
     pde1.set_params(
         rhs = lambda: F0*pde2.gfu/gamma_drag,
         alpha = gamma_PMN/gamma_drag,
-        sp_curv = CF(-1/R_PMN),
+        # sp_curv = CF(-1/R_PMN),
         volume_preserving = True
     )
 

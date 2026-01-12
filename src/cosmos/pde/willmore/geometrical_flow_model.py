@@ -229,8 +229,9 @@ class GeometricalFlowModel(BasePDEModel):
     def PostProcess(self):
 
         if self.model.dim == 2:
-            for i, gfu in enumerate(self.gfu_vtk):
-                gfu.Set(self.gfu.components[i], definedon = self.compartment.domain)
+            if self.model.io.root != None:
+                for i, gfu in enumerate(self.gfu_vtk):
+                    gfu.Set(self.gfu.components[i], definedon = self.compartment.domain)
 
         del self.A
         del self.invA

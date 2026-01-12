@@ -16,7 +16,7 @@ logging.getLogger().setLevel(logging.INFO)
 @pytest.mark.parametrize("phi_cap", [0.969, 0.866, 0.5])
 @pytest.mark.parametrize("D_factor", [1, 0.1, 10])
 @pytest.mark.parametrize("gamma_PMN_factor", [1, 0.1, 10])
-def test_herant_2D_v1_ap(
+def test_herant_2D_v1_vp(
         request,
         artifacts_path,
         phi_cap, 
@@ -91,8 +91,8 @@ def test_herant_2D_v1_ap(
     pde1.set_params(
         rhs = lambda: F0*pde2.gfu/gamma_drag,
         alpha = gamma_PMN/gamma_drag,
-        sp_curv = CF(-1/R_PMN),
-        area_preserving = True
+        # sp_curv = CF(-1/R_PMN),
+        volume_preserving = True
     )
 
     ###################  ALE  ##################################

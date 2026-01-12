@@ -93,7 +93,7 @@ def test_herant_3D_v1_vp(
         rhs = lambda: F0*pde2.gfu/gamma_drag,
         alpha = gamma_PMN/gamma_drag,
         gamma = 1,
-        sp_curv = CF(-2/R_PMN),
+        # sp_curv = CF(-2/R_PMN),
         volume_preserving = True
     )
 
