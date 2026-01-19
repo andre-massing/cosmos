@@ -121,10 +121,15 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
             output_vtk_folder = os.path.join(self.model.io.root, self.name)
             output_vtk_name = os.path.join(output_vtk_folder, self.name)
             os.makedirs(output_vtk_folder, exist_ok=True)
-
+            if self.model.dim == 2:
+                gfu_one = GridFunction(H1(self.model.parentmesh, order = 1))
+                gfu_one.Set(1, definedon = self.compartment.domain)
+            else:
+                gfu_one = GridFunction(H1(self.model.parentmesh, order = 1, definedon = self.compartment.domain))
+                gfu_one.Set(1, definedon = self.compartment.domain)
             self.vtk = VTKOutput(self.model.parentmesh,
-                                coefs=[self.gfu_vtk[i] for i in range(self.sys_dim)],
-                                names =['concentration_' + str(i+1) for i in range(self.sys_dim)],
+                                coefs=[self.gfu_vtk[i] for i in range(self.sys_dim)] + [gfu_one],
+                                names =['concentration_' + str(i+1) for i in range(self.sys_dim)] + ['indicator'],
                                 filename= output_vtk_name, 
                                 subdivision = self.params['subdivision'])
 

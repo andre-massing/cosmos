@@ -101,11 +101,15 @@ class GeometricalFlowStationaryModel(BasePDEModel):
             os.makedirs(output_vtk_folder, exist_ok=True)
             if self.model.dim == 2:
                 self.gfu_vtk = [GridFunction(H1(self.model.parentmesh, order = 1)) for i in range(3)]
+                gfu_one = GridFunction(H1(self.model.parentmesh, order = 1))
+                gfu_one.Set(1, definedon = self.compartment.domain)
             else:
                 self.gfu_vtk = self.gfu.components
+                gfu_one = GridFunction(H1(self.model.parentmesh, order = 1, definedon = self.compartment.domain))
+                gfu_one.Set(1, definedon = self.compartment.domain)
             self.vtk = VTKOutput(self.model.parentmesh,
-                                coefs=[self.gfu_vtk[i] for i in range(3)],
-                                names =['velocity', 'mean_curvature', 'spontaneous_curvature'],
+                                coefs=[self.gfu_vtk[i] for i in range(3)]+ [gfu_one],
+                                names =['velocity', 'mean_curvature', 'spontaneous_curvature', 'indicator'],
                                 filename= output_vtk_name, 
                                 subdivision = self.params['subdivision'])
     def PreProcess(self):

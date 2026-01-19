@@ -66,10 +66,10 @@ class GeometricalFlowModel(BasePDEModel):
 
         self.sp_curv_gfu = GridFunction(self.scalarspace_bbnd)
 
-    def Initialize(self):
+        self.lam = GridFunction(NumberSpace(model.parentmesh, definedon=compartment.domain))
+        self.mu = GridFunction(NumberSpace(model.parentmesh, definedon=compartment.domain))
 
-        self.lam = Parameter(0)
-        self.mu = Parameter(0)
+    def Initialize(self):
 
         self.model.dX = self.model.dX
 
@@ -101,11 +101,15 @@ class GeometricalFlowModel(BasePDEModel):
             os.makedirs(output_vtk_folder, exist_ok=True)
             if self.model.dim == 2:
                 self.gfu_vtk = [GridFunction(H1(self.model.parentmesh, order = 1)) for i in range(2)]
+                gfu_one = GridFunction(H1(self.model.parentmesh, order = 1))
+                gfu_one.Set(1, definedon = self.compartment.domain)
             else:
                 self.gfu_vtk = self.gfu.components
+                gfu_one = GridFunction(H1(self.model.parentmesh, order = 1, definedon = self.compartment.domain))
+                gfu_one.Set(1, definedon = self.compartment.domain)
             self.vtk = VTKOutput(self.model.parentmesh,
-                                coefs=[self.gfu_vtk[i] for i in range(2)],
-                                names =['velocity', 'mean_curvature'],
+                                coefs=[self.gfu_vtk[i] for i in range(2)] + [gfu_one],
+                                names =['velocity', 'mean_curvature', 'indicator'],
                                 filename= output_vtk_name, 
                                 subdivision = self.params['subdivision'])
 
@@ -175,8 +179,8 @@ class GeometricalFlowModel(BasePDEModel):
 
                 lam_old = lam_new
                 mu_old = mu_new
-                self.lam.Set(lam_old)
-                self.mu.Set(mu_old)
+                self.lam.vec[:] = lam_old
+                self.mu.vec[:] = mu_old
 
                 iter += 1
 

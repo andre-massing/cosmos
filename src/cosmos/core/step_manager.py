@@ -54,11 +54,11 @@ class CosmosStepManager:
             while np.max(errors)>tol and self.iter < 20:
                 for i, pde in enumerate(model.pdes):
                     pde.Solve()
-                    errors[i] = Norm(pde.gfu.vec-old_sol[i])/len(pde.gfu.vec)
+                    errors[i] = Norm(pde.gfu.vec-old_sol[i])/np.max([len(pde.gfu.vec), Norm(old_sol[i])])
                     old_sol[i] = pde.gfu.vec.Copy()
                 self.iter += 1
-                logger.debug(f'Step subiter_bool count: {self.iter} | Max error {np.max(np.array(errors)):.2e}')
                 print(errors)
+                logger.debug(f'Step subiter_bool count: {self.iter} | Max error {np.max(np.array(errors)):.2e}')
 
             if self.iter == 20:
                 raise Exception('Internal solver iteration exceeded max number of 20 iterations')

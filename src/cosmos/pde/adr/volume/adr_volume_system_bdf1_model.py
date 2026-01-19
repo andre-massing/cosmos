@@ -26,8 +26,6 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
         self.model = model
         self.compartment = compartment
 
-        self.nonlinearities = []
-
         if 'dim' in kwargs.keys():
             if isinstance(kwargs['dim'], numbers.Number):
                 self.sys_dim = kwargs['dim']
@@ -117,9 +115,11 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
             output_vtk_folder = os.path.join(self.model.io.root, self.name)
             output_vtk_name = os.path.join(output_vtk_folder, self.name)
             os.makedirs(output_vtk_folder, exist_ok=True)
+            gfu_one = GridFunction(H1(self.model.parentmesh, definedon = self.compartment.domain))
+            gfu_one.Set(1, definedon = self.compartment.domain)
             self.vtk = VTKOutput(self.model.parentmesh,
-                                coefs=[self.output_fields["sol_" + str(i+1)]._coef for i in range(self.sys_dim)],
-                                names =['concentration_' + str(i+1) for i in range(self.sys_dim)],
+                                coefs=[self.output_fields["sol_" + str(i+1)]._coef for i in range(self.sys_dim)] + [gfu_one],
+                                names =['concentration_' + str(i+1) for i in range(self.sys_dim)]+ ['indicator'],
                                 filename= output_vtk_name, 
                                 subdivision = self.params['subdivision'])
 
@@ -243,19 +243,3 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
         del self.A
         del self.invA
         del self.F
-
-    def _base_env(self):
-        # whitelist of functions (extend as needed)
-        return {
-            "sin": sin, "cos": cos, "exp": exp, "log": log, "sqrt": sqrt,
-            "IfPos": IfPos,
-        }
-
-    def add_nonlinearity(self, target, expression, map):
-
-        nonlin = {}
-        nonlin["expr"] = expression
-        nonlin["map"] = map
-        nonlin["target"] = target
-
-        self.nonlinearities.append(nonlin)
