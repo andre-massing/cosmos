@@ -126,9 +126,9 @@ class CosmosModel:
                 raise Exception(f'Name {name} for ALE motion has already been used. Names must be unique')
             else:
                 if compartment.is_bnd:
-                    ale = CosmosBndALEField(name, self, compartment, **kwargs)
+                    ale = CosmosBndALEField(name, self, compartment)
                 else:
-                    ale = CosmosVolALEField(name, self, compartment, **kwargs)
+                    ale = CosmosVolALEField(name, self, compartment)
                 self.ales.append(ale)
                 compartment.ale = ale
         return ale

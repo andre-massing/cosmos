@@ -56,13 +56,14 @@ class CosmosIOManager:
                     self.print_step_data(model, file=f)
 
                 for pde in model.pdes:
-                    if pde.is_bnd:
-                        if model.dim == 2:
-                            pde.vtk.Do(time = model.time.t.Get(), vb = VOL)
+                    if pde.params['printing']:
+                        if pde.is_bnd:
+                            if model.dim == 2:
+                                pde.vtk.Do(time = model.time.t.Get(), vb = VOL)
+                            else:
+                                pde.vtk.Do(time = model.time.t.Get(), vb = BND)
                         else:
-                            pde.vtk.Do(time = model.time.t.Get(), vb = BND)
-                    else:
-                        pde.vtk.Do(time = model.time.t.Get(), vb = VOL)
+                            pde.vtk.Do(time = model.time.t.Get(), vb = VOL)
 
                 if model.is_bnd:
                     model.ale.vtk.Do(time = model.time.t.Get(), vb = BND)

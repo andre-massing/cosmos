@@ -15,7 +15,7 @@ class BasePDEModel(ABC):
         self.name = name
         self.model = model
         self.compartment = compartment
-        self.params = {}
+        self.params = {'printing': False}
         self.output_fields: Dict[str, OutputField] = {}
         self.cfg = get_config()
         self.vtk = None

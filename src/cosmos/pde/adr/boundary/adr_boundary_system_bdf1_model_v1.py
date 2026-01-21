@@ -87,7 +87,7 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
             self.identity = CF((x,y,z))
 
         self.dX_new = GridFunction(self.model.dX.space)
-        self.dX_half = GridFunction(self.model.dX.space)
+        self.dX_new = GridFunction(self.model.dX.space)
         self.dX_old = GridFunction(self.model.dX.space)
 
         ir_segm = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
@@ -146,7 +146,6 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
         # self.J_h_old.Set(Det(Grad(self.Amap_h).Trace().trans*Grad(self.Amap_h).Trace() + OuterProduct(self.ns, self.ns)), definedon=self.compartment.domain)
 
         self.dX_new.vec.data = self.model.dX.vec.data
-        self.dX_half.vec.data = 0.5*self.model.ale.prev_dX[-2].data + 0.5*self.model.dX.vec.data
         self.dX_old.vec.data = self.model.ale.prev_dX[-2].data
 
     def Solve(self):
@@ -178,21 +177,21 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
             u_bnd = self.params["u_bnd_" + str(i+1)]().Compile()
             gradu_bnd = self.params["gradu_bnd_" + str(i+1)]().Compile()
 
-            self.A += c*trial[2*i]*test[2*i]*ds(deformation = self.dX_half)
-            self.A += d*grad(trial[2*i]).Trace()*grad(test[2*i]).Trace()*ds(deformation = self.dX_half)
+            self.A += c*trial[2*i]*test[2*i]*ds(deformation = self.dX_new)
+            self.A += d*grad(trial[2*i]).Trace()*grad(test[2*i]).Trace()*ds(deformation = self.dX_new)
                     
             if self.params['Dir_bnd']:
                 dir_bnd_gfu = GridFunction(facet_space)
                 dir_bnd_gfu.Set(1, definedon = self.model.parentmesh.BBoundaries(self.params['Dir_bnd']))
-                self.A += - dir_bnd_gfu*d*InnerProduct(nE, grad(trial[2*i]).Trace())*test[2*i]*ds(element_boundary=True, deformation = self.dX_half) \
-                    - dir_bnd_gfu*d*InnerProduct(nE, grad(test[2*i]).Trace())*trial[2*i]*ds(element_boundary=True, deformation = self.dX_half)\
-                    + dir_bnd_gfu*d*alpha/h*trial[2*i]*test[2*i]*ds(element_boundary=True, deformation = self.dX_half)
+                self.A += - dir_bnd_gfu*d*InnerProduct(nE, grad(trial[2*i]).Trace())*test[2*i]*ds(element_boundary=True, deformation = self.dX_new) \
+                    - dir_bnd_gfu*d*InnerProduct(nE, grad(test[2*i]).Trace())*trial[2*i]*ds(element_boundary=True, deformation = self.dX_new)\
+                    + dir_bnd_gfu*d*alpha/h*trial[2*i]*test[2*i]*ds(element_boundary=True, deformation = self.dX_new)
 
-            self.A += -b*grad(test[2*i]).Trace() * trial[2*i]*ds(deformation = self.dX_half)
+            self.A += -b*grad(test[2*i]).Trace() * trial[2*i]*ds(deformation = self.dX_new)
             bnd_gfu = GridFunction(facet_space)
             bnd_gfu.Set(1, definedon = self.model.parentmesh.BBoundaries(self.params['Dir_bnd']+'|'+self.params['Neu_bnd']))
             self.A += bnd_gfu*IfPos(b*nE, b*nE*trial[2*i], CF(0))*test[2*i]\
-                *ds(element_boundary=True, deformation = self.dX_half)
+                *ds(element_boundary=True, deformation = self.dX_new)
             
             if self.model.dim == 2:
                 tEc = CF((-self.ns[1], self.ns[0]))
@@ -203,23 +202,23 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
                 jump_dvdn = (test[2*i].Trace().Deriv() - test[2*i +1].Trace())*nE
             stab = Norm(b)*h**2
             self.A +=  IfPos(stab, stab*InnerProduct(jump_dudn,jump_dvdn), InnerProduct(trial[2*i +1].Trace(),test[2*i +1].Trace()) )\
-                    *ds(element_boundary=True, deformation = self.dX_half)
+                    *ds(element_boundary=True, deformation = self.dX_new)
             self.A +=  -1*bnd_gfu*IfPos(stab, stab*InnerProduct(jump_dudn,jump_dvdn), InnerProduct(trial[2*i +1].Trace(),test[2*i +1].Trace()) )\
-                    *ds(element_boundary=True, deformation = self.dX_half)
+                    *ds(element_boundary=True, deformation = self.dX_new)
             self.A +=  bnd_gfu*InnerProduct(trial[2*i +1].Trace(),test[2*i +1].Trace())\
-                    *ds(element_boundary=True, deformation = self.dX_half)
+                    *ds(element_boundary=True, deformation = self.dX_new)
 
-            self.F += rhs*test[2*i]*ds(deformation = self.dX_half)
+            self.F += rhs*test[2*i]*ds(deformation = self.dX_new)
             
             if self.params['Dir_bnd']:
-                self.F += dir_bnd_gfu*d*alpha/h*u_bnd*test[2*i]*ds(element_boundary=True, deformation = self.dX_half)\
-                    - dir_bnd_gfu*d*InnerProduct(nE, grad(test[2*i]).Trace())*u_bnd*ds(element_boundary=True, deformation = self.dX_half)
+                self.F += dir_bnd_gfu*d*alpha/h*u_bnd*test[2*i]*ds(element_boundary=True, deformation = self.dX_new)\
+                    - dir_bnd_gfu*d*InnerProduct(nE, grad(test[2*i]).Trace())*u_bnd*ds(element_boundary=True, deformation = self.dX_new)
             if self.params['Neu_bnd']:
                 neu_bnd_gfu = GridFunction(facet_space)
                 neu_bnd_gfu.Set(1, definedon = self.model.parentmesh.BBoundaries(self.params['Neu_bnd']))
-                self.F += neu_bnd_gfu*d*gradu_bnd*nE*test[2*i]*ds(element_boundary=True, deformation = self.dX_half)
+                self.F += neu_bnd_gfu*d*gradu_bnd*nE*test[2*i]*ds(element_boundary=True, deformation = self.dX_new)
 
-            self.F += -bnd_gfu*IfPos(b*nE, CF(0), b*nE*u_bnd)*test[2*i]*ds(element_boundary=True, deformation = self.dX_half)
+            self.F += -bnd_gfu*IfPos(b*nE, CF(0), b*nE*u_bnd)*test[2*i]*ds(element_boundary=True, deformation = self.dX_new)
             
             self.A += 1/self.model.dt*trial[2*i]*test[2*i]*ds(deformation = self.dX_new)
             self.F += 1/self.model.dt*self.gfu_old.components[2*i]*test[2*i]*ds(deformation = self.dX_old)
@@ -232,7 +231,7 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
                 env.update({"u"+str(j+1): self.sol[j], "v"+str(j+1): test[2*j]})
             env.update(nonlin['map'])
             
-            self.F += -1*eval(nonlin['expr'], env)*test[2*(nonlin['target']-1)]*ds(deformation = self.dX_half)
+            self.F += -1*eval(nonlin['expr'], env)*test[2*(nonlin['target']-1)]*ds(deformation = self.dX_new)
 
 
         self.A.Assemble()

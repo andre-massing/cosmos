@@ -65,10 +65,12 @@ class GeometricalFlowStationaryModel(BasePDEModel):
         self.W_h_old = GridFunction(self.discscalarspace)
         self.J_h_old = GridFunction(self.discscalarspace)
 
-    def Initialize(self):
+        self.lam = GridFunction(NumberSpace(model.parentmesh, definedon=compartment.domain))
+        self.mu = GridFunction(NumberSpace(model.parentmesh, definedon=compartment.domain))
+        self.one = GridFunction(NumberSpace(model.parentmesh, definedon=compartment.domain))
+        self.one.Set(1, definedon=compartment.domain)
 
-        self.lam = Parameter(0)
-        self.mu = Parameter(0)
+    def Initialize(self):
 
         deform = self.model.dX
 
@@ -95,7 +97,7 @@ class GeometricalFlowStationaryModel(BasePDEModel):
         self.kappa_h.vec.data = kappa0_h.vec.data
         self.sp_curv_h.vec.data = kappa0_h.vec.data
 
-        if self.model.io.root != None:
+        if self.params['printing']:
             output_vtk_folder = os.path.join(self.model.io.root, self.name)
             output_vtk_name = os.path.join(output_vtk_folder, self.name)
             os.makedirs(output_vtk_folder, exist_ok=True)
@@ -184,8 +186,8 @@ class GeometricalFlowStationaryModel(BasePDEModel):
 
                 lam_old = lam_new
                 mu_old = mu_new
-                self.lam.Set(lam_old)
-                self.mu.Set(mu_old)
+                self.lam.vec[:] = lam_old
+                self.mu.vec[:] = mu_old
 
                 iter += 1
 
@@ -197,19 +199,20 @@ class GeometricalFlowStationaryModel(BasePDEModel):
                 self.invA.Update()
                 self.F.Assemble()
 
-                self.gfu.vec.data += self.invA*self.F.vec
+                res = self.A.mat*self.gfu.vec
+                self.gfu.vec.data += self.invA*(self.F.vec-res)
 
                 if self.params['area_preserving'] and not self.params['volume_preserving']:
                     lam_new = Integrate((-self.V_h + self.lam*self.kappa_h)*self.kappa_h, mesh = self.model.parentmesh, VOL_or_BND = BND)/Integrate(self.kappa_h**2, mesh = self.model.parentmesh, VOL_or_BND = BND)
                 elif self.params['volume_preserving'] and not self.params['area_preserving']:
-                    mu_new = Integrate(-self.V_h + self.mu, mesh = self.model.parentmesh, VOL_or_BND = BND)/Integrate(1, mesh = self.model.parentmesh, VOL_or_BND = BND)
+                    mu_new = Integrate(-self.V_h + self.mu, mesh = self.model.parentmesh, VOL_or_BND = BND)/Integrate(self.one, mesh = self.model.parentmesh, VOL_or_BND = BND)
                 elif self.params['volume_preserving'] and self.params['area_preserving']:
                     M = np.zeros((2,2))
                     c = np.zeros(2)
                     M[0, 0] = Integrate(self.kappa_h**2, mesh = self.model.parentmesh, VOL_or_BND = BND)
                     M[0, 1] = Integrate(self.kappa_h, mesh = self.model.parentmesh, VOL_or_BND = BND)
-                    M[1, 0] = Integrate(self.kappa_h, mesh = self.model.parentmesh, VOL_or_BND = BND)
-                    M[1, 1] = Integrate(1, mesh = self.model.parentmesh, VOL_or_BND = BND)
+                    M[1, 0] = M[0, 1]
+                    M[1, 1] = Integrate(self.one, mesh = self.model.parentmesh, VOL_or_BND = BND)
                     c[0] = Integrate((-self.V_h + self.lam*self.kappa_h + self.mu)*self.kappa_h, mesh = self.model.parentmesh, VOL_or_BND = BND)
                     c[1] = Integrate(-self.V_h + self.lam*self.kappa_h + self.mu, mesh = self.model.parentmesh, VOL_or_BND = BND)
                     x = np.linalg.solve(M, c)
@@ -218,6 +221,7 @@ class GeometricalFlowStationaryModel(BasePDEModel):
 
                 err_lam = abs(lam_new-lam_old)
                 err_mu = abs(mu_new-mu_old)
+                print(err_lam, err_mu)
                 if err_lam<tol and err_mu<tol:
                     # print('Converged in ', iter, ' iterations')
                     break
@@ -235,7 +239,8 @@ class GeometricalFlowStationaryModel(BasePDEModel):
             self.invA = self.A.mat.Inverse(freedofs = self.fes.FreeDofs())
             self.F.Assemble()
 
-            self.gfu.vec.data += self.invA*self.F.vec
+            res = self.A.mat*self.gfu.vec
+            self.gfu.vec.data += self.invA*(self.F.vec-res)
 
     def PostProcess(self):
 
