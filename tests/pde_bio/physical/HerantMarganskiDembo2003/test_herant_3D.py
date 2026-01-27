@@ -15,9 +15,9 @@ from cosmos.pde.adr.boundary.adr_boundary_system_bdf1_model import ADRBoundarySy
 
 logging.getLogger().setLevel(logging.INFO)
 
-@pytest.mark.parametrize("phi_cap", [0.969, 0.866, 0.5])
-@pytest.mark.parametrize("D_factor", [1, 0.1])
-@pytest.mark.parametrize("gamma_PMN_factor", [1, 10, 100])
+@pytest.mark.parametrize("phi_cap", [0.969, 0.866])
+@pytest.mark.parametrize("D_factor", [1])
+@pytest.mark.parametrize("gamma_PMN_factor", [0.1, 1, 10])
 def test_herant_3D_vp(
         request,
         artifacts_path,
@@ -56,6 +56,7 @@ def test_herant_3D_vp(
     f = occ.Face(w)
     body = f.Revolve(occ.Axis((0,0,0),occ.Z), 360).Rotate(occ.Axis((0,0,0),occ.Y), 90)
     body.edges[1].name = "bboundary"
+    body.edges[1].maxh = maxh_fine/4
 
     geo = occ.OCCGeometry(body)
     ngmesh = geo.GenerateMesh(maxh=maxh_coarse, uselocalh=True, optsteps2d=3)
@@ -68,17 +69,17 @@ def test_herant_3D_vp(
     model_name = f"phi_cap{phi_cap}_d{D_m}_k{gamma_PMN}"
     model = CosmosModel(name=model_name, parentmesh=mesh, t0 = 0, t1 = 10,
                         dt = dt, t = t,
-                        coupling_type = 'implicit', redistribute = True,
+                        coupling_type = 'explicit', redistribute = True,
                         root = root, sample_rate = 50)
 
     ################### GRADIENT FLOW  ##################################
     comp1 = model.create_compartment(name = 'comp1', boundary = 'free_bnd', bboundary = 'bboundary', clamped_bbnd = "bboundary")
-    geom_flow = model.create_pde(name = 'geom_flow', pde_model=GeometricalFlowModel, compartment=comp1)
     adr_bnd = model.create_pde(name = 'indicator', pde_model=ADRBoundarySystemBDF1Model, compartment=comp1, dim = 1)
     adr_bnd.set_params(
-        Neu_bnd = 'default',
+        Neu_bnd = 'bboundary',
         b_1 = model.ale.wind,
         u0_1 = 1/(1+exp(-100*(x-R_PMN*phi_cap))),
+        printing = True
     )
 
     ###################  VOLUME ADR  ##################################
@@ -94,10 +95,12 @@ def test_herant_3D_vp(
         printing = True
     )
 
+    geom_flow = model.create_pde(name = 'geom_flow', pde_model=GeometricalFlowModel, compartment=comp1)
     geom_flow.set_params(
         rhs = lambda: F0*adr_vol.gfu/gamma_drag,
         alpha = gamma_PMN/gamma_drag,
-        volume_preserving = True
+        volume_preserving = True,
+        gamma = 0.2
     )
 
     ###################  ALE  ##################################

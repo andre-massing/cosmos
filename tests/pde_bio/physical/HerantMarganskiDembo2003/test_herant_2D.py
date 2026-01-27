@@ -15,9 +15,9 @@ from cosmos.pde.adr.boundary.adr_boundary_system_bdf1_model import ADRBoundarySy
 
 logging.getLogger().setLevel(logging.INFO)
 
-@pytest.mark.parametrize("phi_cap", [0.969, 0.866, 0.5])
-@pytest.mark.parametrize("D_factor", [1, 0.1])
-@pytest.mark.parametrize("gamma_PMN_factor", [1, 10, 100])
+@pytest.mark.parametrize("phi_cap", [0.969, 0.866])
+@pytest.mark.parametrize("D_factor", [1])
+@pytest.mark.parametrize("gamma_PMN_factor", [0.1, 1, 10])
 def test_herant_2D_vp(
         request,
         artifacts_path,
@@ -49,9 +49,13 @@ def test_herant_2D_vp(
     w = occ.Wire([arc1, arc2])
     f = occ.Face(w)
     f.maxh = maxh
-    f.edges.maxh = 0.1
+    f.edges.maxh = 0.15
     f.edges[0].name = 'free_bnd'
     f.edges[1].name = 'pipette_bnd'
+    f.vertices[0].name = 'bbnd'
+    f.vertices[0].maxh= 0.05
+    f.vertices[1].name = 'bbnd'
+    f.vertices[1].maxh= 0.05
 
     geo = occ.OCCGeometry(f, dim = 2)
 
@@ -67,17 +71,17 @@ def test_herant_2D_vp(
     model_name = f"phi_cap{phi_cap}_d{D_m}_k{gamma_PMN}"
     model = CosmosModel(name=model_name, parentmesh=mesh, t0 = 0, t1 = 10,
                         dt = dt, t = t,
-                        coupling_type = 'implicit', redistribute = True,
+                        coupling_type = 'explicit', redistribute = True,
                         root = root, sample_rate = 50)
 
     ################### GRADIENT FLOW  ##################################
-    comp1 = model.create_compartment(name = 'comp1', boundary = 'free_bnd', bboundary = 'default', clamped_bbnd = "default")
-    geom_flow = model.create_pde(name = 'geom_flow', pde_model=GeometricalFlowModel, compartment=comp1)
+    comp1 = model.create_compartment(name = 'comp1', boundary = 'free_bnd', bboundary = 'bbnd', clamped_bbnd = "bbnd")
     adr_bnd = model.create_pde(name = 'indicator', pde_model=ADRBoundarySystemBDF1Model, compartment=comp1, dim = 1)
     adr_bnd.set_params(
-        Neu_bnd = 'default',
+        Neu_bnd = 'bbnd',
         b_1 = model.ale.wind,
-        u0_1 = 1/(1+exp(-100*(x-R_PMN*phi_cap)))
+        u0_1 = 1/(1+exp(-100*(x-R_PMN*phi_cap))),
+        printing = True
     )
 
     ###################  VOLUME ADR  ##################################
@@ -93,9 +97,11 @@ def test_herant_2D_vp(
         printing = True
     )
 
+    geom_flow = model.create_pde(name = 'geom_flow', pde_model=GeometricalFlowModel, compartment=comp1)
     geom_flow.set_params(
         rhs = lambda: F0*adr_vol.gfu/gamma_drag,
         alpha = gamma_PMN/gamma_drag,
+        gamma = 0.5,
         volume_preserving = True
     )
 

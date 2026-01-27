@@ -67,12 +67,11 @@ def test_herant_2D_v1_vp(
     model_name = f"phi_cap{phi_cap}_d{D_m}_k{gamma_PMN}"
     model = CosmosModel(name=model_name, parentmesh=mesh, t0 = 0, t1 = 10,
                         dt = dt, t = t,
-                        coupling_type = 'implicit', redistribute = True,
+                        coupling_type = 'explicit', redistribute = True,
                         root = root, sample_rate = 25)
 
     ################### GRADIENT FLOW  ##################################
     comp1 = model.create_compartment(name = 'comp1', boundary = 'free_bnd', bboundary = 'default', clamped_bbnd = "default")
-    pde1 = model.create_pde(name = 'geom_flow', pde_model=GeometricalFlowModel, compartment=comp1)
 
     ###################  VOLUME ADR  ##################################
     comp2 = model.create_compartment(name = 'comp2', material = 'default', boundary = 'free_bnd|pipette_bnd')
@@ -88,10 +87,10 @@ def test_herant_2D_v1_vp(
         b_1 = model.ale.wind,
     )
 
+    pde1 = model.create_pde(name = 'geom_flow', pde_model=GeometricalFlowModel, compartment=comp1)
     pde1.set_params(
         rhs = lambda: F0*pde2.gfu/gamma_drag,
         alpha = gamma_PMN/gamma_drag,
-        # sp_curv = CF(-1/R_PMN),
         volume_preserving = True
     )
 

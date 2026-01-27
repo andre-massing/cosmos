@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<!DOCTYPE Xdmf SYSTEM "Xdmf.dtd" []>
+<Xdmf Version="3.0" xmlns:xi="http://www.w3.org/2001/XInclude">
+  <Domain>
+    <Grid Name="mesh" GridType="Uniform">
+      <Topology NumberOfElements="37598" TopologyType="Triangle" NodesPerElement="3">
+        <DataItem Dimensions="37598 3" NumberType="UInt" Format="HDF">mito_IM.h5:/Mesh/mesh/topology</DataItem>
+      </Topology>
+      <Geometry GeometryType="XYZ">
+        <DataItem Dimensions="18708 3" Format="HDF">mito_IM.h5:/Mesh/mesh/geometry</DataItem>
+      </Geometry>
+    </Grid>
+  </Domain>
+</Xdmf>
