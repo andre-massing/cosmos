@@ -64,6 +64,11 @@ class CosmosCompartment:
         else:
             raise Exception(f'Compartment {self.name} has to be initialized with the couple: \n {{material, boundary}} or {{boundary, bboundary}}')
         
+        gfu = GridFunction(H1(model.parentmesh, order = model.geo_order))
+        gfu.Set(1, definedon = self.domain)
+        self.vtk_gfu = [gfu]
+        self.vtk_names = [self.name]
+        
     def print_compartment_info(self):
 
         print(f'The compartment name is: {self.name}')

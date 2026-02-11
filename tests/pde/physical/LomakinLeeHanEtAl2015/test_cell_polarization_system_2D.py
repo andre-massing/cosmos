@@ -44,7 +44,7 @@ model = CosmosModel(name = 'system_Lomakin', parentmesh = mesh, dt = dt, t0 = t0
 
 comp1 = model.create_compartment(name = 'compartment', boundary = 'boundary', bboundary = '')
 
-from cosmos.pde.adr.boundary.adr_boundary_system_bdf1_model import ADRBoundarySystemBDF1Model
+from cosmos.pde.adr.boundary.adr_boundary_system_bdf1_model_stab import ADRBoundarySystemBDF1Model
 adr_system = model.create_pde(name = 'adr_system', pde_model=ADRBoundarySystemBDF1Model, compartment=comp1,
                               dim = 2)
 

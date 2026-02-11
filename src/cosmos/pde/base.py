@@ -16,7 +16,6 @@ class BasePDEModel(ABC):
         self.model = model
         self.compartment = compartment
         self.params = {'printing': False}
-        self.output_fields: Dict[str, OutputField] = {}
         self.cfg = get_config()
         self.vtk = None
         self.is_bnd = None
@@ -48,3 +47,9 @@ class BasePDEModel(ABC):
                     self.params[key] = value
             else:
                 raise Exception(f'Parameter {key} not present in PDEModel')
+            
+    def adaptive_timestep_cap(self):
+        return False
+    
+    def reset(self):
+        pass

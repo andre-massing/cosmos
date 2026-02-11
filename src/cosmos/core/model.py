@@ -46,6 +46,9 @@ class CosmosModel:
         # model components
         self.compartments: List[CosmosCompartment] = []
         self.pdes:  List[BasePDEModel] = []
+        self.pdes_init:  List[BasePDEModel] = []
+        self.pdes_pre:  List[BasePDEModel] = []
+        self.pdes_post:  List[BasePDEModel] = []
         self.ales = []
         self.time = CosmosTimeManager(self.params)
         self.step = CosmosStepManager(self.params)
@@ -55,14 +58,12 @@ class CosmosModel:
         self.dt = self.time.dt
         self.t = self.time.t
 
-        self.dX = self.ale.dX
-
     def initialize(self):
 
         self.time.initialize()
-        self.io.initialize(self)
-        self.step.initialize(self)
         self.ale.initialize(self)
+        self.step.initialize(self)
+        self.io.initialize(self)
 
     def __call__(self):
         return self._generator()
@@ -80,10 +81,13 @@ class CosmosModel:
 
                 self.step.solve_step(self)
                 self.time.next()
-
                 self.io.save_step_data(self)
 
+                self.ale.finalize(self)
+
                 yield
+
+            self.io.finalize(self)
 
     def run(self):
         for step in self(): 
@@ -107,7 +111,7 @@ class CosmosModel:
         self.compartments.append(compartment)
         return compartment
     
-    def create_pde(self, name, pde_model: "BasePDEModel", compartment:CosmosCompartment, **kwargs):
+    def create_pde(self, name, pde_model: "BasePDEModel", compartment:CosmosCompartment,  ale_type:int , **kwargs):
         pde = pde_model(name, self, compartment, **kwargs)
         if pde.is_bnd and compartment.is_vol:
             raise Exception(f'Boundary PDE {pde_model} is trying to be imposed on a non-boundary domain {compartment.name} or the opposite')
@@ -115,6 +119,14 @@ class CosmosModel:
             raise Exception(f'Volume PDE {pde_model} is trying to be imposed on a boundary domain {compartment.name} or the opposite')
         else:
             compartment.pdes.append(pde)
+            if ale_type == -1:
+                self.pdes_init.append(pde)
+            elif ale_type == 0:
+                self.pdes_pre.append(pde)
+            elif ale_type == 1:
+                self.pdes_post.append(pde)
+            else:
+                raise Exception('Parameter pde-type must be in the values {-1 ,0, 1}')
             self.pdes.append(pde)
         return pde
     

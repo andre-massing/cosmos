@@ -45,11 +45,11 @@ def generate_boundary_arc(r=1, N=20, bbnd_name = "bboundary"):
         pids.append(ngmesh.Add(MeshPoint(Pnt(radius * np.cos(theta), radius * np.sin(theta), 0))))
     # Left half of the domain is material 1, right half material 2.
 
-    idx_doml = ngmesh.AddRegion("default", dim=1)
-    idx_domr = ngmesh.AddRegion("default", dim=1)
+    idx_doml = ngmesh.AddRegion("bbnd_l", dim=1)
+    idx_domr = ngmesh.AddRegion("bbnd_r", dim=1)
         
     for i in range(n_segments):
-        ngmesh.Add(Element1D([pids[i], pids[i + 1]], index=idx_doml if i < 10 else idx_domr))
+        ngmesh.Add(Element1D([pids[i], pids[i + 1]], index=idx_doml if i < round(N/2) else idx_domr))
 
     # Add BC to the mesh.
 
@@ -57,6 +57,42 @@ def generate_boundary_arc(r=1, N=20, bbnd_name = "bboundary"):
     idx_r = ngmesh.AddRegion(bbnd_name, dim=0)
     ngmesh.Add(Element0D(pids[0], index=idx_l))  
     ngmesh.Add(Element0D(pids[n_segments], index=idx_r))
+    mesh = Mesh(ngmesh)
+    
+    return mesh
+
+'''
+1D circle
+'''
+def generate_boundary_1D_circle(r=1, N=20, bbnd_name = "bboundary"):
+
+    ngmesh = NetGenMesh(dim=2)
+    # --- points: exactly N points around the circle (no duplicate endpoint) ---
+    pids = []
+    thetas = np.linspace(0.0, 2*np.pi, N, endpoint=False)
+    for th in thetas:
+        x, y = r*np.cos(th), r*np.sin(th)
+        pids.append(ngmesh.Add(MeshPoint(Pnt(x, y, 0.0))))
+
+    # --- boundary region for the curve (dim=1) ---
+    bnd_idx = ngmesh.AddRegion('default', dim=1)
+
+    # --- segments: i -> (i+1)%N closes the loop ---
+    for i in range(N):
+        ngmesh.Add(Element1D([pids[i], pids[(i+1) % N]], index=bnd_idx))
+
+    # --- optional: periodic identification across a "cut" ---
+    # This identifies point 0 with point N-1, which is useful if you want
+    # a periodic parameterization along the boundary (not required for a circle itself).
+    # left_idx  = ngmesh.AddRegion("per_left", dim=0)
+    # right_idx = ngmesh.AddRegion("per_right", dim=0)
+
+    # ngmesh.Add(Element0D(pids[0],   index=left_idx))
+    # ngmesh.Add(Element0D(pids[-1],  index=right_idx))
+    # ngmesh.AddPointIdentification(pids[0], pids[-1], left_idx, right_idx)
+
+    ngmesh.Update()
+
     mesh = Mesh(ngmesh)
     
     return mesh

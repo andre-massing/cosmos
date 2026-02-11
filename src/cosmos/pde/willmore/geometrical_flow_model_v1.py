@@ -57,10 +57,8 @@ class GeometricalFlowModel(BasePDEModel):
 
         self.pre_normal = GridFunction(self.vectorspace)
         self.normal = GridFunction(self.vectorspace)
-        self.Amap_h = GridFunction(self.vectorspace_bbnd)
         self.kappa_h_old = GridFunction(self.scalarspace_navier_bbnd)
         self.W_h_old = GridFunction(self.discscalarspace)
-        self.J_h_old = GridFunction(self.discscalarspace)
 
         self.sp_curv_gfu = GridFunction(self.scalarspace_bbnd)
 
@@ -114,9 +112,6 @@ class GeometricalFlowModel(BasePDEModel):
         self.normal.Set(Normalize(self.pre_normal), dual = True, definedon =self.compartment.domain)
         self.W_h_old.Set(Norm(grad(self.normal).Trace())**2, definedon =self.compartment.domain)
 
-        self.Amap_h.Set(self.identity - self.model.dt*self.model.ale.Wo, dual = True, definedon =self.compartment.domain)
-        self.J_h_old.Set(sqrt(Det(Grad(self.Amap_h).Trace().trans*Grad(self.Amap_h).Trace() + OuterProduct(self.ns, self.ns))), definedon=self.compartment.domain)
-
     def Solve(self):
 
         rhs = self.params['rhs']()
@@ -142,6 +137,9 @@ class GeometricalFlowModel(BasePDEModel):
 
         self.A += -1*InnerProduct(self.lam*kappa, phi)*ds(deformation = self.model.ale.Yo)
 
+        #### Implict coupling to geometry!
+        self.A += 0.5*InnerProduct(InnerProduct(Grad(self.model.ale.X).Trace(), Grad(self.model.ale.W).Trace())*kappa, phi)*ds(deformation = self.model.ale.Yo)
+
         self.A.Assemble()
         self.invA = self.A.mat.Inverse(freedofs = self.fes.FreeDofs())
 
@@ -153,10 +151,13 @@ class GeometricalFlowModel(BasePDEModel):
         self.F += -alpha*0.5*InnerProduct((self.kappa_h_old-self.params['sp_curv'])*self.kappa_h_old*self.params['sp_curv'], phi)*ds(deformation = self.model.ale.Yo)
 
         self.F += InnerProduct(self.params['sp_curv']/self.model.dt,xsi)*ds(deformation = self.model.ale.Yo)
-        self.F += InnerProduct((self.kappa_h_old - self.params['sp_curv'])/self.model.dt*sqrt(self.J_h_old),xsi)*ds(deformation = self.model.ale.Yo)
+        self.F += InnerProduct((self.kappa_h_old - self.params['sp_curv'])/self.model.dt,xsi)*ds(deformation = self.model.ale.Yo)
         self.F += -0.5*(- InnerProduct(self.model.ale.Wo, grad(xsi).Trace()*self.params['sp_curv']))*ds(deformation = self.model.ale.Yo)
 
         self.F += InnerProduct(self.mu, phi)*ds(deformation = self.model.ale.Yo)
+
+        #### Implict coupling to geometry!
+        self.F += 0.5*InnerProduct(InnerProduct(Grad(self.model.ale.X).Trace(), Grad(self.model.ale.W).Trace())*self.params['sp_curv'], phi)*ds(deformation = self.model.ale.Yo)
 
         if self.params['area_preserving'] or self.params['volume_preserving']:
 

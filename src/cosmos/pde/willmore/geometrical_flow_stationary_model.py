@@ -44,10 +44,6 @@ class GeometricalFlowStationaryModel(BasePDEModel):
         self.fes = self.scalarspace_bbnd*self.scalarspace_navier_bbnd*self.scalarspace_navier_bbnd
         self.gfu = GridFunction(self.fes)
         self.V_h, self.kappa_h, self.sp_curv_h = self.gfu.components
-        
-        self.output_fields["velocity"] = OutputField(self.V_h, "velocity", BND)
-        self.output_fields["mean_curvature"] = OutputField(self.kappa_h, "mean_curvature", BND)
-        self.output_fields["spontaneous_curvature"] = OutputField(self.sp_curv_h, "spontaneous_curvature", BND)
 
         dim = model.dim
         self.ns = specialcf.normal(dim)
@@ -70,9 +66,13 @@ class GeometricalFlowStationaryModel(BasePDEModel):
         self.one = GridFunction(NumberSpace(model.parentmesh, definedon=compartment.domain))
         self.one.Set(1, definedon=compartment.domain)
 
-    def Initialize(self):
+        if self.model.dim == 2:
+            self.vtk_gfu = [GridFunction(H1(self.model.parentmesh, order = 1)) for i in range(3)]
+        else:
+            self.vtk_gfu = self.gfu.components
+        self.vtk_names =[self.name + '_V', self.name + '_kappa', self.name + '_kappa0']
 
-        deform = self.model.dX
+    def Initialize(self):
 
         fes0 = self.vectorspace_bbnd*self.scalarspace_bbnd
         (dY0, kappa0), (nu0, zeta0) = fes0.TnT()
@@ -83,37 +83,20 @@ class GeometricalFlowStationaryModel(BasePDEModel):
         ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
 
         A0 = BilinearForm(fes0)
-        A0 += InnerProduct(dY0*self.ns, zeta0)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = deform)
-        A0 += InnerProduct(kappa0*self.ns, nu0)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = deform)
-        A0 += InnerProduct(grad(dY0).Trace(), grad(nu0).Trace())*ds(deformation = deform)
+        A0 += InnerProduct(dY0*self.ns, zeta0)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = self.model.ale.Yo)
+        A0 += InnerProduct(kappa0*self.ns, nu0)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = self.model.ale.Yo)
+        A0 += InnerProduct(grad(dY0).Trace(), grad(nu0).Trace())*ds(deformation = self.model.ale.Yo)
         A0.Assemble()
         invA0 = A0.mat.Inverse(freedofs = fes0.FreeDofs())
 
         F0 = LinearForm(fes0)
-        F0 += -InnerProduct(self.Ps, grad(nu0).Trace())*ds(deformation = deform)
+        F0 += -InnerProduct(self.Ps, grad(nu0).Trace())*ds(deformation = self.model.ale.Yo)
         F0.Assemble()
 
         gfu0.vec.data = invA0*F0.vec
         self.kappa_h.vec.data = kappa0_h.vec.data
         self.sp_curv_h.vec.data = kappa0_h.vec.data
 
-        if self.params['printing']:
-            output_vtk_folder = os.path.join(self.model.io.root, self.name)
-            output_vtk_name = os.path.join(output_vtk_folder, self.name)
-            os.makedirs(output_vtk_folder, exist_ok=True)
-            if self.model.dim == 2:
-                self.gfu_vtk = [GridFunction(H1(self.model.parentmesh, order = 1)) for i in range(3)]
-                gfu_one = GridFunction(H1(self.model.parentmesh, order = 1))
-                gfu_one.Set(1, definedon = self.compartment.domain)
-            else:
-                self.gfu_vtk = self.gfu.components
-                gfu_one = GridFunction(H1(self.model.parentmesh, order = 1, definedon = self.compartment.domain))
-                gfu_one.Set(1, definedon = self.compartment.domain)
-            self.vtk = VTKOutput(self.model.parentmesh,
-                                coefs=[self.gfu_vtk[i] for i in range(3)]+ [gfu_one],
-                                names =['velocity', 'mean_curvature', 'spontaneous_curvature', 'indicator'],
-                                filename= output_vtk_name, 
-                                subdivision = self.params['subdivision'])
     def PreProcess(self):
 
         self.kappa_h_old.vec.data = self.kappa_h.vec.data
@@ -122,12 +105,11 @@ class GeometricalFlowStationaryModel(BasePDEModel):
         self.pre_normal.Set(self.ns, dual = True, definedon=self.compartment.domain)
         self.normal.Set(Normalize(self.pre_normal), dual = True, definedon =self.compartment.domain)
         self.W_h_old.Set(Norm(grad(self.normal).Trace())**2, definedon =self.compartment.domain)
-        self.Amap_h.Set(self.identity - self.model.dt*self.model.ale.ale_velocity, dual = True, definedon =self.compartment.domain)
+        self.Amap_h.Set(self.identity - self.model.dt*self.model.ale.Wo, dual = True, definedon =self.compartment.domain)
         self.J_h_old.Set(sqrt(Det(Grad(self.Amap_h).Trace().trans*Grad(self.Amap_h).Trace() + OuterProduct(self.ns, self.ns))), definedon=self.compartment.domain)
 
     def Solve(self):
 
-        deform = self.model.dX
         rhs = self.params['rhs']()
         alpha = self.params['alpha']
         beta = self.params['beta']
@@ -136,40 +118,40 @@ class GeometricalFlowStationaryModel(BasePDEModel):
         (V, kappa, sp_curv), (phi, xsi, zeta) = self.fes.TnT()
         
         self.A = BilinearForm(self.fes)
-        self.A += InnerProduct(V, phi)*ds(deformation = deform)
-        self.A += -alpha*InnerProduct(grad(kappa).Trace(), grad(phi).Trace())*ds(deformation = deform)
-        self.A += alpha*InnerProduct(grad(sp_curv).Trace(), grad(phi).Trace())*ds(deformation = deform)
-        self.A += alpha*InnerProduct(self.W_h_old*kappa, phi)*ds(deformation = deform)
-        self.A += -alpha*InnerProduct(self.W_h_old*sp_curv, phi)*ds(deformation = deform)
-        self.A += -alpha*0.5*InnerProduct((self.kappa_h_old-self.sp_curv_h_old)*self.kappa_h_old*kappa, phi)*ds(deformation = deform)
-        self.A += alpha*0.5*InnerProduct((self.kappa_h_old-self.sp_curv_h_old)*self.kappa_h_old*sp_curv, phi)*ds(deformation = deform)
-        self.A += -beta*InnerProduct(grad(kappa).Trace(), grad(phi).Trace())*ds(deformation = deform)
-        self.A += -gamma*InnerProduct(kappa, phi)*ds(deformation = deform)
+        self.A += InnerProduct(V, phi)*ds(deformation = self.model.ale.Yo)
+        self.A += -alpha*InnerProduct(grad(kappa).Trace(), grad(phi).Trace())*ds(deformation = self.model.ale.Yo)
+        self.A += alpha*InnerProduct(grad(sp_curv).Trace(), grad(phi).Trace())*ds(deformation = self.model.ale.Yo)
+        self.A += alpha*InnerProduct(self.W_h_old*kappa, phi)*ds(deformation = self.model.ale.Yo)
+        self.A += -alpha*InnerProduct(self.W_h_old*sp_curv, phi)*ds(deformation = self.model.ale.Yo)
+        self.A += -alpha*0.5*InnerProduct((self.kappa_h_old-self.sp_curv_h_old)*self.kappa_h_old*kappa, phi)*ds(deformation = self.model.ale.Yo)
+        self.A += alpha*0.5*InnerProduct((self.kappa_h_old-self.sp_curv_h_old)*self.kappa_h_old*sp_curv, phi)*ds(deformation = self.model.ale.Yo)
+        self.A += -beta*InnerProduct(grad(kappa).Trace(), grad(phi).Trace())*ds(deformation = self.model.ale.Yo)
+        self.A += -gamma*InnerProduct(kappa, phi)*ds(deformation = self.model.ale.Yo)
 
-        self.A += InnerProduct(kappa/self.model.dt,xsi)*ds(deformation = deform)
-        self.A += -1*InnerProduct(sp_curv/self.model.dt,xsi)*ds(deformation = deform)
-        self.A += -0.5*(InnerProduct(self.model.ale.ale_velocity, grad(kappa).Trace()*xsi) - InnerProduct(self.model.ale.ale_velocity, grad(xsi).Trace()*kappa))*ds(deformation = deform)
-        self.A += 0.5*(InnerProduct(self.model.ale.ale_velocity, grad(sp_curv).Trace()*xsi) - InnerProduct(self.model.ale.ale_velocity, grad(xsi).Trace()*sp_curv))*ds(deformation = deform)
-        self.A += InnerProduct(grad(V).Trace(), grad(xsi).Trace())*ds(deformation = deform)
-        self.A += -InnerProduct(self.W_h_old*V, xsi)*ds(deformation = deform)
-        self.A += 0.5*InnerProduct(V, (self.kappa_h_old - self.sp_curv_h_old)*self.kappa_h_old*xsi)*ds(deformation = deform)
+        self.A += InnerProduct(kappa/self.model.dt,xsi)*ds(deformation = self.model.ale.Yo)
+        self.A += -1*InnerProduct(sp_curv/self.model.dt,xsi)*ds(deformation = self.model.ale.Yo)
+        self.A += -0.5*(InnerProduct(self.model.ale.Wo, grad(kappa).Trace()*xsi) - InnerProduct(self.model.ale.Wo, grad(xsi).Trace()*kappa))*ds(deformation = self.model.ale.Yo)
+        self.A += 0.5*(InnerProduct(self.model.ale.Wo, grad(sp_curv).Trace()*xsi) - InnerProduct(self.model.ale.Wo, grad(xsi).Trace()*sp_curv))*ds(deformation = self.model.ale.Yo)
+        self.A += InnerProduct(grad(V).Trace(), grad(xsi).Trace())*ds(deformation = self.model.ale.Yo)
+        self.A += -InnerProduct(self.W_h_old*V, xsi)*ds(deformation = self.model.ale.Yo)
+        self.A += 0.5*InnerProduct(V, (self.kappa_h_old - self.sp_curv_h_old)*self.kappa_h_old*xsi)*ds(deformation = self.model.ale.Yo)
 
-        self.A += -1*InnerProduct(self.lam*kappa, phi)*ds(deformation = deform)
+        self.A += -1*InnerProduct(self.lam*kappa, phi)*ds(deformation = self.model.ale.Yo)
 
-        self.A += InnerProduct(sp_curv/self.model.dt, zeta)*ds(deformation = deform)
-        self.A += InnerProduct(-self.model.ale.ale_velocity*grad(sp_curv).Trace(), zeta)*ds(deformation = deform)
+        self.A += InnerProduct(sp_curv/self.model.dt, zeta)*ds(deformation = self.model.ale.Yo)
+        self.A += InnerProduct(-self.model.ale.Wo*grad(sp_curv).Trace(), zeta)*ds(deformation = self.model.ale.Yo)
 
         self.A.Assemble()
         self.invA = self.A.mat.Inverse(freedofs = self.fes.FreeDofs())
 
         self.F = LinearForm(self.fes)
 
-        self.F += InnerProduct(rhs,phi)*ds(deformation = deform)
+        self.F += InnerProduct(rhs,phi)*ds(deformation = self.model.ale.Yo)
 
-        self.F += InnerProduct((self.kappa_h_old - self.sp_curv_h_old)/self.model.dt*sqrt(self.J_h_old),xsi)*ds(deformation = deform)
-        self.F += InnerProduct(self.sp_curv_h_old/self.model.dt, zeta)*ds(deformation = deform)
+        self.F += InnerProduct((self.kappa_h_old - self.sp_curv_h_old)/self.model.dt*sqrt(self.J_h_old),xsi)*ds(deformation = self.model.ale.Yo)
+        self.F += InnerProduct(self.sp_curv_h_old/self.model.dt, zeta)*ds(deformation = self.model.ale.Yo)
 
-        self.F += InnerProduct(self.mu, phi)*ds(deformation = deform)
+        self.F += InnerProduct(self.mu, phi)*ds(deformation = self.model.ale.Yo)
 
         if self.params['area_preserving'] or self.params['volume_preserving']:
 
@@ -245,5 +227,14 @@ class GeometricalFlowStationaryModel(BasePDEModel):
     def PostProcess(self):
 
         if self.model.dim == 2:
-            for i, gfu in enumerate(self.gfu_vtk):
+            for i, gfu in enumerate(self.vtk_gfu):
                 gfu.Set(self.gfu.components[i], definedon = self.compartment.domain)
+
+    def adaptive_timestep_cap(self):
+
+        Eo = Integrate(0.5*(self.kappa_h_old - self.sp_curv_h_old)**2, self.model.parentmesh, VOL_or_BND = BND)
+        En = Integrate(0.5*(self.kappa_h - self.sp_curv_h)**2, self.model.parentmesh, VOL_or_BND = BND)
+        Fo = Integrate(InnerProduct(self.params['rhs'](), self.V_h), self.model.parentmesh, VOL_or_BND = BND)
+        dt = self.model.dt.Get()
+        
+        return (En-Eo)<dt*Fo

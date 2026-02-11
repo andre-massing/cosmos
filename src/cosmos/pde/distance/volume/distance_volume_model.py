@@ -37,23 +37,22 @@ class DistanceVolumeModel(BasePDEModel):
         self.fes = H1(model.parentmesh, order = self.params["fes_order"], 
                                 definedon = compartment.domain,
                                 dirichlet = self.params['zero_bnd'])
-        
         self.gfu = GridFunction(self.fes)
         self.gfu_old = GridFunction(self.fes)
-        self.sol = [self.gfu]
-        self.output_fields["distance"] = OutputField(self.gfu, "distance", VOL)
+        
+        self.fes2 = VectorH1(self.model.parentmesh, order = self.params["fes_order"]-1, 
+                                definedon = self.compartment.domain,
+                                dirichlet = self.model.parentmesh.Boundaries(self.params['zero_bnd']))
+        self.gfu2 = GridFunction(self.fes2)
+        
+        self.sol = [self.gfu, self.gfu2]
+
+        self.vtk_gfu = self.sol
+        self.vtk_names = [self.name + '_distance', self.name + '_velocity']
 
     def Initialize(self):
 
-        if self.params['printing']:
-            output_vtk_folder = os.path.join(self.model.io.root, self.name)
-            output_vtk_name = os.path.join(output_vtk_folder, self.name)
-            os.makedirs(output_vtk_folder, exist_ok=True)
-            self.vtk = VTKOutput(self.model.parentmesh,
-                                coefs=[self.output_fields["distance"]._coef],
-                                names =['distance'],
-                                filename= output_vtk_name, 
-                                subdivision = self.params['subdivision'])
+        pass
 
     def PreProcess(self):
 
@@ -71,34 +70,31 @@ class DistanceVolumeModel(BasePDEModel):
         
         u1, v1 = fes1.TnT()
         A1 = BilinearForm(fes1)
-        A1 += (u1*v1 + dt*grad(u1)*grad(v1))*dx(deformation = self.model.dX)
+        A1 += (u1*v1 + dt*grad(u1)*grad(v1))*dx(deformation = self.model.ale.Y)
         A1.Assemble()
         gfu1 = GridFunction(fes1)
         gfu1.Set(1, definedon =  self.model.parentmesh.Boundaries(self.params['zero_bnd']))
         res1 = -1*A1.mat*gfu1.vec
         gfu1.vec.data += A1.mat.Inverse(freedofs = fes1.FreeDofs())*res1 
 
-        fes2 = VectorH1(self.model.parentmesh, order = self.params["fes_order"]-1, 
-                                definedon = self.compartment.domain,
-                                dirichlet = self.model.parentmesh.Boundaries(self.params['zero_bnd']))
-        u2, v2 = fes2.TnT()
-        A2 = BilinearForm(fes2)
-        A2 += u2*v2*dx(deformation = self.model.dX)
+        
+        u2, v2 = self.fes2.TnT()
+        A2 = BilinearForm(self.fes2)
+        A2 += u2*v2*dx(deformation = self.model.ale.Y)
         A2.Assemble()
-        F2 = LinearForm(fes2)
-        F2 += -1*Normalize(grad(gfu1))*v2*dx(deformation = self.model.dX)
+        F2 = LinearForm(self.fes2)
+        F2 += Normalize(grad(gfu1))*v2*dx(deformation = self.model.ale.Y)
         F2.Assemble()
-        gfu2 = GridFunction(fes2)
-        gfu2.Set(-1*specialcf.normal(self.model.dim), definedon = self.model.parentmesh.Boundaries(self.params['zero_bnd']))
-        res2 =  F2.vec - A2.mat*gfu2.vec
-        gfu2.vec.data += A2.mat.Inverse(freedofs = fes2.FreeDofs())*res2
+        self.gfu2.Set(specialcf.normal(self.model.dim), definedon = self.model.parentmesh.Boundaries(self.params['zero_bnd']))
+        res2 =  F2.vec - A2.mat*self.gfu2.vec
+        self.gfu2.vec.data += A2.mat.Inverse(freedofs = self.fes2.FreeDofs())*res2
 
         u3, v3 = self.fes.TnT()
         A3 = BilinearForm(self.fes)
-        A3 += grad(u3)*grad(v3)*dx(deformation = self.model.dX)
+        A3 += grad(u3)*grad(v3)*dx(deformation = self.model.ale.Y)
         A3.Assemble()
         F3 = LinearForm(self.fes)
-        F3 += -1*Trace(Grad(gfu2))*v3*dx(deformation = self.model.dX)
+        F3 += Trace(Grad(self.gfu2))*v3*dx(deformation = self.model.ale.Y)
         F3.Assemble()
         self.gfu.vec.data += A3.mat.Inverse(freedofs = self.fes.FreeDofs())*F3.vec
 

@@ -80,8 +80,8 @@ def test_convergence_vol(
 
         Ap, Bp = A_B(t+dt)
         displacement_ex = (Ap-A)*inv_phi+(Bp-B)
-        # ale.set_domain_velocity(displacement_ex/dt)
-        ale.set_domain_velocity(w_phi)
+        ale.set_domain_velocity(displacement_ex/dt)
+        # ale.set_domain_velocity(w_phi)
 
         u_ex = u0 # Exact solution
         c = 1 + t**2 # reaction coefficient
@@ -91,6 +91,7 @@ def test_convergence_vol(
 
         pde = model.create_pde(name = 'adr', pde_model=ADRVolumeSystemBDF1Model, compartment=comp, dim = 1)
         pde.set_params(**input_params)
+        pde.set_params(printing = True)
         pde.set_params(b_1 = b, c_1 = c, rhs_1 = rhs)
         if bnd == 'neu':
             pde.set_params(u_bnd_1=u_ex, gradu_bnd_1 = gradient(u_ex, Id(2)))

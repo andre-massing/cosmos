@@ -2,7 +2,7 @@ from ngsolve import *
 from ngsolve.webgui import Draw
 from cosmos.utils.generate_meshes import generate_boundary_sphere, generate_boundary_half_sphere
 from cosmos.core.model import CosmosModel
-from cosmos.pde.adr.boundary.adr_boundary_system_bdf1_model import ADRBoundarySystemBDF1Model
+from cosmos.pde.adr.boundary.adr_boundary_system_bdf1_model_stab import ADRBoundarySystemBDF1Model
 from cosmos.config.parameters import get_config
 from cosmos.utils.tools import gradient
 import numpy as np
@@ -86,8 +86,8 @@ def test_convergence_bnd(
 
         Ap, Bp = A_B(t+dt)
         displacement_ex = (Ap-A)*inv_phi+(Bp-B)
-        # ale.set_domain_velocity(displacement_ex/dt)
-        ale.set_domain_velocity(w_phi)
+        ale.set_domain_velocity(displacement_ex/dt)
+        # ale.set_domain_velocity(w_phi)
 
         u_ex = u0*cos(t) # Exact solution
         c = 1 + t**2 # reaction coefficient
@@ -98,6 +98,7 @@ def test_convergence_bnd(
 
         pde = model.create_pde(name = 'adr', pde_model=ADRBoundarySystemBDF1Model, compartment=comp, dim = 1)
         pde.set_params(**input_params)
+        pde.set_params(printing = True)
         pde.set_params(b_1 = b, c_1 = c, rhs_1 = rhs)
         if bnd == 'neu':
             pde.set_params(u_bnd_1=u_ex, gradu_bnd_1 = gradient(u_ex, P_ex))

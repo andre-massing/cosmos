@@ -37,23 +37,25 @@ class DistanceBoundaryModel(BasePDEModel):
         self.fes = H1(model.parentmesh, order = self.params["fes_order"], 
                                 definedon = compartment.domain,
                                 dirichlet_bbnd = self.model.parentmesh.BBoundaries(self.params['zero_bbnd']))
-        
         self.gfu = GridFunction(self.fes)
         self.gfu_old = GridFunction(self.fes)
-        self.sol = [self.gfu]
-        self.output_fields["distance"] = OutputField(self.gfu, "distance", BND)
+
+        self.fes2 = VectorH1(self.model.parentmesh, order = self.params["fes_order"]-1, 
+                                definedon = self.compartment.domain)
+        self.gfu2 = GridFunction(self.fes2)
+
+        self.sol = [self.gfu, self.gfu2]
+
+        if self.model.dim == 2:
+            self.vtk_gfu = [GridFunction(H1(self.model.parentmesh, order = self.params["fes_order"])),
+                            GridFunction(VectorH1(self.model.parentmesh, order = self.params["fes_order"] - 1))]
+        else:
+            self.vtk_gfu = self.sol
+        self.vtk_names = [self.name + '_distance', self.name + '_velocity']
 
     def Initialize(self):
 
-        if self.params['printing']:
-            output_vtk_folder = os.path.join(self.model.io.root, self.name)
-            output_vtk_name = os.path.join(output_vtk_folder, self.name)
-            os.makedirs(output_vtk_folder, exist_ok=True)
-            self.vtk = VTKOutput(self.model.parentmesh,
-                                coefs=[self.output_fields["distance"]._coef],
-                                names =['distance'],
-                                filename= output_vtk_name, 
-                                subdivision = self.params['subdivision'])
+        pass
 
     def PreProcess(self):
         
@@ -76,27 +78,25 @@ class DistanceBoundaryModel(BasePDEModel):
         res1 = -1*A1.mat*gfu1.vec
         gfu1.vec.data += A1.mat.Inverse(freedofs = fes1.FreeDofs())*res1 
 
-        fes2 = VectorH1(self.model.parentmesh, order = self.params["fes_order"]-1, 
-                                definedon = self.compartment.domain)
-        u2, v2 = fes2.TnT()
-        A2 = BilinearForm(fes2)
+        u2, v2 = self.fes2.TnT()
+        A2 = BilinearForm(self.fes2)
         A2 += u2*v2*ds(deformation = self.model.dX)
         A2.Assemble()
-        F2 = LinearForm(fes2)
-        F2 += -1*Normalize(grad(gfu1).Trace())*v2*ds(deformation = self.model.dX)
+        F2 = LinearForm(self.fes2)
+        F2 += Normalize(grad(gfu1).Trace())*v2*ds(deformation = self.model.dX)
         F2.Assemble()
-        gfu2 = GridFunction(fes2)
-        gfu2.vec.data = A2.mat.Inverse(freedofs = fes2.FreeDofs())*F2.vec
+        self.gfu2.vec.data = A2.mat.Inverse(freedofs = self.fes2.FreeDofs())*F2.vec
 
         u3, v3 = self.fes.TnT()
         A3 = BilinearForm(self.fes)
         A3 += grad(u3).Trace()*grad(v3).Trace()*ds(deformation = self.model.dX)
         A3.Assemble()
         F3 = LinearForm(self.fes)
-        F3 += -1*Trace(Grad(gfu2).Trace())*v3*ds(deformation = self.model.dX)
+        F3 += Trace(Grad(self.gfu2).Trace())*v3*ds(deformation = self.model.dX)
         F3.Assemble()
         self.gfu.vec.data += A3.mat.Inverse(freedofs = self.fes.FreeDofs())*F3.vec
 
     def PostProcess(self):
 
-        pass
+        self.vtk_gfu[0].Set(self.gfu, definedon = self.compartment.domain)
+        self.vtk_gfu[1].Set(self.gfu2, definedon = self.compartment.domain)

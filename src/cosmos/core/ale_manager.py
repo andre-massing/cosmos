@@ -24,31 +24,48 @@ class CosmosALEManager:
 
         if model.is_bnd:
             self.domain = model.parentmesh.Boundaries('.*')
-            self.V = VectorH1(model.parentmesh, order = model.geo_order,
+            self.fes = VectorH1(model.parentmesh, order = model.geo_order,
                                         definedon = self.domain)
-            gfu = GridFunction(self.V)
+            gfu = GridFunction(self.fes)
             model.parentmesh.SetDeformation(gfu)
         else:
             self.domain = model.parentmesh.Materials('.*')
-            self.V = VectorH1(model.parentmesh, order = model.geo_order, definedon = self.domain)
-            gfu = GridFunction(self.V)
+            self.fes = VectorH1(model.parentmesh, order = model.geo_order, definedon = self.domain)
+            gfu = GridFunction(self.fes)
             model.parentmesh.SetDeformation(gfu)
         
-        self.dX = GridFunction(self.V)
-        self.prev_dX = [self.dX.vec.Copy(), self.dX.vec.Copy()]
+        self.dY = GridFunction(self.fes)
+        self.Y = GridFunction(self.fes)
+        self.Yo = GridFunction(self.fes)
+        self.Xo = GridFunction(self.fes)
+        self.X = GridFunction(self.fes)
+        if model.dim == 2:
+            self.Xo.Set(CF((x, y)), definedon = self.domain)
+            self.X.Set(CF((x, y)), definedon = self.domain)
+        elif model.dim == 3:
+            self.Xo.Set(CF((x, y, z)), definedon = self.domain)
+            self.X.Set(CF((x, y, z)), definedon = self.domain)
+        self.W = GridFunction(self.fes)
+        self.Wo = GridFunction(self.fes)
+        self.gfu_bnd_ale = GridFunction(self.fes)
+        self.gfu_bnd_mat = GridFunction(self.fes)
+        self.gfu_vol_ale = GridFunction(self.fes)
+        self.gfu_vol_mat = GridFunction(self.fes)
+        self.dY_mat = GridFunction(self.fes)
+        self.V = GridFunction(self.fes)
+        self.Vo = GridFunction(self.fes)
 
         if 'redistribute' in  self.params.keys():
             if isinstance(self.params['redistribute'], bool):
                 self.redistribute = self.params['redistribute']
             else:
-                raise Exception(f'Mesh redistribution for for model {model.name} must be either True or False')
-            
+                raise Exception(f'Mesh redistribution for for model {model.name} must be either True or False')      
         
         if model.is_vol:
             # V0 = VectorH1(model.parentmesh, order = model.geo_order, dirichlet = model.parentmesh.Boundaries('.*'))
             # u, v = V0.TnT()
             # self.A = BilinearForm(V0, symmetric = True)
-            # self.A += InnerProduct(grad(u), grad(v))*dx(deformation = self.dX)
+            # self.A += InnerProduct(grad(u), grad(v))*dx(deformation = self.Y)
             # self.A.Assemble()
             # self.invA = self.A.mat.Inverse(freedofs = V0.FreeDofs())
 
@@ -60,7 +77,7 @@ class CosmosALEManager:
             lam = E * nu / ((1+nu)*(1-2*nu))
             def Stress(strain):
                 return 2*mu*strain + lam*Trace(strain)*Id(model.dim)    
-            self.A += InnerProduct(Stress(Sym(Grad(u))), Sym(Grad(v)))*dx(deformation = self.dX)
+            self.A += InnerProduct(Stress(Sym(Grad(u))), Sym(Grad(v)))*dx(deformation = self.Y)
             self.A.Assemble()
             self.invA = self.A.mat.Inverse(freedofs = V0.FreeDofs())
 
@@ -74,17 +91,12 @@ class CosmosALEManager:
             # def psi(F):
             #     E = 0.5*(F.trans*F - Id(model.dim))
             #     return mu*InnerProduct(E,E) + lam/2*Trace(E)**2
-            # self.A += Variation(psi(defgrad)*dx(deformation = self.dX))
-     
-        self.gfu_bnd_ale = GridFunction(self.V)
-        self.gfu_bnd_mat = GridFunction(self.V)
-        self.gfu_vol_ale = GridFunction(self.V)
-        self.gfu_vol_mat = GridFunction(self.V)
-        self.ale_displacement = GridFunction(self.V)
-        self.material_displacement = GridFunction(self.V)
-        self.wind = GridFunction(self.V)
-        self.ale_velocity = GridFunction(self.V)
-        self.material_velocity = GridFunction(self.V)
+            # self.A += Variation(psi(defgrad)*dx(deformation = self.Y))
+
+        self.vtk_gfu=[self.dY, self.Y, self.X, self.W, 
+                    self.V]
+        self.vtk_names =['ale_dY', 'ale_Y', 'ale_X',
+                'ale_W', 'ale_V']
 
     def initialize(self, model:"CosmosModel"):
 
@@ -105,25 +117,12 @@ class CosmosALEManager:
         self.vol_ale_cf = model.parentmesh.MaterialCF(self.vol_ales, default = CF((0,)*model.dim))
         self.vol_mat_cf = model.parentmesh.MaterialCF(self.vol_mats, default = CF((0,)*model.dim))
 
-        if model.io.root != None:
-            output_vtk_folder = os.path.join(model.io.root, 'ale')
-            output_vtk_name = os.path.join(output_vtk_folder, 'ale')
-            os.makedirs(output_vtk_folder, exist_ok=True)
-            self.vtk = VTKOutput(model.parentmesh,
-                                coefs=[self.ale_velocity, self.ale_displacement, 
-                                       self.material_velocity, self.material_displacement, 
-                                       self.wind, self.dX],
-                                names =['ale_velocity', 'ale_displacement',
-                                        'material_velocity', 'material_displacement',
-                                        'wind', 'total_displacement'],
-                                filename= output_vtk_name)
-
     def solve_ale(self, model:"CosmosModel"):
 
         start = time.time()
 
-        self.ale_displacement.vec.data[:] = 0
-        self.material_displacement.vec.data[:] = 0
+        self.dY.vec.data[:] = 0
+        self.dY_mat.vec.data[:] = 0
         
         for ale in model.ales:
             ale.update(model, self.redistribute)
@@ -132,24 +131,25 @@ class CosmosALEManager:
             self.gfu_bnd_ale.Set(self.bnd_ale_cf, definedon = model.parentmesh.Boundaries('.*'), dual = True)
             if model.is_vol:
                 self._extend_displacement_to_bulk(self.gfu_bnd_ale)
-            self.ale_displacement.vec.data += self.gfu_bnd_ale.vec.data
+            self.dY.vec.data += self.gfu_bnd_ale.vec.data
 
             self.gfu_bnd_mat.Set(self.bnd_mat_cf, definedon = model.parentmesh.Boundaries('.*'), dual = True)
             if model.is_vol:
                 self._extend_displacement_to_bulk(self.gfu_bnd_mat)
-            self.material_displacement.vec.data += self.gfu_bnd_mat.vec.data
+            self.dY_mat.vec.data += self.gfu_bnd_mat.vec.data
 
         if self.vol_ales:
             self.gfu_vol_ale.Set(self.vol_ale_cf, dual = True)
             self.gfu_vol_mat.Set(self.vol_mat_cf, dual = True)
 
-            self.ale_displacement.vec.data += self.gfu_vol_ale.vec.data
-            self.material_displacement.vec.data += self.gfu_vol_mat.vec.data
+            self.dY.vec.data += self.gfu_vol_ale.vec.data
+            self.dY_mat.vec.data += self.gfu_vol_mat.vec.data
 
         if self.bnd_ales or self.vol_ales:
-            self.wind.Set((self.material_displacement - self.ale_displacement)/model.dt, definedon = self.domain, dual = True)
-            self.ale_velocity.Set(self.ale_displacement/model.dt, definedon = self.domain, dual = True)
-            self.material_velocity.Set(self.material_displacement/model.dt, definedon = self.domain, dual = True)
+            self.Y.vec.data = self.Yo.vec.data + self.dY.vec.data
+            self.X.vec.data = self.Xo.vec.data + self.dY.vec.data
+            self.W.Set(self.dY/model.dt, definedon = self.domain, dual = True)
+            self.V.Set(self.dY_mat/model.dt, definedon = self.domain, dual = True)
 
         stop = time.time()
 
@@ -158,12 +158,11 @@ class CosmosALEManager:
     def finalize(self, model:"CosmosModel"):
 
         if self.bnd_ales or self.vol_ales:
-            self.dX.vec.data += self.ale_displacement.vec.data
-            model.parentmesh.deformation.vec.data = self.dX.vec.data
-
-        self.prev_dX.append(self.dX.vec.Copy())
-        if len(self.prev_dX)>6:
-            self.prev_dX.pop(0)
+            model.parentmesh.deformation.vec.data = self.Y.vec.data
+            self.Yo.vec.data = self.Y.vec.data
+            self.Xo.vec.data = self.X.vec.data
+            self.Wo.vec.data = self.W.vec.data
+            self.Vo.vec.data = self.V.vec.data
 
     def _extend_displacement_to_bulk(self, gfu):
 
@@ -173,6 +172,13 @@ class CosmosALEManager:
         gfu.vec.data += self.invA*vec
 
         # Newton(self.A,  gfu, freedofs=gfu.space.FreeDofs(), printing = False, dampfactor=0.1)
+
+    def reset(self):
+
+        self.Y.vec.data = self.Yo.vec.data
+        self.X.vec.data = self.Xo.vec.data
+        self.W.vec.data = self.Wo.vec.data
+        self.V.vec.data = self.Vo.vec.data
         
 class CosmosBndALEField:
 
@@ -189,21 +195,21 @@ class CosmosBndALEField:
         self.Ps = Id(model.dim) - OuterProduct(self.ns, self.ns)
         self.Qs = OuterProduct(self.ns, self.ns)
 
-        self.V = VectorH1(self.model.parentmesh, order = self.model.geo_order, 
+        self.fes = VectorH1(self.model.parentmesh, order = self.model.geo_order, 
                         definedon = self.compartment.domain,
                         dirichlet_bbnd = self.compartment.boundary)
         S = H1(self.model.parentmesh, order = self.model.geo_order, 
                         definedon = self.compartment.domain,
                         dirichlet_bbnd = self.compartment.boundary)
         
-        self.ale_displ = GridFunction(self.V)
-        self.mat_displ = GridFunction(self.V)
-        self.ale_vel = GridFunction(self.V)
-        self.mat_vel = GridFunction(self.V)
+        self.ale_displ = GridFunction(self.fes)
+        self.mat_displ = GridFunction(self.fes)
+        self.ale_vel = GridFunction(self.fes)
+        self.mat_vel = GridFunction(self.fes)
 
         self.gfu_norm_vel = GridFunction(S)
 
-        fes_pp = self.V*S
+        fes_pp = self.fes*S
         (dX_pp, kappa_pp), (nu_pp, zeta_pp) = fes_pp.TnT()
         self.gfu_pp = GridFunction(fes_pp)
 
@@ -213,47 +219,47 @@ class CosmosBndALEField:
         ######## Istantaneous harmonic map
 
         # self.A_pp = BilinearForm(fes_pp, symmetric = True)
-        # self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.dX)
-        # self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.dX)
-        # self.A_pp += InnerProduct(Grad(dX_pp).Trace(), Grad(nu_pp).Trace())*ds(deformation = model.dX)
+        # self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
+        # self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
+        # self.A_pp += InnerProduct(Grad(dX_pp).Trace(), Grad(nu_pp).Trace())*ds(deformation = model.ale.Y)
         # self.A_pp.Assemble()
         # self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
 
         # self.F_pp = LinearForm(fes_pp)
-        # self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.dX)
-        # self.F_pp += -1*InnerProduct(self.Ps, Grad(nu_pp).Trace())*ds(deformation = model.dX)
+        # self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
+        # self.F_pp += -1*InnerProduct(self.Ps, Grad(nu_pp).Trace())*ds(deformation = model.ale.Y)
 
         ###########################
 
         ######## Historic harmonic map
 
-        # gfu0 = GridFunction(model.dX.space)
+        # gfu0 = GridFunction(model.ale.Y.space)
 
         # self.A_pp = BilinearForm(fes_pp, symmetric = True)
-        # self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.dX)
-        # self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.dX)
+        # self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
+        # self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
         # self.A_pp += InnerProduct(Grad(dX_pp).Trace(), Grad(nu_pp).Trace())*ds(deformation = gfu0)
         # self.A_pp.Assemble()
         # self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
 
         # self.F_pp = LinearForm(fes_pp)
-        # self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.dX)
-        # self.F_pp += -1*InnerProduct(Grad(model.dX).Trace(), Grad(nu_pp).Trace())*ds(deformation = gfu0)
+        # self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
+        # self.F_pp += -1*InnerProduct(Grad(model.ale.Y).Trace(), Grad(nu_pp).Trace())*ds(deformation = gfu0)
         # self.F_pp += -1*InnerProduct(self.Ps, Grad(nu_pp).Trace())*ds(deformation = gfu0)
 
         ###########################
 
         ######## MDR
 
-        self.A_pp = BilinearForm(fes_pp, symmetric = True)
-        self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.dX)
-        self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.dX)
-        self.A_pp += InnerProduct(1/model.dt*Grad(dX_pp).Trace(), Grad(nu_pp).Trace())*ds(deformation = model.dX)
+        self.A_pp = BilinearForm(fes_pp)
+        self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
+        self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
+        self.A_pp += InnerProduct(1/model.dt*Grad(dX_pp).Trace(), Grad(nu_pp).Trace())*ds(deformation = model.ale.Y)
         self.A_pp.Assemble()
         self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
 
         self.F_pp = LinearForm(fes_pp)
-        self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.dX)
+        self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
 
         ###########################
 
@@ -265,21 +271,21 @@ class CosmosBndALEField:
         # ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
 
         # self.A_pp = BilinearForm(fes_pp, symmetric = True)
-        # self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.dX)
-        # self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.dX)
-        # self.A_pp += InnerProduct(deviatoric(dX_pp), deviatoric(nu_pp))*ds(deformation = model.dX)
+        # self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
+        # self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
+        # self.A_pp += InnerProduct(deviatoric(dX_pp), deviatoric(nu_pp))*ds(deformation = model.ale.Y)
         # self.A_pp.Assemble()
         # self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
 
         # self.F_pp = LinearForm(fes_pp)
-        # self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.dX)
+        # self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
 
         ###########################
 
         ######## Minimal historical stretch
 
-        # gfu0 = GridFunction(model.dX.space)
-        # X0 = GridFunction(model.dX.space)
+        # gfu0 = GridFunction(model.ale.Y.space)
+        # X0 = GridFunction(model.ale.Y.space)
         # if model.dim == 2:
         #     X0.Set(CF((x, y)), definedon = compartment.domain, dual = True)
         # elif model.dim == 3:
@@ -291,15 +297,15 @@ class CosmosBndALEField:
         # ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
 
         # self.A_pp = BilinearForm(fes_pp, symmetric = True)
-        # self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.dX)
-        # self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.dX)
+        # self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
+        # self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
         # self.A_pp += InnerProduct(deviatoric(dX_pp), deviatoric(nu_pp))*ds(deformation = gfu0)
         # self.A_pp.Assemble()
         # self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
 
         # self.F_pp = LinearForm(fes_pp)
-        # self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.dX)
-        # self.F_pp += -1*InnerProduct(deviatoric(model.dX), deviatoric(nu_pp))*ds(deformation = gfu0)
+        # self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
+        # self.F_pp += -1*InnerProduct(deviatoric(model.ale.Y), deviatoric(nu_pp))*ds(deformation = gfu0)
         # self.F_pp += -1*InnerProduct(deviatoric(X0), deviatoric(nu_pp))*ds(deformation = gfu0)
 
         ###########################
@@ -338,10 +344,6 @@ class CosmosBndALEField:
                 self.ale_displ.Set((self.gfu_norm_vel*self.ns + self.Ps*self.tangential_velocity())*model.time.dt, definedon = self.compartment.domain)
             self.mat_displ.Set((self.normal_velocity()*self.ns + self.Ps*self.tangential_velocity())*model.time.dt, definedon = self.compartment.domain)
 
-            self.ale_vel.Set(self.ale_displ/model.time.dt, definedon = self.compartment.domain)
-            self.mat_vel.Set(self.mat_displ/model.time.dt, definedon = self.compartment.domain)
-
-
 class CosmosVolALEField:
 
     def __init__(self, name:str, model:"CosmosModel", compartment:CosmosCompartment):
@@ -351,13 +353,13 @@ class CosmosVolALEField:
         self.compartment = compartment
         self.domain_velocity = None
 
-        self.V = VectorH1(self.model.parentmesh, order = self.model.geo_order, 
+        self.fes = VectorH1(self.model.parentmesh, order = self.model.geo_order, 
                         definedon = self.compartment.domain)
         
-        self.ale_displ = GridFunction(self.V)
-        self.mat_displ = GridFunction(self.V)
-        self.ale_vel = GridFunction(self.V)
-        self.mat_vel = GridFunction(self.V)
+        self.ale_displ = GridFunction(self.fes)
+        self.mat_displ = GridFunction(self.fes)
+        self.ale_vel = GridFunction(self.fes)
+        self.mat_vel = GridFunction(self.fes)
         
     def set_domain_velocity(self, coef):
         self.domain_velocity = Field(coef)
@@ -369,5 +371,3 @@ class CosmosVolALEField:
         
         self.ale_displ.Set(self.domain_velocity()*model.time.dt, definedon = self.compartment.domain, dual = True)
         self.mat_displ.vec.data = self.ale_displ.vec.data
-        self.ale_vel.Set(self.ale_displ/model.time.dt, definedon = self.compartment.domain, dual = True)
-        self.mat_vel.vec.data = self.ale_vel.vec.data

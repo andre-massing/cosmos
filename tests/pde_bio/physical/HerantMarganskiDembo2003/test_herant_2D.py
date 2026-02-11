@@ -11,19 +11,19 @@ import pytest
 from cosmos.core.model import CosmosModel
 from cosmos.pde.willmore.geometrical_flow_model import GeometricalFlowModel
 from cosmos.pde.adr.volume.adr_volume_system_bdf1_model import ADRVolumeSystemBDF1Model
-from cosmos.pde.adr.boundary.adr_boundary_system_bdf1_model import ADRBoundarySystemBDF1Model
+from cosmos.pde.adr.boundary.adr_boundary_system_bdf1_model_nostab import ADRBoundarySystemBDF1Model
 
 logging.getLogger().setLevel(logging.INFO)
 
-@pytest.mark.parametrize("phi_cap", [0.969, 0.866])
-@pytest.mark.parametrize("D_factor", [1])
-@pytest.mark.parametrize("gamma_PMN_factor", [0.1, 1, 10])
-def test_herant_2D_vp(
+@pytest.mark.parametrize("gamma_tension", [10, 100])
+@pytest.mark.parametrize("gamma_curv", [0.1, 1, 10])
+@pytest.mark.parametrize("phi_cap", [0.93, 0.96])
+def test_herant_2D_vp_clamped(
         request,
         artifacts_path,
         phi_cap, 
-        D_factor,
-        gamma_PMN_factor
+        gamma_curv,
+        gamma_tension
     ):
 
     R_PMN = 4.25
@@ -31,11 +31,10 @@ def test_herant_2D_vp(
     k_prod = 10
     maxh = 0.8
     F0 = 100
+    D_m = 10
     gamma_drag = 100
-    D_m = D_factor*10
-    gamma_PMN = gamma_PMN_factor*1
 
-    angle2_deg = 30
+    angle2_deg = 20
     angle2 = angle2_deg/180*pi
 
     pnt1 = occ.Pnt(R_PMN, 0, 0)
@@ -49,7 +48,7 @@ def test_herant_2D_vp(
     w = occ.Wire([arc1, arc2])
     f = occ.Face(w)
     f.maxh = maxh
-    f.edges.maxh = 0.15
+    f.edges.maxh = 0.1
     f.edges[0].name = 'free_bnd'
     f.edges[1].name = 'pipette_bnd'
     f.vertices[0].name = 'bbnd'
@@ -68,41 +67,44 @@ def test_herant_2D_vp(
     t = Parameter(0)
     dt = Parameter(2e-3)
     root =  artifacts_path
-    model_name = f"phi_cap{phi_cap}_d{D_m}_k{gamma_PMN}"
+    model_name = f"phi_cap{phi_cap}_alpha{gamma_curv}_gamma{gamma_tension}"
     model = CosmosModel(name=model_name, parentmesh=mesh, t0 = 0, t1 = 10,
                         dt = dt, t = t,
-                        coupling_type = 'explicit', redistribute = True,
+                        coupling_type = 'implicit', redistribute = True,
                         root = root, sample_rate = 50)
 
     ################### GRADIENT FLOW  ##################################
     comp1 = model.create_compartment(name = 'comp1', boundary = 'free_bnd', bboundary = 'bbnd', clamped_bbnd = "bbnd")
-    adr_bnd = model.create_pde(name = 'indicator', pde_model=ADRBoundarySystemBDF1Model, compartment=comp1, dim = 1)
+    adr_bnd = model.create_pde(name = 'indicator', pde_model=ADRBoundarySystemBDF1Model, compartment=comp1, ale_type = 1, dim = 1)
     adr_bnd.set_params(
         Neu_bnd = 'bbnd',
-        b_1 = model.ale.wind,
+        b_1 = lambda: model.ale.V,
         u0_1 = 1/(1+exp(-100*(x-R_PMN*phi_cap))),
         printing = True
     )
 
     ###################  VOLUME ADR  ##################################
     comp2 = model.create_compartment(name = 'comp2', material = 'default', boundary = 'free_bnd|pipette_bnd')
-    adr_vol = model.create_pde(name = 'concentration', pde_model=ADRVolumeSystemBDF1Model, compartment=comp2, dim = 1)
+    adr_vol = model.create_pde(name = 'concentration', pde_model=ADRVolumeSystemBDF1Model, compartment=comp2, ale_type = 1, dim = 1)
     ns = specialcf.normal(2)
     adr_vol.set_params(
-        Neu_bnd = 'free_bnd',
+        Neu_bnd = 'free_bnd|pipette_bnd',
         d_1 = D_m,
         c_1 = k_deg,
-        gradu_bnd_1 = lambda: IfPos(adr_bnd.sol[0], adr_bnd.sol[0], 0)*k_prod/D_m*ns,
-        b_1 = model.ale.wind,
+        gradu_bnd_1 = lambda: IfPos(adr_bnd.sol[0], adr_bnd.sol[0], 0)*k_prod/D_m*ns*IfPos(t-5, 0, 1),
+        b_1 = lambda: model.ale.V,
         printing = True
     )
 
-    geom_flow = model.create_pde(name = 'geom_flow', pde_model=GeometricalFlowModel, compartment=comp1)
+    geom_flow = model.create_pde(name = 'geom_flow', pde_model=GeometricalFlowModel, compartment=comp1, ale_type = 0)
     geom_flow.set_params(
-        rhs = lambda: F0*adr_vol.gfu/gamma_drag,
-        alpha = gamma_PMN/gamma_drag,
-        gamma = 0.5,
-        volume_preserving = True
+        kappa0 = CF(-1/R_PMN),
+        sp_curv = CF(-1/R_PMN),
+        rhs = lambda: F0*adr_vol.sol[0]/gamma_drag,
+        alpha = gamma_curv/gamma_drag,
+        gamma = gamma_tension/gamma_drag,
+        volume_preserving = True,
+        printing = True
     )
 
     ###################  ALE  ##################################
@@ -114,7 +116,8 @@ def test_herant_2D_vp(
         output_callables = {'energy': lambda: Integrate(0.5*(geom_flow.kappa_h - geom_flow.params['sp_curv'])**2, mesh, VOL_or_BND = BND),
                             'area': lambda: Integrate(1, mesh, VOL_or_BND = BND),
                             'volume': lambda: Integrate(1, mesh, VOL_or_BND = VOL),
-                            'u_mass': lambda: Integrate(adr_vol.sol, mesh, VOL_or_BND = VOL)}
+                            'u_mass': lambda: Integrate(adr_vol.sol[0], mesh, VOL_or_BND = VOL),
+                            'i_mass': lambda: Integrate(adr_bnd.sol[0], mesh, VOL_or_BND = BND)}
     )
 
     scene = Draw(adr_vol.gfu ,mesh)

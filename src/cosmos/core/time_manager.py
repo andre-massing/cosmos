@@ -42,6 +42,11 @@ class CosmosTimeManager:
         if len(self.prev_t)>6:
             self.prev_t.pop(0)
 
+    def modify_dt(self, dt_new):
+        self.dt.Set(dt_new)
+        self.prev_dt[-1] = dt_new
+
+
 class CosmosTimeHelper:
 
     def __init__(self, **kwargs):
@@ -97,6 +102,8 @@ class CosmosTimeHelper:
         t.Set(t.Get()+dt.Get())
         self.t.Set(t.Get())
 
+        dt_old = dt.Get()
+
         if isinstance(self.params["dt"], list):
             self.dt.Set(self.params["dt"][iter] )
         elif isinstance(self.params["dt"], np.ndarray):
@@ -107,6 +114,11 @@ class CosmosTimeHelper:
             self.dt.Set(self.params["dt"])
         else:
             raise Exception("dt must be either a number or a list of numbers")
+        
+        if 'adaptive_timestep' in  self.params.keys():
+            if self.params['adaptive_timestep']:
+                dt_new = self.dt.Get()
+                self.dt.Set((dt_new+dt_old)/2)
         
         if self.dt.Get() <= 0:
             raise Exception("Time-step has been set to negative value")
