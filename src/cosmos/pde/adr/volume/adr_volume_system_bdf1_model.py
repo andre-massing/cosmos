@@ -179,7 +179,8 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
             env = {"__builtins__": {}}
             env.update(self._base_env())
             for j in range(self.sys_dim):
-                env.update({"u"+str(j+1): self.sol[j], "v"+str(j+1): test[j]})
+                # env.update({"u"+str(j+1): self.sol[j], "v"+str(j+1): test[j]})
+                env.update({"u"+str(j+1): self.gfu_old.components[j], "v"+str(j+1): test[j]})
             env.update(nonlin['map'])
             
             self.F += -1*eval(nonlin['expr'], env)*test[nonlin['target']-1]*dx(deformation = self.Yhalf)
@@ -187,90 +188,90 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
         self.A.Assemble()
         self.invA = self.A.mat.Inverse(freedofs = self.fes.FreeDofs())
 
-        if self.nonlinearities:
+        # if self.nonlinearities:
             
-            verbose = True
-            m=5
-            maxit=20
-            tol=1e-10
-            beta=1.0
-            reg=1e-12
+        #     verbose = True
+        #     m=5
+        #     maxit=20
+        #     tol=1e-10
+        #     beta=1.0
+        #     reg=1e-12
             
-            u = self.gfu.vec.Copy().FV().NumPy()
+        #     u = self.gfu.vec.Copy().FV().NumPy()
 
-            # History of deltas: Δu_i = u_{i+1} - u_i, Δf_i = f_{i+1} - f_i
-            dU = []
-            dF = []
+        #     # History of deltas: Δu_i = u_{i+1} - u_i, Δf_i = f_{i+1} - f_i
+        #     dU = []
+        #     dF = []
 
-            # Initial evaluation
-            self.F.Assemble()
-            self.gfu.vec.data = self.invA*self.F.vec
-            f = self.gfu.vec.FV().NumPy() - u
+        #     # Initial evaluation
+        #     self.F.Assemble()
+        #     self.gfu.vec.data = self.invA*self.F.vec
+        #     f = self.gfu.vec.FV().NumPy() - u
 
-            norm_u0 = max(np.linalg.norm(u), 1.0)
-            rel = np.linalg.norm(f) / norm_u0
-            if verbose:
-                print(f"it=0  ||f||/||u||={rel:.3e}")
+        #     norm_u0 = max(np.linalg.norm(u), 1.0)
+        #     rel = np.linalg.norm(f) / norm_u0
+        #     if verbose:
+        #         print(f"it=0  ||f||/||u||={rel:.3e}")
 
-            for k in range(1, maxit + 1):
-                if rel < tol:
-                    break
+        #     for k in range(1, maxit + 1):
+        #         if rel < tol:
+        #             break
 
-                # Plain Picard step candidate
-                u_pic = u + beta * f
-                self.gfu.vec.data[:] = u_pic
-                self.F.Assemble()
-                self.gfu.vec.data = self.invA*self.F.vec
-                f_pic = self.gfu.vec.FV().NumPy() - u_pic
+        #         # Plain Picard step candidate
+        #         u_pic = u + beta * f
+        #         self.gfu.vec.data[:] = u_pic
+        #         self.F.Assemble()
+        #         self.gfu.vec.data = self.invA*self.F.vec
+        #         f_pic = self.gfu.vec.FV().NumPy() - u_pic
 
-                # Update histories with newest step information
-                # (use u_pic and f_pic as the "next" quantities)
-                du = (u_pic - u)
-                df = (f_pic - f)
+        #         # Update histories with newest step information
+        #         # (use u_pic and f_pic as the "next" quantities)
+        #         du = (u_pic - u)
+        #         df = (f_pic - f)
 
-                if np.linalg.norm(df) > 0:
-                    dU.append(du)
-                    dF.append(df)
-                    if len(dU) > m:
-                        dU.pop(0)
-                        dF.pop(0)
+        #         if np.linalg.norm(df) > 0:
+        #             dU.append(du)
+        #             dF.append(df)
+        #             if len(dU) > m:
+        #                 dU.pop(0)
+        #                 dF.pop(0)
 
-                # If not enough history yet, accept Picard
-                if len(dF) == 0:
-                    u, f = u_pic, f_pic
-                else:
-                    # Build least squares: minimize || f_pic - DF * gamma ||, DF columns are dF_j
-                    DF = np.column_stack(dF)  # shape (N, p)
-                    # Solve (DF^T DF + reg I) gamma = DF^T f_pic
-                    A = DF.T @ DF
-                    A.flat[::A.shape[0] + 1] += reg  # add reg to diagonal
-                    b = DF.T @ f_pic
-                    gamma = np.linalg.solve(A, b)
+        #         # If not enough history yet, accept Picard
+        #         if len(dF) == 0:
+        #             u, f = u_pic, f_pic
+        #         else:
+        #             # Build least squares: minimize || f_pic - DF * gamma ||, DF columns are dF_j
+        #             DF = np.column_stack(dF)  # shape (N, p)
+        #             # Solve (DF^T DF + reg I) gamma = DF^T f_pic
+        #             A = DF.T @ DF
+        #             A.flat[::A.shape[0] + 1] += reg  # add reg to diagonal
+        #             b = DF.T @ f_pic
+        #             gamma = np.linalg.solve(A, b)
 
-                    # Anderson update:
-                    # u_{new} = u_pic - DU * gamma  (where DU columns are dU_j)
-                    DU = np.column_stack(dU)
-                    u_new = u_pic - DU @ gamma
+        #             # Anderson update:
+        #             # u_{new} = u_pic - DU * gamma  (where DU columns are dU_j)
+        #             DU = np.column_stack(dU)
+        #             u_new = u_pic - DU @ gamma
 
-                    # Recompute f at accelerated iterate
-                    self.gfu.vec.data[:] = u_new
-                    self.F.Assemble()
-                    self.gfu.vec.data = self.invA*self.F.vec
-                    f_new = self.gfu.vec.FV().NumPy() - u_new
+        #             # Recompute f at accelerated iterate
+        #             self.gfu.vec.data[:] = u_new
+        #             self.F.Assemble()
+        #             self.gfu.vec.data = self.invA*self.F.vec
+        #             f_new = self.gfu.vec.FV().NumPy() - u_new
 
-                    u, f = u_new, f_new
+        #             u, f = u_new, f_new
 
-                rel = np.linalg.norm(f) / max(np.linalg.norm(u), 1.0)
-                if verbose:
-                    print(f"it={k}  ||f||/||u||={rel:.3e}  hist={len(dF)}")
+        #         rel = np.linalg.norm(f) / max(np.linalg.norm(u), 1.0)
+        #         if verbose:
+        #             print(f"it={k}  ||f||/||u||={rel:.3e}  hist={len(dF)}")
 
-            if k >= maxit:
-                raise Exception('Exceeded maximum number of iterations') 
+        #     if k >= maxit:
+        #         raise Exception('Exceeded maximum number of iterations') 
             
-        else:
+        # else:
 
-            self.F.Assemble()
-            self.gfu.vec.data = self.invA*self.F.vec
+        self.F.Assemble()
+        self.gfu.vec.data = self.invA*self.F.vec
 
         ############## Do I actually need this? Getting rid of it for now
         ############## might be a problem for manufactured solutions

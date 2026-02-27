@@ -65,7 +65,7 @@ class CosmosALEManager:
             # V0 = VectorH1(model.parentmesh, order = model.geo_order, dirichlet = model.parentmesh.Boundaries('.*'))
             # u, v = V0.TnT()
             # self.A = BilinearForm(V0, symmetric = True)
-            # self.A += InnerProduct(grad(u), grad(v))*dx(deformation = self.Y)
+            # self.A += InnerProduct(Grad(u), Grad(v))*dx(deformation = self.Yo)
             # self.A.Assemble()
             # self.invA = self.A.mat.Inverse(freedofs = V0.FreeDofs())
 
@@ -77,7 +77,7 @@ class CosmosALEManager:
             lam = E * nu / ((1+nu)*(1-2*nu))
             def Stress(strain):
                 return 2*mu*strain + lam*Trace(strain)*Id(model.dim)    
-            self.A += InnerProduct(Stress(Sym(Grad(u))), Sym(Grad(v)))*dx(deformation = self.Y)
+            self.A += InnerProduct(Stress(Sym(Grad(u))), Sym(Grad(v)))*dx(deformation = self.Yo)
             self.A.Assemble()
             self.invA = self.A.mat.Inverse(freedofs = V0.FreeDofs())
 
@@ -91,7 +91,7 @@ class CosmosALEManager:
             # def psi(F):
             #     E = 0.5*(F.trans*F - Id(model.dim))
             #     return mu*InnerProduct(E,E) + lam/2*Trace(E)**2
-            # self.A += Variation(psi(defgrad)*dx(deformation = self.Y))
+            # self.A += Variation(psi(defgrad)*dx(deformation = self.Yo))
 
         self.vtk_gfu=[self.dY, self.Y, self.X, self.W, 
                     self.V]
@@ -219,32 +219,32 @@ class CosmosBndALEField:
         ######## Istantaneous harmonic map
 
         # self.A_pp = BilinearForm(fes_pp, symmetric = True)
-        # self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
-        # self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
-        # self.A_pp += InnerProduct(Grad(dX_pp).Trace(), Grad(nu_pp).Trace())*ds(deformation = model.ale.Y)
+        # self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
+        # self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
+        # self.A_pp += InnerProduct(Grad(dX_pp).Trace(), Grad(nu_pp).Trace())*ds(deformation = model.ale.Yo)
         # self.A_pp.Assemble()
         # self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
 
         # self.F_pp = LinearForm(fes_pp)
-        # self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
-        # self.F_pp += -1*InnerProduct(self.Ps, Grad(nu_pp).Trace())*ds(deformation = model.ale.Y)
+        # self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
+        # self.F_pp += -1*InnerProduct(self.Ps, Grad(nu_pp).Trace())*ds(deformation = model.ale.Yo)
 
         ###########################
 
         ######## Historic harmonic map
 
-        # gfu0 = GridFunction(model.ale.Y.space)
+        # gfu0 = GridFunction(model.ale.Yo.space)
 
         # self.A_pp = BilinearForm(fes_pp, symmetric = True)
-        # self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
-        # self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
+        # self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
+        # self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
         # self.A_pp += InnerProduct(Grad(dX_pp).Trace(), Grad(nu_pp).Trace())*ds(deformation = gfu0)
         # self.A_pp.Assemble()
         # self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
 
         # self.F_pp = LinearForm(fes_pp)
-        # self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
-        # self.F_pp += -1*InnerProduct(Grad(model.ale.Y).Trace(), Grad(nu_pp).Trace())*ds(deformation = gfu0)
+        # self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
+        # self.F_pp += -1*InnerProduct(Grad(model.ale.Yo).Trace(), Grad(nu_pp).Trace())*ds(deformation = gfu0)
         # self.F_pp += -1*InnerProduct(self.Ps, Grad(nu_pp).Trace())*ds(deformation = gfu0)
 
         ###########################
@@ -252,14 +252,29 @@ class CosmosBndALEField:
         ######## MDR
 
         self.A_pp = BilinearForm(fes_pp)
-        self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
-        self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
-        self.A_pp += InnerProduct(1/model.dt*Grad(dX_pp).Trace(), Grad(nu_pp).Trace())*ds(deformation = model.ale.Y)
+        self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
+        self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
+        self.A_pp += InnerProduct(1/model.dt*Grad(dX_pp).Trace(), Grad(nu_pp).Trace())*ds(deformation = model.ale.Yo)
         self.A_pp.Assemble()
         self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
 
         self.F_pp = LinearForm(fes_pp)
-        self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
+        self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
+
+        ###########################
+
+        ######## GarckeNurnbergZhao
+
+        # self.A_pp = BilinearForm(fes_pp)
+        # self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
+        # self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
+        # self.A_pp += InnerProduct(Grad(dX_pp).Trace(), Grad(nu_pp).Trace())*ds(deformation = model.ale.Yo)
+        # self.A_pp.Assemble()
+        # self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
+
+        # self.F_pp = LinearForm(fes_pp)
+        # self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
+        # self.F_pp += -1*InnerProduct(self.Ps, Grad(nu_pp).Trace())*ds(deformation = model.ale.Yo)
 
         ###########################
 
@@ -271,21 +286,21 @@ class CosmosBndALEField:
         # ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
 
         # self.A_pp = BilinearForm(fes_pp, symmetric = True)
-        # self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
-        # self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
-        # self.A_pp += InnerProduct(deviatoric(dX_pp), deviatoric(nu_pp))*ds(deformation = model.ale.Y)
+        # self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
+        # self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
+        # self.A_pp += InnerProduct(deviatoric(dX_pp), deviatoric(nu_pp))*ds(deformation = model.ale.Yo)
         # self.A_pp.Assemble()
         # self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
 
         # self.F_pp = LinearForm(fes_pp)
-        # self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
+        # self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
 
         ###########################
 
         ######## Minimal historical stretch
 
-        # gfu0 = GridFunction(model.ale.Y.space)
-        # X0 = GridFunction(model.ale.Y.space)
+        # gfu0 = GridFunction(model.ale.Yo.space)
+        # X0 = GridFunction(model.ale.Yo.space)
         # if model.dim == 2:
         #     X0.Set(CF((x, y)), definedon = compartment.domain, dual = True)
         # elif model.dim == 3:
@@ -297,15 +312,15 @@ class CosmosBndALEField:
         # ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
 
         # self.A_pp = BilinearForm(fes_pp, symmetric = True)
-        # self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
-        # self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
+        # self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
+        # self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
         # self.A_pp += InnerProduct(deviatoric(dX_pp), deviatoric(nu_pp))*ds(deformation = gfu0)
         # self.A_pp.Assemble()
         # self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
 
         # self.F_pp = LinearForm(fes_pp)
-        # self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Y)
-        # self.F_pp += -1*InnerProduct(deviatoric(model.ale.Y), deviatoric(nu_pp))*ds(deformation = gfu0)
+        # self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
+        # self.F_pp += -1*InnerProduct(deviatoric(model.ale.Yo), deviatoric(nu_pp))*ds(deformation = gfu0)
         # self.F_pp += -1*InnerProduct(deviatoric(X0), deviatoric(nu_pp))*ds(deformation = gfu0)
 
         ###########################

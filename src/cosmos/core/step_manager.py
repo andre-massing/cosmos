@@ -16,7 +16,7 @@ class CosmosStepManager:
 
     def __init__(self, kwargs):
 
-        self.iter = None
+        self.subiter = None
         self.params = kwargs
         self.coupling_type = 'explicit'
         self.step_elasped_time = None
@@ -61,10 +61,12 @@ class CosmosStepManager:
             if self.adaptive:
 
                 print('adaptive')
+                print(self.subiter, model.time.dt.Get(), model.time.helper.params['dt'])
 
                 dt_tol = 1e-9
 
                 while model.dt.Get()>dt_tol:
+                    
                     try:
                         if self.coupling_type == 'implicit':
                             self.implicit_solve_step_gauss(model)
@@ -72,8 +74,8 @@ class CosmosStepManager:
                             self.explicit_solve_step(model)
                         elif self.coupling_type == 'imex':
                             self.imex_solve_step_gauss(model)
-
                         break
+
                     except:
                         dt = model.dt.Get()
                         model.time.modify_dt(dt/2)
@@ -81,8 +83,16 @@ class CosmosStepManager:
                         for pde in model.pdes:
                             pde.reset()
                         model.ale.reset()
-
                         print('Timesep reduced: ', model.dt.Get())
+
+                        print(self.subiter, model.time.dt.Get(), model.time.helper.params['dt'])
+
+                if self.subiter<=5:
+                    model.time.helper.params['dt'] = (model.time.dt.Get() + model.time.helper.dt0)/2
+                else:
+                    model.time.helper.params['dt'] = model.time.dt.Get()
+
+                print(self.subiter, model.time.dt.Get(), model.time.helper.params['dt'])
 
                 print('adaptive_end')
 
@@ -99,6 +109,7 @@ class CosmosStepManager:
                     self.imex_solve_step_gauss(model)
                 
             logger.debug(f'Subiter solved successfully')
+            print('ok')
 
             for pde in model.pdes:
                 pde.PostProcess()
@@ -128,9 +139,9 @@ class CosmosStepManager:
             old_sol.append(pde.gfu.vec.Copy())
 
         errors = np.ones(len(model.pdes_pre) + len(model.pdes_post))*1e5
-        self.iter = 0
-        max_iter = 20
-        while np.max(errors)>tol and self.iter < max_iter:
+        self.subiter = 0
+        max_iter = 10
+        while np.max(errors)>tol and self.subiter < max_iter:
 
             count = 0
             for i, pde in enumerate(model.pdes_pre):
@@ -144,12 +155,59 @@ class CosmosStepManager:
                 errors[count] = Norm(pde.gfu.vec-old_sol[count])/np.max([len(pde.gfu.vec), Norm(old_sol[count])])
                 old_sol[count] = pde.gfu.vec.Copy()
                 count += 1
-            self.iter += 1
-            print(self.iter, errors)
-            logger.debug(f'Step subiter_bool count: {self.iter} | Max error {np.max(np.array(errors)):.2e}')
+            self.subiter += 1
+            logger.debug(f'Step subiter_bool count: {self.subiter} | Max error {np.max(np.array(errors)):.2e}')
 
-        if self.iter == max_iter:
+            print(errors)
+
+        if self.subiter == max_iter:
             raise Exception(f'Internal solver iteration exceeded max number of {max_iter:d} iterations')
+        
+    def imex_solve_step_gauss(self, model):
+        
+        old_sol = []
+        tol = 1e-10
+
+        for i, pde in enumerate(model.pdes_pre):
+            pde.Solve()
+            old_sol.append(pde.gfu.vec.Copy())
+        model.ale.solve_ale(model)
+
+        errors = np.ones(len(model.pdes_pre))*1e5
+
+        errors_ale = np.ones(3)*1e5
+        old_sol_ale = [model.ale.V.vec.Copy(), model.ale.W.vec.Copy(), model.ale.Y.vec.Copy()]
+
+        max_iter = 10
+        self.subiter = 0
+        while np.max(errors)>tol and self.subiter < max_iter:
+
+            count = 0
+            for i, pde in enumerate(model.pdes_pre):
+                pde.Solve()
+                errors[count] = Norm(pde.gfu.vec-old_sol[count])/np.max([len(pde.gfu.vec), Norm(old_sol[count])])
+                old_sol[count] = pde.gfu.vec.Copy()
+                count += 1
+            model.ale.solve_ale(model)
+
+            errors_ale[0] = Norm(model.ale.V.vec-old_sol_ale[0])/np.max([len(model.ale.V.vec), Norm(old_sol_ale[0])])
+            errors_ale[1] = Norm(model.ale.W.vec-old_sol_ale[1])/np.max([len(model.ale.W.vec), Norm(old_sol_ale[1])])
+            errors_ale[2] = Norm(model.ale.Y.vec-old_sol_ale[2])/np.max([len(model.ale.Y.vec), Norm(old_sol_ale[2])])
+            old_sol_ale[0] = model.ale.V.vec.Copy()
+            old_sol_ale[1] = model.ale.W.vec.Copy()
+            old_sol_ale[2] = model.ale.Y.vec.Copy()
+
+            self.subiter += 1
+            logger.debug(f'Step subiter_bool count: {self.subiter} | Max error {np.max(np.array(errors)):.2e}')
+
+            print(errors, errors_ale)
+
+        if self.subiter == max_iter:
+            print('Max iteration number for nonlinear Gauss iteration reached')
+            raise Exception(f'Internal solver iteration exceeded max number of {max_iter:d} iterations')
+        
+        for j, pde in enumerate(model.pdes_post):
+            pde.Solve()
 
     def implicit_solve_step_anderson(self, model):
 
@@ -350,54 +408,6 @@ class CosmosStepManager:
 
         if k >= maxit:
             raise Exception('Exceeded maximum number of iterations') 
-        
-        print('Post-step')
-        
-        for j, pde in enumerate(model.pdes_post):
-            pde.Solve()
-
-    def imex_solve_step_gauss(self, model):
-        
-        old_sol = []
-        tol = 1e-10
-
-        for i, pde in enumerate(model.pdes_pre):
-            pde.Solve()
-            old_sol.append(pde.gfu.vec.Copy())
-        model.ale.solve_ale(model)
-
-        errors = np.ones(len(model.pdes_pre))*1e5
-
-        errors_ale = np.ones(3)*1e5
-        old_sol_ale = [model.ale.V.vec.Copy(), model.ale.W.vec.Copy(), model.ale.Y.vec.Copy()]
-
-        max_iter = 20
-        self.iter = 0
-        while np.max(errors)>tol and self.iter < max_iter:
-
-            count = 0
-            for i, pde in enumerate(model.pdes_pre):
-                pde.Solve()
-                errors[count] = Norm(pde.gfu.vec-old_sol[count])/np.max([len(pde.gfu.vec), Norm(old_sol[count])])
-                old_sol[count] = pde.gfu.vec.Copy()
-                count += 1
-            model.ale.solve_ale(model)
-
-            errors_ale[0] = Norm(model.ale.V.vec-old_sol_ale[0])/np.max([len(model.ale.V.vec), Norm(old_sol_ale[0])])
-            errors_ale[1] = Norm(model.ale.W.vec-old_sol_ale[1])/np.max([len(model.ale.W.vec), Norm(old_sol_ale[1])])
-            errors_ale[2] = Norm(model.ale.Y.vec-old_sol_ale[2])/np.max([len(model.ale.Y.vec), Norm(old_sol_ale[2])])
-            old_sol_ale[0] = model.ale.V.vec.Copy()
-            old_sol_ale[1] = model.ale.W.vec.Copy()
-            old_sol_ale[2] = model.ale.Y.vec.Copy()
-
-            self.iter += 1
-            print(self.iter, errors)
-            print(self.iter, errors_ale)
-            logger.debug(f'Step subiter_bool count: {self.iter} | Max error {np.max(np.array(errors)):.2e}')
-
-        if self.iter == max_iter:
-            print('Max iteration number for nonlinear Gauss iteration reached')
-            raise Exception(f'Internal solver iteration exceeded max number of {max_iter:d} iterations')
         
         print('Post-step')
         

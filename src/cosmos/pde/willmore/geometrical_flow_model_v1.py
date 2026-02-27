@@ -137,7 +137,7 @@ class GeometricalFlowModel(BasePDEModel):
 
         self.A += -1*InnerProduct(self.lam*kappa, phi)*ds(deformation = self.model.ale.Yo)
 
-        #### Implict coupling to geometry!
+        #### Implicit coupling to geometry!
         self.A += 0.5*InnerProduct(InnerProduct(Grad(self.model.ale.X).Trace(), Grad(self.model.ale.W).Trace())*kappa, phi)*ds(deformation = self.model.ale.Yo)
 
         self.A.Assemble()

@@ -13,13 +13,11 @@ from dendritic_spine_geom import generate_synapse2d
 
 logging.getLogger().setLevel(logging.INFO)
 
-@pytest.mark.parametrize("d", [1e-3, 1e-7, 1e-10])
-@pytest.mark.parametrize("scheme", ['explicit', 'imex', 'implicit'])
-def test_quintana(
+@pytest.mark.parametrize("Re", [7])
+def test_quintana_imex_adaptive(
         request,
         artifacts_path,
-        scheme,
-        d
+        Re
     ):
 
     mesh = generate_synapse2d(maxh=0.02)
@@ -47,15 +45,17 @@ def test_quintana(
     N = 3
 
     dt = 0.01
-    T = 120
-    dt = Parameter(dt)
+    T = 70
+    # dt = Parameter(dt)
     t = Parameter(-60)
 
     from cosmos.core.model import CosmosModel
 
+    root =  artifacts_path
+    model_name = f"test_quintana_Re{Re}"
     model = CosmosModel(parentmesh=mesh, dt=dt, t=t, t0 = t.Get(), t1 = T,
-                        root = '.', sample_rate = 100, name = 'test_explicit', coupling_type = 'explicit',
-                        redistribute = True, adaptive_timestep = False)
+                        root = root, sample_rate = 100, name = model_name, coupling_type = 'imex',
+                        redistribute = True, adaptive_timestep = True)
 
     ###################  BULK REACTIONS  ##################################
     from cosmos.pde.adr.volume.adr_volume_system_bdf1_model import ADRVolumeSystemBDF1Model
@@ -91,9 +91,9 @@ def test_quintana(
     dist_fct.Initialize()
     dist_fct.Solve()
     id_funct = IfPos(dist_fct.sol[0]-0.02, 1, 0)*IfPos(y-0.3, 1, 0)
-    impulse = IfPos(t, 1, 0)*IfPos(60-t, 1, 0)*CF(0)
+    impulse = IfPos(t, 1, 0)*IfPos(60-t, 1, 0)
 
-    d = CF(d)
+    d = CF(1e-3)*exp(-Re)
     adr_sys.set_params(
         Neu_bnd = 'membrane|default',
         u0_1 = A0*id_funct,
@@ -104,7 +104,7 @@ def test_quintana(
         gradu_bnd_1 = CF((0,0)),
         u0_2 = B0*id_funct,
         c_2 = K_B,
-        b_2 = lambda: model.ale.V + dist_fct.sol[1]*1e-3,
+        b_2 = lambda: model.ale.V + dist_fct.sol[1]*1e-3*(1-exp(-Re)),
         d_2 = d,
         rhs_2 = psi0*(I_B + I_SB*impulse),
         gradu_bnd_2 = CF((0,0)),

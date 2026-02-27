@@ -12,9 +12,9 @@ from cosmos.pde.adr.boundary.adr_boundary_system_bdf1_model_nostab import ADRBou
 
 logging.getLogger().setLevel(logging.INFO)
 
-@pytest.mark.parametrize("a21", [0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3])
-@pytest.mark.parametrize("a12", [0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3])
-@pytest.mark.parametrize("angle", [90, 60])
+@pytest.mark.parametrize("a21", np.round(np.linspace(0, 3, 21, endpoint=True), 2)[1:].tolist())
+@pytest.mark.parametrize("a12", np.round(np.linspace(0, 3, 21, endpoint=True), 2)[1:].tolist())
+@pytest.mark.parametrize("angle", [90])
 def test_lomakin_2D(
         request,
         artifacts_path,
@@ -36,13 +36,12 @@ def test_lomakin_2D(
         r2 = 1
         klim_A = 1
         klim_B = 1
-        A0 = 3
-        B0 = 3
+        A0 = 2
+        B0 = 2
 
         R = 10
         mesh = generate_boundary_1D_circle(r=R, N = 100)
         ns = specialcf.normal(2)
-        Area0 = Integrate(CF((x, 0))*ns, mesh, VOL_or_BND=BND)
 
         from cosmos.core.model import CosmosModel
         root = artifacts_path
@@ -75,10 +74,12 @@ def test_lomakin_2D(
             d_1 = 0.1,
             c_1 = -r1,
             b_1 = lambda: model.ale.V,
+            bounds_1 = [0, 1e100],
             u0_2 = 1,
             d_2 = 0.1,
             c_2 = -r2,
             b_2 = lambda: model.ale.V,
+            bounds_2 = [0, 1e100],
             printing = True,
         )
 
@@ -94,6 +95,10 @@ def test_lomakin_2D(
             'y_bary': lambda: Integrate(y, mesh, VOL_or_BND = BND)/Integrate(1, mesh, VOL_or_BND = BND), 
             'area': lambda: Integrate(1, mesh, VOL_or_BND = BND),
             'volume': lambda: Integrate(CF((x, 0))*ns, mesh, VOL_or_BND = BND),
+            'min_A': lambda: np.min(adr_system.sol[0].vec.FV().NumPy()), 
+            'max_A': lambda: np.max(adr_system.sol[0].vec.FV().NumPy()), 
+            'min_B': lambda: np.min(adr_system.sol[1].vec.FV().NumPy()), 
+            'max_B': lambda: np.max(adr_system.sol[1].vec.FV().NumPy()) 
         }
 
         model.set_params(
@@ -115,9 +120,9 @@ def test_lomakin_2D(
         print('Simulation terminated with error')
         print(e)
 
-@pytest.mark.parametrize("a21", [0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3])
-@pytest.mark.parametrize("a12", [0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3])
-@pytest.mark.parametrize("angle", [90, 60])
+@pytest.mark.parametrize("a21", np.round(np.linspace(0, 3, 21, endpoint=True), 2)[1:].tolist())
+@pytest.mark.parametrize("a12", np.round(np.linspace(0, 3, 21, endpoint=True), 2)[1:].tolist())
+@pytest.mark.parametrize("angle", [90])
 def test_lomakin_2D_feedback(
         request,
         artifacts_path,
@@ -139,8 +144,8 @@ def test_lomakin_2D_feedback(
         r2 = 1
         klim_A = 1
         klim_B = 1
-        A0 = 3
-        B0 = 3
+        A0 = 2
+        B0 = 2
 
         R = 10
         mesh = generate_boundary_1D_circle(r=R, N = 100)
@@ -167,8 +172,8 @@ def test_lomakin_2D_feedback(
             return T
         def V():
             T = Tension()
-            term1 = (adr_system.sol[0])**m/((adr_system.sol[0])**m + A0*T**m)
-            term2 = (adr_system.sol[1])**m/((adr_system.sol[1])**m + B0)
+            term1 = (adr_system.sol[0])**m/((adr_system.sol[0])**m + (A0*T)**m)
+            term2 = (adr_system.sol[1])**m/((adr_system.sol[1])**m + B0**m)
             return term1-term2
         ale.set_normal_velocity(V)
         ale.set_tangential_velocity(CF((0,0)))
@@ -183,10 +188,12 @@ def test_lomakin_2D_feedback(
             d_1 = 0.1,
             c_1 = -r1,
             b_1 = lambda: model.ale.V,
+            bounds_1 = [0, 1e100],
             u0_2 = 1,
             d_2 = 0.1,
             c_2 = -r2,
             b_2 = lambda: model.ale.V,
+            bounds_2 = [0, 1e100],
             printing = True,
         )
 
@@ -203,6 +210,10 @@ def test_lomakin_2D_feedback(
             'y_bary': lambda: Integrate(y, mesh, VOL_or_BND = BND)/Integrate(1, mesh, VOL_or_BND = BND), 
             'area': lambda: Integrate(1, mesh, VOL_or_BND = BND),
             'volume': lambda: Integrate(CF((x, 0))*ns, mesh, VOL_or_BND = BND),
+            'min_A': lambda: np.min(adr_system.sol[0].vec.FV().NumPy()), 
+            'max_A': lambda: np.max(adr_system.sol[0].vec.FV().NumPy()), 
+            'min_B': lambda: np.min(adr_system.sol[1].vec.FV().NumPy()), 
+            'max_B': lambda: np.max(adr_system.sol[1].vec.FV().NumPy()) 
         }
 
         model.set_params(

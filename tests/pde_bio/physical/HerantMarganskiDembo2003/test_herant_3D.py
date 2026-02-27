@@ -15,9 +15,9 @@ from cosmos.pde.adr.boundary.adr_boundary_system_bdf1_model_nostab import ADRBou
 
 logging.getLogger().setLevel(logging.INFO)
 
-@pytest.mark.parametrize("gamma_tension", [10, 100])
+@pytest.mark.parametrize("gamma_tension", [100])
 @pytest.mark.parametrize("gamma_curv", [0.1, 1, 10])
-@pytest.mark.parametrize("phi_cap", [0.9, 0.93, 0.96, 0.99])
+@pytest.mark.parametrize("phi_cap", [0.93, 0.96, 0.99])
 def test_herant_3D_vp_clamped(
         request,
         artifacts_path,
@@ -64,7 +64,7 @@ def test_herant_3D_vp_clamped(
     dt = Parameter(2e-3)
     root =  artifacts_path
     model_name = f"phi_cap{phi_cap}_alpha{gamma_curv}_gamma{gamma_tension}"
-    model = CosmosModel(name=model_name, parentmesh=mesh, t0 = 0, t1 = 10,
+    model = CosmosModel(name=model_name, parentmesh=mesh, t0 = 0, t1 = 15,
                         dt = dt, t = t,
                         coupling_type = 'implicit', redistribute = True,
                         root = root, sample_rate = 50)
@@ -112,8 +112,15 @@ def test_herant_3D_vp_clamped(
         output_callables = {'energy': lambda: Integrate(0.5*(geom_flow.kappa_h - geom_flow.params['sp_curv'])**2, mesh, VOL_or_BND = BND),
                             'area': lambda: Integrate(1, mesh, VOL_or_BND = BND),
                             'volume': lambda: Integrate(1, mesh, VOL_or_BND = VOL),
-                            'u_mass': lambda: Integrate(adr_vol.sol, mesh, VOL_or_BND = VOL),
-                            'i_mass': lambda: Integrate(adr_bnd.sol[0], mesh, VOL_or_BND = BND)}
+                            'u_mass': lambda: Integrate(adr_vol.sol[0], mesh, VOL_or_BND = VOL),
+                            'i_mass': lambda: Integrate(adr_bnd.sol[0], mesh, VOL_or_BND = BND),
+                            'x_bary': lambda: Integrate(x, mesh, VOL_or_BND = VOL),
+                            'y_bary': lambda: Integrate(y, mesh, VOL_or_BND = VOL),
+                            'z_bary': lambda: Integrate(z, mesh, VOL_or_BND = VOL),
+                            'x_max': lambda: np.max(model.ale.X.components[0].vec.FV().NumPy()),
+                            'y_max': lambda: np.max(model.ale.X.components[1].vec.FV().NumPy()),
+                            'z_max': lambda: np.max(model.ale.X.components[2].vec.FV().NumPy())
+                            }
     )
 
     scene = Draw(adr_vol.gfu ,mesh)
