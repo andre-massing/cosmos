@@ -34,6 +34,7 @@ class GeometricalFlowStationaryModel(BasePDEModel):
         self.params["gamma"] = CF(0)
         self.params["area_preserving"] = False
         self.params["volume_preserving"] = False
+        self.params["kappa0"] = None
 
         self.vectorspace_bbnd = VectorH1(model.parentmesh, order = 1, definedon = compartment.domain, dirichlet_bbnd = self.cn_bboundary)
         self.vectorspace = VectorH1(model.parentmesh, order = 1, definedon =compartment.domain)
@@ -95,7 +96,11 @@ class GeometricalFlowStationaryModel(BasePDEModel):
 
         gfu0.vec.data = invA0*F0.vec
         self.kappa_h.vec.data = kappa0_h.vec.data
-        self.sp_curv_h.vec.data = kappa0_h.vec.data
+
+        if self.params['kappa0']:
+            self.sp_curv_h.Set(self.params['kappa0'], definedon = self.compartment.domain)
+        else:
+            self.sp_curv_h.vec.data = kappa0_h.vec.data
 
     def PreProcess(self):
 
@@ -229,12 +234,3 @@ class GeometricalFlowStationaryModel(BasePDEModel):
         if self.model.dim == 2:
             for i, gfu in enumerate(self.vtk_gfu):
                 gfu.Set(self.gfu.components[i], definedon = self.compartment.domain)
-
-    def adaptive_timestep_cap(self):
-
-        Eo = Integrate(0.5*(self.kappa_h_old - self.sp_curv_h_old)**2, self.model.parentmesh, VOL_or_BND = BND)
-        En = Integrate(0.5*(self.kappa_h - self.sp_curv_h)**2, self.model.parentmesh, VOL_or_BND = BND)
-        Fo = Integrate(InnerProduct(self.params['rhs'](), self.V_h), self.model.parentmesh, VOL_or_BND = BND)
-        dt = self.model.dt.Get()
-        
-        return (En-Eo)<dt*Fo

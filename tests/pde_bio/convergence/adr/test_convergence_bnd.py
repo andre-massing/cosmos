@@ -2,7 +2,7 @@ from ngsolve import *
 from ngsolve.webgui import Draw
 from cosmos.utils.generate_meshes import generate_boundary_sphere, generate_boundary_half_sphere
 from cosmos.core.model import CosmosModel
-from cosmos.pde.adr.boundary.adr_boundary_system_bdf1_model_stab import ADRBoundarySystemBDF1Model
+from cosmos.pde.adr.boundary.adr_boundary_system_bdf1_model_nostab import ADRBoundarySystemBDF1Model
 from cosmos.config.parameters import get_config
 from cosmos.utils.tools import gradient
 import numpy as np
@@ -96,7 +96,7 @@ def test_convergence_bnd(
         rel_flux = u_ex*Trace(gradient(w_phi, P_ex)) + w_phi*gradient(u_ex, Id(3))
         rhs = (u_ex.Diff(t) + rel_flux + Trace(gradient(flux_b, P_ex)) + c*u_ex) # manufactured solution right-hand side
 
-        pde = model.create_pde(name = 'adr', pde_model=ADRBoundarySystemBDF1Model, compartment=comp, dim = 1)
+        pde = model.create_pde(name = 'adr', pde_model=ADRBoundarySystemBDF1Model, compartment=comp, ale_type = 1, dim = 1)
         pde.set_params(**input_params)
         pde.set_params(printing = True)
         pde.set_params(b_1 = b, c_1 = c, rhs_1 = rhs)

@@ -147,12 +147,12 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
                     - d*InnerProduct(n, grad(test[i]))*trial[i]*ds(definedon = self.params['Dir_bnd'], skeleton=True, deformation = self.Yhalf)\
                     + d*alpha/h*trial[i]*test[i]*ds(definedon = self.params['Dir_bnd'], skeleton = True, deformation = self.Yhalf)\
 
-            self.A += -(b - self.model.ale.W)*grad(test[i]) * trial[i]*dx(deformation = self.Yhalf)
-            stab = (Norm(b - self.model.ale.W))*h**2
+            self.A += -(b - self.model.ale.Wo)*grad(test[i]) * trial[i]*dx(deformation = self.Yhalf)
+            stab = (Norm(b - self.model.ale.Wo))*h**2
             jump_u = grad(trial[i])-grad(trial[i]).Other()
             jump_v = grad(test[i])-grad(test[i]).Other()
             self.A += stab*jump_u*jump_v*dx(deformation = self.Yhalf, skeleton = True)
-            self.A += IfPos((b - self.model.ale.W)*n, (b - self.model.ale.W)*n*trial[i], CF(0))*test[i]\
+            self.A += IfPos((b - self.model.ale.Wo)*n, (b - self.model.ale.Wo)*n*trial[i], CF(0))*test[i]\
                 *ds(deformation = self.Yhalf)
 
             self.F += rhs*test[i]*dx(deformation = self.Yhalf)
@@ -165,7 +165,7 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
 
             self.F += tot_flux_bnd*test[i]*ds(deformation = self.Yhalf)
 
-            self.F += -IfPos((b - self.model.ale.W)*n, CF(0), (b - self.model.ale.W)*n*u_bnd)*test[i]*ds(deformation = self.Yhalf)
+            self.F += -IfPos((b - self.model.ale.Wo)*n, CF(0), (b - self.model.ale.Wo)*n*u_bnd)*test[i]*ds(deformation = self.Yhalf)
 
             self.A += 1/self.model.dt*trial[i]*test[i]*dx(deformation = self.model.ale.Y)
 

@@ -73,7 +73,7 @@ def test_herant_2D_vp_clamped(
                         coupling_type = 'implicit', redistribute = True,
                         root = root, sample_rate = 50)
 
-    ################### GRADIENT FLOW  ##################################
+    ################### INDICATOR ADR ##################################
     comp1 = model.create_compartment(name = 'comp1', boundary = 'free_bnd', bboundary = 'bbnd', clamped_bbnd = "bbnd")
     adr_bnd = model.create_pde(name = 'indicator', pde_model=ADRBoundarySystemBDF1Model, compartment=comp1, ale_type = 1, dim = 1)
     adr_bnd.set_params(
@@ -96,6 +96,7 @@ def test_herant_2D_vp_clamped(
         printing = True
     )
 
+    ################### GRADIENT FLOW  ##################################
     geom_flow = model.create_pde(name = 'geom_flow', pde_model=GeometricalFlowModel, compartment=comp1, ale_type = 0)
     geom_flow.set_params(
         kappa0 = CF(-1/R_PMN),

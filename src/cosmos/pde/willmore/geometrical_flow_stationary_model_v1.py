@@ -34,6 +34,7 @@ class GeometricalFlowStationaryModel(BasePDEModel):
         self.params["gamma"] = CF(0)
         self.params["area_preserving"] = False
         self.params["volume_preserving"] = False
+        self.params["kappa0"] = None
 
         self.vectorspace_bbnd = VectorH1(model.parentmesh, order = 1, definedon = compartment.domain, dirichlet_bbnd = self.cn_bboundary)
         self.vectorspace = VectorH1(model.parentmesh, order = 1, definedon =compartment.domain)
@@ -93,7 +94,10 @@ class GeometricalFlowStationaryModel(BasePDEModel):
 
         gfu0.vec.data = invA0*F0.vec
         self.kappa_h.vec.data = kappa0_h.vec.data
-        self.sp_curv_h.vec.data = kappa0_h.vec.data
+        if self.params['kappa0']:
+            self.sp_curv_h.Set(self.params['kappa0'], definedon = self.compartment.domain)
+        else:
+            self.sp_curv_h.vec.data = kappa0_h.vec.data
 
     def PreProcess(self):
 

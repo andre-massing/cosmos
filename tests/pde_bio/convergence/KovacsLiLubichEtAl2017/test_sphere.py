@@ -55,17 +55,14 @@ def test_sphere_bio(
         adr = model.create_pde(name='adr', pde_model=ADRBoundarySystemBDF1Model, compartment=comp1, ale_type = 1, dim=1)
         ale = model.create_ale(name='ale', compartment=comp1)
 
-        ale.set_normal_velocity(mc.sol[0])
+        ale.set_normal_velocity(mc.V_h)
         ale.set_tangential_velocity(CF((0,0,0)))
 
-        def mc_rhs():       
-            term1 = delta*adr.sol[0] + g
-            return term1
         mc.set_params(
             alpha = 0,
             beta = 0, 
             gamma = 1,
-            rhs = lambda: mc_rhs()
+            rhs = lambda: delta*adr.sol[0] + g
         )
 
         adr.set_params(

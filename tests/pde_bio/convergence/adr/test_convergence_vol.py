@@ -89,7 +89,7 @@ def test_convergence_vol(
         flux_b = (b+w_phi)*u_ex
         rhs = (u_ex.Diff(t) + Trace(gradient(flux_b, Id(2))) + c*u_ex) # manufactured solution right-hand side
 
-        pde = model.create_pde(name = 'adr', pde_model=ADRVolumeSystemBDF1Model, compartment=comp, dim = 1)
+        pde = model.create_pde(name = 'adr', pde_model=ADRVolumeSystemBDF1Model, compartment=comp, ale_type = 1, dim = 1)
         pde.set_params(**input_params)
         pde.set_params(printing = True)
         pde.set_params(b_1 = b, c_1 = c, rhs_1 = rhs)

@@ -4,7 +4,7 @@ from ngsolve.webgui import Draw
 from cosmos.utils.generate_meshes import generate_boundary_sphere, generate_boundary_half_sphere, \
     generate_boundary_torus, generate_boundary_half_torus
 from cosmos.core.model import CosmosModel
-from cosmos.pde.willmore.geometrical_flow_model import GeometricalFlowModel
+from cosmos.pde.willmore.geometrical_flow_model_v1 import GeometricalFlowModel
 from scipy.integrate import solve_ivp
 import numpy as np
 import logging
@@ -25,10 +25,11 @@ def test_convergence_bio_sphere(
     def solve(mesh, dt):
 
         model = CosmosModel(name = 'convergence_sphere', parentmesh=mesh, 
-                            t0 = 0, t1 = Tend, dt = dt, redistribute = redistribute)
+                            t0 = 0, t1 = Tend, dt = dt, redistribute = redistribute,
+                            coupling_type = 'implicit')
         
         comp1 = model.create_compartment(name = 'compartment', boundary = 'default', bboundary = '')
-        pde = model.create_pde(name = 'willmore_flow', pde_model=GeometricalFlowModel, compartment=comp1)
+        pde = model.create_pde(name = 'willmore_flow', pde_model=GeometricalFlowModel, compartment=comp1, ale_type = 0)
         ale = model.create_ale(name = 'ale', compartment=comp1)
         ale.set_normal_velocity(pde.V_h)
         ale.set_tangential_velocity(CF((0, 0, 0)))
@@ -97,11 +98,12 @@ def test_convergence_bio_half_sphere(
     def solve(mesh, dt):
 
         model = CosmosModel(name = 'convergence_half_sphere', parentmesh=mesh, 
-                            t0 = 0, t1 = Tend, dt = dt, redistribute = redistribute)
+                            t0 = 0, t1 = Tend, dt = dt, redistribute = redistribute,
+                            coupling_type = 'implicit')
         
         comp1 = model.create_compartment(name = 'compartment', boundary = 'default', bboundary = 'bboundary',
                                          clamped_bbnd = 'bboundary')
-        pde = model.create_pde(name = 'willmore_flow', pde_model=GeometricalFlowModel, compartment=comp1)
+        pde = model.create_pde(name = 'willmore_flow', pde_model=GeometricalFlowModel, compartment=comp1, ale_type = 0)
         ale = model.create_ale(name = 'ale', compartment=comp1)
         ale.set_normal_velocity(pde.V_h)
         ale.set_tangential_velocity(CF((0, 0, 0)))
@@ -170,10 +172,11 @@ def test_convergence_bio_torus(
     def solve(mesh, dt):
 
         model = CosmosModel(name = 'convergence_torus', parentmesh=mesh, 
-                            t0 = 0, t1 = Tend, dt = dt, redistribute = redistribute)
+                            t0 = 0, t1 = Tend, dt = dt, redistribute = redistribute,
+                            coupling_type = 'implicit')
         
         comp1 = model.create_compartment(name = 'compartment', boundary = 'default', bboundary = '')
-        pde = model.create_pde(name = 'willmore_flow', pde_model=GeometricalFlowModel, compartment=comp1)
+        pde = model.create_pde(name = 'willmore_flow', pde_model=GeometricalFlowModel, compartment=comp1, ale_type = 0)
         ale = model.create_ale(name = 'ale', compartment=comp1)
         ale.set_normal_velocity(pde.V_h)
         ale.set_tangential_velocity(CF((0, 0, 0)))
@@ -242,11 +245,12 @@ def test_convergence_bio_half_torus(
     def solve(mesh, dt):
 
         model = CosmosModel(name = 'convergence_half_torus', parentmesh=mesh, 
-                            t0 = 0, t1 = Tend, dt = dt, redistribute = redistribute)
+                            t0 = 0, t1 = Tend, dt = dt, redistribute = redistribute,
+                            coupling_type = 'implicit')
         
         comp1 = model.create_compartment(name = 'compartment', boundary = 'default', bboundary = 'bboundary',
                                          clamped_bbnd = 'bboundary')
-        pde = model.create_pde(name = 'willmore_flow', pde_model=GeometricalFlowModel, compartment=comp1)
+        pde = model.create_pde(name = 'willmore_flow', pde_model=GeometricalFlowModel, compartment=comp1, ale_type = 0)
         ale = model.create_ale(name = 'ale', compartment=comp1)
         ale.set_normal_velocity(pde.V_h)
         ale.set_tangential_velocity(CF((0, 0, 0)))
@@ -324,10 +328,11 @@ def test_convergence_bio_sphere_kappa0(
         gfu = GridFunction(H1(mesh))
 
         model = CosmosModel(name = 'convergence_torus', parentmesh=mesh, 
-                            t0 = 0, t1 = Tend, dt = dt, redistribute = redistribute)
+                            t0 = 0, t1 = Tend, dt = dt, redistribute = redistribute,
+                            coupling_type = 'implicit')
         
         comp1 = model.create_compartment(name = 'compartment', boundary = 'default', bboundary = '')
-        pde = model.create_pde(name = 'willmore_flow', pde_model=GeometricalFlowModel, compartment=comp1)
+        pde = model.create_pde(name = 'willmore_flow', pde_model=GeometricalFlowModel, compartment=comp1, ale_type = 0)
         pde.set_params(sp_curv = CF(sp_curv))
         ale = model.create_ale(name = 'ale', compartment=comp1)
         ale.set_normal_velocity(pde.V_h)

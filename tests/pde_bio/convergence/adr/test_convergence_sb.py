@@ -3,7 +3,7 @@ from ngsolve.webgui import Draw
 from cosmos.utils.generate_meshes import generate_volume_circle, generate_volume_ball
 from cosmos.core.model import CosmosModel
 from cosmos.pde.adr.volume.adr_volume_system_bdf1_model import ADRVolumeSystemBDF1Model
-from cosmos.pde.adr.boundary.adr_boundary_system_bdf1_model_stab import ADRBoundarySystemBDF1Model
+from cosmos.pde.adr.boundary.adr_boundary_system_bdf1_model_nostab import ADRBoundarySystemBDF1Model
 from cosmos.config.parameters import get_config
 from cosmos.utils.tools import gradient
 import numpy as np
@@ -65,13 +65,13 @@ def test_convergence_sb_circle(
         ale.set_domain_velocity(displacement_ex/dt)
         # ale.set_domain_velocity(w_phi)
 
-        pde_vol = model.create_pde(name = 'adr_vol', pde_model=ADRVolumeSystemBDF1Model, compartment=comp_vol, dim = 1)
+        pde_vol = model.create_pde(name = 'adr_vol', pde_model=ADRVolumeSystemBDF1Model, compartment=comp_vol, ale_type = 1, dim = 1)
         ns = specialcf.normal(2)
         def tot_flux_bnd_cf():
             return  -1*flux_vol*ns + alpha*(pde_vol.sol[0] - u_ex) - beta*(pde_bnd.sol[0] - v_ex)
         pde_vol.set_params(d_1 = d_vol, rhs_1 = rhs_vol, u0_1 = u_ex,
                         tot_flux_bnd_1 = tot_flux_bnd_cf, printing = True)
-        pde_bnd = model.create_pde(name = 'adr_bnd', pde_model=ADRBoundarySystemBDF1Model, compartment=comp_bnd, dim = 1)
+        pde_bnd = model.create_pde(name = 'adr_bnd', pde_model=ADRBoundarySystemBDF1Model, compartment=comp_bnd, ale_type = 1, dim = 1)
         def rhs_bnd_cf():
             return rhs_bnd - beta*pde_bnd.sol[0] + alpha*pde_vol.sol[0]
         pde_bnd.set_params(d_1 = d_bnd, rhs_1 = rhs_bnd_cf, u0_1 = v_ex, printing = True)

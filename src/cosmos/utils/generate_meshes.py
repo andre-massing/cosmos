@@ -184,7 +184,7 @@ def generate_boundary_ellipse(maxh = 0.1, order_g = 1, a=1, b=1, c=1):
     return mesh
     
 '''
-Sigar
+Cigar
 '''
 def generate_boundary_cigar(maxh=0.1, order_g = 1, center=csg.Pnt(0,0,0), r = 1.0, h= 2):
 

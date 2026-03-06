@@ -30,6 +30,7 @@ class CosmosTimeManager:
         self.t0 = self.helper.t0
         self.prev_dt.append(self.dt.Get())
         self.prev_t.append(self.t.Get())
+        self.dt0 = self.dt.Get()
 
     def next(self):
 

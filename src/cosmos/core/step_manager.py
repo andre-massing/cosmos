@@ -22,10 +22,12 @@ class CosmosStepManager:
         self.step_elasped_time = None
         self.adaptive = False
 
+        self.control = []
+
     def initialize(self, model: "CosmosModel"):
 
         if 'coupling_type' in  self.params.keys():
-            if {self.params['coupling_type']} <= {'implicit', 'explicit', 'imex'}:
+            if {self.params['coupling_type']} <= {'implicit', 'explicit'}:
                 self.coupling_type = self.params['coupling_type']
             else:
                 raise Exception('Coupling type must be either implicit or explicit')
@@ -47,6 +49,20 @@ class CosmosStepManager:
             self.len += len(pde.gfu.vec)
         self.positions.append(self.len)
 
+        ns = specialcf.normal(model.dim)
+        Ps = Id(model.dim) - OuterProduct(ns, ns)
+        V = VectorH1(model.parentmesh, definedon = model.parentmesh.Boundaries('.*'))
+        kappa, xsi = V.TnT()
+        self.A = BilinearForm(V)
+        self.A += InnerProduct(kappa, xsi)*ds(deformation = model.ale.Y)
+        self.A.Assemble()
+        self.invA = self.A.mat.Inverse(freedofs = V.FreeDofs())
+        self.F = LinearForm(V)
+        self.F += -1*InnerProduct(Ps, Grad(xsi).Trace())*ds(deformation = model.ale.Y)
+        self.kappa_h = GridFunction(V) 
+
+        self.control.append(self.energy(model))
+
     def solve_step(self, model: "CosmosModel"):
 
         start = time.time()
@@ -60,53 +76,99 @@ class CosmosStepManager:
 
             if self.adaptive:
 
+                safety = 0.8
+
                 print('adaptive')
-                print(self.subiter, model.time.dt.Get(), model.time.helper.params['dt'])
 
                 dt_tol = 1e-9
 
                 while model.dt.Get()>dt_tol:
                     
-                    try:
-                        if self.coupling_type == 'implicit':
-                            self.implicit_solve_step_gauss(model)
-                        elif self.coupling_type == 'explicit':
-                            self.explicit_solve_step(model)
-                        elif self.coupling_type == 'imex':
-                            self.imex_solve_step_gauss(model)
-                        break
+                    if self.coupling_type == 'implicit':
 
-                    except:
-                        dt = model.dt.Get()
-                        model.time.modify_dt(dt/2)
+                        order = 1
+                        iter_target = 4
 
-                        for pde in model.pdes:
-                            pde.reset()
-                        model.ale.reset()
-                        print('Timesep reduced: ', model.dt.Get())
+                        success, subiter = self.implicit_solve_step_gauss(model)
 
-                        print(self.subiter, model.time.dt.Get(), model.time.helper.params['dt'])
+                        if not success:
+                            dt = model.dt.Get()
+                            dt *= safety * (iter_target / subiter) ** (1 / (order + 1))
+                            model.time.modify_dt(dt)
+                            for pde in model.pdes:
+                                pde.reset()
+                            model.ale.reset()
+                            print('Control difference is too high, timestep lowered to: ', dt)
+                        elif subiter<=iter_target:
+                            dt = model.dt.Get()
+                            dt *= safety * (iter_target / subiter) ** (1 / (order + 1))
+                            dt = min(dt, model.time.dt0)
 
-                if self.subiter<=5:
-                    model.time.helper.params['dt'] = (model.time.dt.Get() + model.time.helper.dt0)/2
-                else:
-                    model.time.helper.params['dt'] = model.time.dt.Get()
+                            model.time.helper.params['dt'] = dt
+                            print('Control difference is too low, timestep raised to: ', dt)
+                            break
+                        else:
+                            dt = model.dt.Get()
+                            model.time.helper.params['dt'] = dt
+                            break
 
-                print(self.subiter, model.time.dt.Get(), model.time.helper.params['dt'])
+                    elif self.coupling_type == 'explicit':
 
-                print('adaptive_end')
+                        previous_control = self.control[-1]
+                        eps_target = 1e-5
+                        eps_max = 1e-4
+                        eps_min = 1e-6
+                        small_floor = 1e-8
+                        order = 1
+
+                        if eps_max<eps_target or eps_target<eps_min:
+                            raise Exception('Wrong parameters for adaptive algorithm!!')
+
+                        self.explicit_solve_step(model)
+
+                        new_control = self.energy(model)
+                        self.control.append(new_control)
+                        eps = np.max([abs((new_control - previous_control)/previous_control), small_floor])
+
+                        print(previous_control, new_control, eps)
+
+                        if eps > eps_max:
+                            dt = model.dt.Get()
+                            dt *= safety * (eps_target / eps) ** (1 / (order + 1))
+                            model.time.modify_dt(dt)
+                            for pde in model.pdes:
+                                pde.reset()
+                            model.ale.reset()
+
+                            print('Control difference is too high, timestep reduced to: ', dt)
+                        elif eps < eps_min:
+                            dt = model.dt.Get()
+                            dt *= safety * (eps_target / eps) ** (1 / (order + 1))
+                            dt = min(dt, model.time.dt0)
+
+                            model.time.helper.params['dt'] = dt
+                            print('Control difference is too low, timestep raised to: ', dt)
+                            break
+                        else:
+                            dt = model.dt.Get()
+                            model.time.helper.params['dt'] = dt
+                            print('Control inside limits, timestep kept as: ', dt)
+                            break
 
                 if model.dt.Get()<dt_tol:
+                    print(self.control)
                     raise Exception('Timestep shrinked to 0!')
+                
+                print('adaptive_end')
                 
             else:
 
                 if self.coupling_type == 'implicit':
-                    self.implicit_solve_step_gauss(model)
+                    success, subiter = self.implicit_solve_step_gauss(model)
+                    if not success:
+                        raise Exception('Implicit algorithm couldn\'t converge, max_iter reached')
                 elif self.coupling_type == 'explicit':
                     self.explicit_solve_step(model)
-                elif self.coupling_type == 'imex':
-                    self.imex_solve_step_gauss(model)
                 
             logger.debug(f'Subiter solved successfully')
             print('ok')
@@ -116,6 +178,26 @@ class CosmosStepManager:
 
         stop = time.time()
         self.step_elasped_time = stop-start
+
+    def energy(self, model: "CosmosModel"):
+
+        model.parentmesh.deformation.vec.data = model.ale.Y.vec.data
+
+        self.A.Assemble()
+        self.invA.Update()
+        self.F.Assemble()
+
+        self.kappa_h.vec.data = self.invA*self.F.vec
+        w_energy = Integrate(self.kappa_h**2, model.parentmesh, VOL_or_BND = BND)
+        if model.dim == 2:
+            v_energy = Integrate(CF((x, 0))*specialcf.normal(model.dim), model.parentmesh, VOL_or_BND = BND)
+        elif model.dim == 3:
+            v_energy = Integrate(CF((x, 0, 0))*specialcf.normal(model.dim), model.parentmesh, VOL_or_BND = BND)
+        a_energy = Integrate(1, model.parentmesh, VOL_or_BND = BND)
+
+        model.parentmesh.deformation.vec.data = model.ale.Yo.vec.data
+
+        return w_energy
 
     def explicit_solve_step(self, model):
 
@@ -128,6 +210,8 @@ class CosmosStepManager:
     def implicit_solve_step_gauss(self, model):
 
         old_sol = []
+        error_ale = 1e5
+        old_sol_ale = model.ale.dY.vec.Copy()
         tol = 1e-8
 
         for i, pde in enumerate(model.pdes_pre):
@@ -138,278 +222,26 @@ class CosmosStepManager:
             pde.Solve()
             old_sol.append(pde.gfu.vec.Copy())
 
-        errors = np.ones(len(model.pdes_pre) + len(model.pdes_post))*1e5
-        self.subiter = 0
+        subiter = 0
         max_iter = 10
-        while np.max(errors)>tol and self.subiter < max_iter:
+        while error_ale>tol and subiter < max_iter:
 
             count = 0
             for i, pde in enumerate(model.pdes_pre):
                 pde.Solve()
-                errors[count] = Norm(pde.gfu.vec-old_sol[count])/np.max([len(pde.gfu.vec), Norm(old_sol[count])])
-                old_sol[count] = pde.gfu.vec.Copy()
                 count += 1
             model.ale.solve_ale(model)
+            error_ale = Norm(model.ale.dY.vec-old_sol_ale)/np.max([len(model.ale.dY.vec), Norm(old_sol_ale)])
+            old_sol_ale = model.ale.dY.vec.Copy()
             for j, pde in enumerate(model.pdes_post):
                 pde.Solve()
-                errors[count] = Norm(pde.gfu.vec-old_sol[count])/np.max([len(pde.gfu.vec), Norm(old_sol[count])])
-                old_sol[count] = pde.gfu.vec.Copy()
                 count += 1
-            self.subiter += 1
-            logger.debug(f'Step subiter_bool count: {self.subiter} | Max error {np.max(np.array(errors)):.2e}')
+            subiter += 1
+            logger.debug(f'Step subiter_bool count: {subiter} | Max error {error_ale:.2e}')
 
-            print(errors)
+            print('errors_ale', error_ale)
 
-        if self.subiter == max_iter:
-            raise Exception(f'Internal solver iteration exceeded max number of {max_iter:d} iterations')
-        
-    def imex_solve_step_gauss(self, model):
-        
-        old_sol = []
-        tol = 1e-10
-
-        for i, pde in enumerate(model.pdes_pre):
-            pde.Solve()
-            old_sol.append(pde.gfu.vec.Copy())
-        model.ale.solve_ale(model)
-
-        errors = np.ones(len(model.pdes_pre))*1e5
-
-        errors_ale = np.ones(3)*1e5
-        old_sol_ale = [model.ale.V.vec.Copy(), model.ale.W.vec.Copy(), model.ale.Y.vec.Copy()]
-
-        max_iter = 10
-        self.subiter = 0
-        while np.max(errors)>tol and self.subiter < max_iter:
-
-            count = 0
-            for i, pde in enumerate(model.pdes_pre):
-                pde.Solve()
-                errors[count] = Norm(pde.gfu.vec-old_sol[count])/np.max([len(pde.gfu.vec), Norm(old_sol[count])])
-                old_sol[count] = pde.gfu.vec.Copy()
-                count += 1
-            model.ale.solve_ale(model)
-
-            errors_ale[0] = Norm(model.ale.V.vec-old_sol_ale[0])/np.max([len(model.ale.V.vec), Norm(old_sol_ale[0])])
-            errors_ale[1] = Norm(model.ale.W.vec-old_sol_ale[1])/np.max([len(model.ale.W.vec), Norm(old_sol_ale[1])])
-            errors_ale[2] = Norm(model.ale.Y.vec-old_sol_ale[2])/np.max([len(model.ale.Y.vec), Norm(old_sol_ale[2])])
-            old_sol_ale[0] = model.ale.V.vec.Copy()
-            old_sol_ale[1] = model.ale.W.vec.Copy()
-            old_sol_ale[2] = model.ale.Y.vec.Copy()
-
-            self.subiter += 1
-            logger.debug(f'Step subiter_bool count: {self.subiter} | Max error {np.max(np.array(errors)):.2e}')
-
-            print(errors, errors_ale)
-
-        if self.subiter == max_iter:
-            print('Max iteration number for nonlinear Gauss iteration reached')
-            raise Exception(f'Internal solver iteration exceeded max number of {max_iter:d} iterations')
-        
-        for j, pde in enumerate(model.pdes_post):
-            pde.Solve()
-
-    def implicit_solve_step_anderson(self, model):
-
-        uo = np.zeros(self.len)
-        u = np.zeros(self.len)
-        f_pic = np.zeros(self.len)
-        f_new = np.zeros(self.len)
-
-        count = 0
-        for i, pde in enumerate(model.pdes_pre):
-            uo[self.positions[count]:self.positions[count+1]] = pde.gfu.vec.FV().NumPy()
-            pde.Solve()
-            u[self.positions[count]:self.positions[count+1]] = pde.gfu.vec.FV().NumPy()
-            count += 1
-        model.ale.solve_ale(model)
-        for j, pde in enumerate(model.pdes_post):
-            uo[self.positions[count]:self.positions[count+1]] = pde.gfu.vec.FV().NumPy()
-            pde.Solve()
-            u[self.positions[count]:self.positions[count+1]] = pde.gfu.vec.FV().NumPy()
-            count += 1
-        f = u - uo
-
-        verbose = True
-        m=3
-        maxit=20
-        tol=1e-10
-        beta=1.0
-        reg=1e-12
-
-        # History of deltas: Δu_i = u_{i+1} - u_i, Δf_i = f_{i+1} - f_i
-        dU = []
-        dF = []
-
-        norm_u0 = max(np.linalg.norm(u), 1.0)
-        rel = np.linalg.norm(f) / norm_u0
-        if verbose:
-            print(f"it=0  ||f||/||u||={rel:.3e}")
-
-        for k in range(1, maxit + 1):
-            if rel < tol:
-                break
-
-            # Plain Picard step candidate
-            u_pic = u + beta * f
-            count = 0
-            for i, pde in enumerate(model.pdes_pre):
-                pde.gfu.vec.data[:] = u_pic[self.positions[count]:self.positions[count+1]]
-                pde.Solve()
-                f_pic[self.positions[count]:self.positions[count+1]] = pde.gfu.vec.FV().NumPy() - u_pic[self.positions[count]:self.positions[count+1]]
-                count += 1
-            model.ale.solve_ale(model)
-            for j, pde in enumerate(model.pdes_post):
-                pde.gfu.vec.data[:] = u_pic[self.positions[count]:self.positions[count+1]]
-                pde.Solve()
-                f_pic[self.positions[count]:self.positions[count+1]] = pde.gfu.vec.FV().NumPy() - u_pic[self.positions[count]:self.positions[count +1]]
-                count += 1
-
-            # Update histories with newest step information
-            # (use u_pic and f_pic as the "next" quantities)
-            du = (u_pic - u)
-            df = (f_pic - f)
-
-            if np.linalg.norm(df) > 0:
-                dU.append(du)
-                dF.append(df)
-                if len(dU) > m:
-                    dU.pop(0)
-                    dF.pop(0)
-
-            # If not enough history yet, accept Picard
-            if len(dF) == 0:
-                u, f = u_pic, f_pic
-            else:
-                # Build least squares: minimize || f_pic - DF * gamma ||, DF columns are dF_j
-                DF = np.column_stack(dF)  # shape (N, p)
-                # Solve (DF^T DF + reg I) gamma = DF^T f_pic
-                A = DF.T @ DF
-                A.flat[::A.shape[0] + 1] += reg  # add reg to diagonal
-                b = DF.T @ f_pic
-                gamma = np.linalg.solve(A, b)
-
-                # Anderson update:
-                # u_{new} = u_pic - DU * gamma  (where DU columns are dU_j)
-                DU = np.column_stack(dU)
-                u_new = u_pic - DU @ gamma
-
-                # Recompute f at accelerated iterate
-                count = 0
-                for i, pde in enumerate(model.pdes_pre):
-                    pde.gfu.vec.data[:] = u_new[self.positions[count]:self.positions[count+1]]
-                    pde.Solve()
-                    f_new[self.positions[count]:self.positions[count+1]] = pde.gfu.vec.FV().NumPy() - u_new[self.positions[count]:self.positions[count+1]]
-                    count += 1
-                model.ale.solve_ale(model)
-                for j, pde in enumerate(model.pdes_post):
-                    pde.gfu.vec.data[:] = u_new[self.positions[count]:self.positions[count +1]]
-                    pde.Solve()
-                    f_new[self.positions[count]:self.positions[count+1]] = pde.gfu.vec.FV().NumPy() - u_new[self.positions[count]:self.positions[count+1]]
-
-                u, f = u_new, f_new
-
-            rel = np.linalg.norm(f) / max(np.linalg.norm(u), 1.0)
-            if verbose:
-                print(f"it={k}  ||f||/||u||={rel:.3e}  hist={len(dF)}")
-
-        if k >= maxit:
-            raise Exception('Exceeded maximum number of iterations') 
-        
-    def imex_solve_step_anderson(self, model):
-        
-        uo = np.zeros(self.len)
-        u = np.zeros(self.len)
-        f_pic = np.zeros(self.len)
-        f_new = np.zeros(self.len)
-
-        count = 0
-        for i, pde in enumerate(model.pdes_pre):
-            uo[self.positions[count]:self.positions[count+1]] = pde.gfu.vec.FV().NumPy()
-            pde.Solve()
-            u[self.positions[count]:self.positions[count+1]] = pde.gfu.vec.FV().NumPy()
-            count += 1
-        model.ale.solve_ale(model)
-        f = u - uo
-
-        verbose = True
-        m=5
-        maxit=10
-        tol=1e-10
-        beta=1.0
-        reg=1e-12
-
-        # History of deltas: Δu_i = u_{i+1} - u_i, Δf_i = f_{i+1} - f_i
-        dU = []
-        dF = []
-
-        norm_u0 = max(np.linalg.norm(u), 1.0)
-        rel = np.linalg.norm(f) / norm_u0
-        if verbose:
-            print(f"it=0  ||f||/||u||={rel:.3e}")
-
-        for k in range(1, maxit + 1):
-            if rel < tol:
-                break
-
-            # Plain Picard step candidate
-            u_pic = u + beta * f
-            count = 0
-            for i, pde in enumerate(model.pdes_pre):
-                pde.gfu.vec.data[:] = u_pic[self.positions[count]:self.positions[count+1]]
-                pde.Solve()
-                f_pic[self.positions[count]:self.positions[count+1]] = pde.gfu.vec.FV().NumPy() - u_pic[self.positions[count]:self.positions[count+1]]
-                count += 1
-            model.ale.solve_ale(model)
-
-            # Update histories with newest step information
-            # (use u_pic and f_pic as the "next" quantities)
-            du = (u_pic - u)
-            df = (f_pic - f)
-
-            if np.linalg.norm(df) > 0:
-                dU.append(du)
-                dF.append(df)
-                if len(dU) > m:
-                    dU.pop(0)
-                    dF.pop(0)
-
-            # If not enough history yet, accept Picard
-            if len(dF) == 0:
-                u, f = u_pic, f_pic
-            else:
-                # Build least squares: minimize || f_pic - DF * gamma ||, DF columns are dF_j
-                DF = np.column_stack(dF)  # shape (N, p)
-                # Solve (DF^T DF + reg I) gamma = DF^T f_pic
-                A = DF.T @ DF
-                A.flat[::A.shape[0] + 1] += reg  # add reg to diagonal
-                b = DF.T @ f_pic
-                gamma = np.linalg.solve(A, b)
-
-                # Anderson update:
-                # u_{new} = u_pic - DU * gamma  (where DU columns are dU_j)
-                DU = np.column_stack(dU)
-                u_new = u_pic - DU @ gamma
-
-                # Recompute f at accelerated iterate
-                count = 0
-                for i, pde in enumerate(model.pdes_pre):
-                    pde.gfu.vec.data[:] = u_new[self.positions[count]:self.positions[count+1]]
-                    pde.Solve()
-                    f_new[self.positions[count]:self.positions[count+1]] = pde.gfu.vec.FV().NumPy() - u_new[self.positions[count]:self.positions[count+1]]
-                    count += 1
-                model.ale.solve_ale(model)
-
-                u, f = u_new, f_new
-
-            rel = np.linalg.norm(f) / max(np.linalg.norm(u), 1.0)
-            if verbose:
-                print(f"it={k}  ||f||/||u||={rel:.3e}  hist={len(dF)}")
-
-        if k >= maxit:
-            raise Exception('Exceeded maximum number of iterations') 
-        
-        print('Post-step')
-        
-        for j, pde in enumerate(model.pdes_post):
-            pde.Solve()
+        if subiter == max_iter:
+            return False, subiter
+        else:
+            return True, subiter
