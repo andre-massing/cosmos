@@ -24,6 +24,7 @@ class CosmosIOManager:
         self.params = kwargs
         self.root = None
         self.sample_rate = None
+        self.samples = None
         self.output_step_data = None
         self.output_step_headers = ['iter', 'time', 'dt', 'step_elapsed', 'ale_elapsed']
 
@@ -34,8 +35,11 @@ class CosmosIOManager:
             os.makedirs(self.root, exist_ok=True)
             if 'sample_rate' in self.params.keys():
                 self.sample_rate = self.params['sample_rate']
+            elif 'samples' in self.params.keys():
+                self.samples = self.params['samples']
+                self.N = 1
             else:
-                raise Exception(f'Sample rate not set for output in folder {self.root}')
+                raise Exception(f'Sample rate (or n. of samples) not set for output in folder {self.root}')
 
             output_model_data = os.path.join(self.root, 'model_data.txt')
             with open(output_model_data, "w") as f:
@@ -105,7 +109,9 @@ class CosmosIOManager:
     def save_step_data(self, model: "CosmosModel"):
 
         if self.root != None:
-            if model.time.iter % self.sample_rate == 0:
+            # if model.time.iter % self.sample_rate == 0:
+
+            if model.time.t.Get()%((model.time.t1-model.time.t0)%self.samples)>=self.N:
 
                 with open(self.output_step_data, "a") as f:
                     self.print_step_data(model, file=f)
@@ -146,6 +152,8 @@ class CosmosIOManager:
                     files = [f"bnd_pdes_step{i:05d}.vtu" for i in range(self.num_saved)]
                     # Optional: supply physical simulation times for each file
                     write_pvd(self.bnd_output_vtk_name + '.pvd', files, timesteps=self.t_saved)
+
+                self.N += 1
 
     def finalize(self, model: "CosmosModel"):
 

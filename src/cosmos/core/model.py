@@ -77,7 +77,7 @@ class CosmosModel:
 
             yield
             
-            while self.t.Get() + self.dt.Get() <= self.time.t1:
+            while self.t.Get()<= self.time.t1:
 
                 self.step.solve_step(self)
                 self.time.next()

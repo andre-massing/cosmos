@@ -76,32 +76,37 @@ class CosmosStepManager:
 
             if self.adaptive:
 
-                safety = 0.8
-
                 print('adaptive')
 
                 dt_tol = 1e-9
+                safety = 0.8
 
                 while model.dt.Get()>dt_tol:
                     
                     if self.coupling_type == 'implicit':
 
                         order = 1
-                        iter_target = 4
+                        eps_target = 1e-8
+                        eps_max = 1e-7
+                        eps_min = 1e-9
+                        iter_max = 7
 
-                        success, subiter = self.implicit_solve_step_gauss(model)
+                        if eps_max<eps_target or eps_target<eps_min:
+                            raise Exception('Wrong parameters for adaptive algorithm!!')
 
-                        if not success:
+                        success, eps, subiter = self.implicit_solve_step_gauss(model, iter_max, eps_max)
+
+                        if eps > eps_max:
                             dt = model.dt.Get()
-                            dt *= safety * (iter_target / subiter) ** (1 / (order + 1))
+                            dt *= safety * (eps_target / eps) ** (1 / (order + 1))
                             model.time.modify_dt(dt)
                             for pde in model.pdes:
                                 pde.reset()
                             model.ale.reset()
                             print('Control difference is too high, timestep lowered to: ', dt)
-                        elif subiter<=iter_target:
+                        elif eps < eps_min:
                             dt = model.dt.Get()
-                            dt *= safety * (iter_target / subiter) ** (1 / (order + 1))
+                            dt *= safety * (eps_target / eps) ** (1 / (order + 1))
                             dt = min(dt, model.time.dt0)
 
                             model.time.helper.params['dt'] = dt
@@ -207,12 +212,11 @@ class CosmosStepManager:
         for j, pde in enumerate(model.pdes_post):
             pde.Solve()
 
-    def implicit_solve_step_gauss(self, model):
+    def implicit_solve_step_gauss(self, model, iter_max, eps_target):
 
         old_sol = []
-        error_ale = 1e5
-        old_sol_ale = model.ale.dY.vec.Copy()
-        tol = 1e-8
+        old_sol_ale = model.ale.Y.vec.Copy()
+        tol_floor = 1e-10
 
         for i, pde in enumerate(model.pdes_pre):
             pde.Solve()
@@ -222,26 +226,34 @@ class CosmosStepManager:
             pde.Solve()
             old_sol.append(pde.gfu.vec.Copy())
 
-        subiter = 0
-        max_iter = 10
-        while error_ale>tol and subiter < max_iter:
+        error_ale = 1e5
+        errors_pde = np.ones(len(old_sol))*1e100
+        eps = 1e5
+
+        subiter = 1
+        while eps>eps_target and subiter < iter_max:
 
             count = 0
             for i, pde in enumerate(model.pdes_pre):
                 pde.Solve()
+                errors_pde[count] = Norm(pde.gfu.vec-old_sol[count])/np.max([tol_floor, Norm(old_sol[count])])
+                old_sol[count] = pde.gfu.vec.Copy()
                 count += 1
             model.ale.solve_ale(model)
-            error_ale = Norm(model.ale.dY.vec-old_sol_ale)/np.max([len(model.ale.dY.vec), Norm(old_sol_ale)])
-            old_sol_ale = model.ale.dY.vec.Copy()
+            error_ale = Norm(model.ale.Y.vec-old_sol_ale)/np.max([tol_floor, Norm(old_sol_ale)])
+            old_sol_ale = model.ale.Y.vec.Copy()
             for j, pde in enumerate(model.pdes_post):
                 pde.Solve()
+                errors_pde[count] = Norm(pde.gfu.vec-old_sol[count])/np.max([tol_floor, Norm(old_sol[count])])
+                old_sol[count] = pde.gfu.vec.Copy()
                 count += 1
             subiter += 1
             logger.debug(f'Step subiter_bool count: {subiter} | Max error {error_ale:.2e}')
+            eps = error_ale
 
-            print('errors_ale', error_ale)
+            print('eps', eps)
 
-        if subiter == max_iter:
-            return False, subiter
+        if subiter == iter_max:
+            return False, eps, subiter
         else:
-            return True, subiter
+            return True, eps, subiter
