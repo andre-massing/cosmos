@@ -9,8 +9,6 @@ from cosmos import *
 import pytest
 import logging
 
-from dendritic_spine_geom import generate_synapse2d
-
 logging.getLogger().setLevel(logging.INFO)
 
 @pytest.mark.parametrize("Re", [7])
