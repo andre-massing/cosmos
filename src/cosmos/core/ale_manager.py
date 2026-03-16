@@ -16,9 +16,11 @@ if TYPE_CHECKING:
 
 class CosmosALEManager:
 
-    def __init__(self, model:"CosmosModel", kwargs):
+    def __init__(self, model:"CosmosModel", kwargs, volume_ALE = 'linel', surface_ALE = 'ms'):
 
         self.params = kwargs
+        self.volume_ALE = volume_ALE
+        self.surface_ALE = surface_ALE
         self.redistribute = False
         self.ale_elapsed_time = None
 
@@ -62,36 +64,49 @@ class CosmosALEManager:
                 raise Exception(f'Mesh redistribution for for model {model.name} must be either True or False')      
         
         if model.is_vol:
-            # V0 = VectorH1(model.parentmesh, order = model.geo_order, dirichlet = model.parentmesh.Boundaries('.*'))
-            # u, v = V0.TnT()
-            # self.A = BilinearForm(V0, symmetric = True)
-            # self.A += InnerProduct(Grad(u), Grad(v))*dx(deformation = self.Yo)
-            # self.A.Assemble()
-            # self.invA = self.A.mat.Inverse(freedofs = V0.FreeDofs())
 
-            V0 = VectorH1(model.parentmesh, order = model.geo_order, dirichlet = model.parentmesh.Boundaries('.*'))
-            u, v = V0.TnT()
-            self.A = BilinearForm(V0, symmetric = True)
-            E, nu = 100, 0.2
-            mu  = E / 2 / (1+nu)
-            lam = E * nu / ((1+nu)*(1-2*nu))
-            def Stress(strain):
-                return 2*mu*strain + lam*Trace(strain)*Id(model.dim)    
-            self.A += InnerProduct(Stress(Sym(Grad(u))), Sym(Grad(v)))*dx(deformation = self.Yo)
-            self.A.Assemble()
-            self.invA = self.A.mat.Inverse(freedofs = V0.FreeDofs())
+            if self.volume_ALE == 'laplace':
+                self.V0 = VectorH1(model.parentmesh, order = model.geo_order, dirichlet = model.parentmesh.Boundaries('.*'))
+                u, v = self.V0.TnT()
+                self.A = BilinearForm(self.V0, symmetric = True)
+                self.A += InnerProduct(Grad(u), Grad(v))*dx(deformation = self.Yo)
+                self.A.Assemble()
+                self.invA = self.A.mat.Inverse(freedofs = self.V0.FreeDofs())
 
-            # V0 = VectorH1(model.parentmesh, order = model.geo_order, dirichlet = model.parentmesh.Boundaries('.*'))
-            # u, v = V0.TnT()
-            # self.A = BilinearForm(V0, symmetric = True)
-            # E, nu = 210, 0.2
-            # mu  = E / 2 / (1+nu)
-            # lam = E * nu / ((1+nu)*(1-2*nu))
-            # defgrad = Id(model.dim) + Grad(u)  
-            # def psi(F):
-            #     E = 0.5*(F.trans*F - Id(model.dim))
-            #     return mu*InnerProduct(E,E) + lam/2*Trace(E)**2
-            # self.A += Variation(psi(defgrad)*dx(deformation = self.Yo))
+            elif self.volume_ALE == 'linel':
+                self.V0 = VectorH1(model.parentmesh, order = model.geo_order, dirichlet = model.parentmesh.Boundaries('.*'))
+                u, v = self.V0.TnT()
+                self.A = BilinearForm(self.V0, symmetric = True)
+                h = specialcf.mesh_size
+                E, nu = 1/h**model.dim, 0.49
+                mu  = E / 2 / (1+nu)
+                lam = E * nu / ((1+nu)*(1-2*nu))
+                def Stress(strain):
+                    return 2*mu*strain + lam*Trace(strain)*Id(model.dim)    
+                self.A += InnerProduct(Stress(Sym(Grad(u))), Sym(Grad(v)))*dx(deformation = self.Yo)
+                self.A.Assemble()
+                self.invA = self.A.mat.Inverse(freedofs = self.V0.FreeDofs())
+
+            elif self.volume_ALE == 'nonlinel':
+                self.V0 = VectorH1(model.parentmesh, order = model.geo_order, dirichlet = model.parentmesh.Boundaries('.*'))
+                u, v = self.V0.TnT()
+                self.A = BilinearForm(self.V0, symmetric = True)
+                h = specialcf.mesh_size
+                E, nu = 1/h, 0.3
+                mu  = E / 2 / (1+nu)
+                lam = E * nu / ((1+nu)*(1-2*nu))
+                I = Id(model.dim)
+                F = I + Grad(u)
+                C = F.trans * F
+                E = 0.5 * (C-I)
+                def Pow(a, b):
+                    return a**b  # exp (log(a)*b)
+                def NeoHooke (C):
+                    return 0.5 * mu * (Trace(C-I) + 2*mu/lam * Pow(Det(C),-lam/2/mu) - 1)
+                self.A += Variation (NeoHooke(C).Compile()*dx)
+
+            else:
+                raise Exception('ALE extension to volume type not known')
 
         self.vtk_gfu=[self.dY, self.Y, self.X, self.W, 
                     self.V]
@@ -166,12 +181,19 @@ class CosmosALEManager:
 
     def _extend_displacement_to_bulk(self, gfu):
 
-        self.A.Assemble()
-        vec = -1*self.A.mat*gfu.vec
-        self.invA.Update()
-        gfu.vec.data += self.invA*vec
+        if self.volume_ALE == 'laplace' or self.volume_ALE == 'linel':
 
-        # Newton(self.A,  gfu, freedofs=gfu.space.FreeDofs(), printing = False, dampfactor=0.1)
+            self.A.Assemble()
+            vec = -1*self.A.mat*gfu.vec
+            self.invA.Update()
+            gfu.vec.data += self.invA*vec
+
+        elif self.volume_ALE == 'nonlinel':
+
+            gfu_nl = GridFunction(gfu.space)
+            gfu_nl.vec.data += gfu.vec.data + self.Yo.vec.data
+            Newton(self.A, gfu_nl, freedofs=self.V0.FreeDofs(), printing = False)
+            gfu.vec.data = gfu_nl.vec.data - self.Yo.vec.data
 
     def reset(self):
 
@@ -179,6 +201,25 @@ class CosmosALEManager:
         self.X.vec.data = self.Xo.vec.data
         self.W.vec.data = self.Wo.vec.data
         self.V.vec.data = self.Vo.vec.data
+
+def SimpleNewtonSolve(gfu,a,tol=1e-13,maxits=25):
+    res = gfu.vec.CreateVector()
+    du = gfu.vec.CreateVector()
+    fes = gfu.space
+    for it in range(maxits):
+        print ("Iteration {:3}  ".format(it),end="")
+        a.Apply(gfu.vec, res)
+        a.AssembleLinearization(gfu.vec)
+        du.data = a.mat.Inverse(fes.FreeDofs()) * res
+        gfu.vec.data -= du
+
+        #stopping criteria
+        stopcritval = sqrt(abs(InnerProduct(du,res)))
+        print ("<A u",it,", A u",it,">_{-1}^0.5 = ", stopcritval)
+        if stopcritval < tol:
+            break
+    if it == maxits-1:
+        raise Exception('Maximum number of iterations reached for the Newton Solver')
         
 class CosmosBndALEField:
 
@@ -233,67 +274,67 @@ class CosmosBndALEField:
 
         ######## Historic harmonic map
 
-        # gfu0 = GridFunction(model.ale.Yo.space)
+        if model.ale.surface_ALE == 'duanli':
 
-        # self.A_pp = BilinearForm(fes_pp, symmetric = True)
-        # self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
-        # self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
-        # self.A_pp += InnerProduct(Grad(dX_pp).Trace(), Grad(nu_pp).Trace())*ds(deformation = gfu0)
-        # self.A_pp.Assemble()
-        # self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
+            gfu0 = GridFunction(model.ale.Yo.space)
 
-        # self.F_pp = LinearForm(fes_pp)
-        # self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
-        # self.F_pp += -1*InnerProduct(Grad(model.ale.Yo).Trace(), Grad(nu_pp).Trace())*ds(deformation = gfu0)
-        # self.F_pp += -1*InnerProduct(self.Ps, Grad(nu_pp).Trace())*ds(deformation = gfu0)
+            self.A_pp = BilinearForm(fes_pp, symmetric = True)
+            self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
+            self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
+            self.A_pp += InnerProduct(Grad(dX_pp).Trace(), Grad(nu_pp).Trace())*ds(deformation = gfu0)
+            self.A_pp.Assemble()
+            self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
 
-        ###########################
+            self.F_pp = LinearForm(fes_pp)
+            self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
+            self.F_pp += -1*InnerProduct(Grad(model.ale.Yo).Trace(), Grad(nu_pp).Trace())*ds(deformation = gfu0)
+            self.F_pp += -1*InnerProduct(self.Ps, Grad(nu_pp).Trace())*ds(deformation = gfu0)
 
-        ######## MDR
+        elif model.ale.surface_ALE == 'mdr':
 
-        self.A_pp = BilinearForm(fes_pp)
-        self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
-        self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
-        self.A_pp += InnerProduct(1/model.dt*Grad(dX_pp).Trace(), Grad(nu_pp).Trace())*ds(deformation = model.ale.Yo)
-        self.A_pp.Assemble()
-        self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
+            self.A_pp = BilinearForm(fes_pp)
+            self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
+            self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
+            self.A_pp += InnerProduct(1/model.dt*Grad(dX_pp).Trace(), Grad(nu_pp).Trace())*ds(deformation = model.ale.Yo)
+            self.A_pp.Assemble()
+            self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
 
-        self.F_pp = LinearForm(fes_pp)
-        self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
+            self.F_pp = LinearForm(fes_pp)
+            self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
 
-        ###########################
+        elif model.ale.surface_ALE == 'gnz':
 
-        ######## GarckeNurnbergZhao
+            self.A_pp = BilinearForm(fes_pp)
+            self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
+            self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
+            self.A_pp += InnerProduct(Grad(dX_pp).Trace(), Grad(nu_pp).Trace())*ds(deformation = model.ale.Yo)
+            self.A_pp.Assemble()
+            self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
 
-        # self.A_pp = BilinearForm(fes_pp)
-        # self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
-        # self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
-        # self.A_pp += InnerProduct(Grad(dX_pp).Trace(), Grad(nu_pp).Trace())*ds(deformation = model.ale.Yo)
-        # self.A_pp.Assemble()
-        # self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
+            self.F_pp = LinearForm(fes_pp)
+            self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
+            self.F_pp += -1*InnerProduct(self.Ps, Grad(nu_pp).Trace())*ds(deformation = model.ale.Yo)
 
-        # self.F_pp = LinearForm(fes_pp)
-        # self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
-        # self.F_pp += -1*InnerProduct(self.Ps, Grad(nu_pp).Trace())*ds(deformation = model.ale.Yo)
+        elif model.ale.surface_ALE == 'ms':
 
-        ###########################
+            def deviatoric(u):
+                return Sym(Grad(u).Trace()) - Trace(Sym(Grad(u).Trace()))/model.dim*Id(model.dim)
+            ir_segm = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
+            ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
 
-        ######## Minimal istantaneous stretch
+            self.A_pp = BilinearForm(fes_pp, symmetric = True)
+            self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
+            self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
+            self.A_pp += InnerProduct(deviatoric(dX_pp), deviatoric(nu_pp))*ds(deformation = model.ale.Yo)
+            self.A_pp.Assemble()
+            self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
 
-        # def deviatoric(u):
-        #     return Sym(Grad(u).Trace()) - Trace(Sym(Grad(u).Trace()))/model.dim*Id(model.dim)
-        # ir_segm = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
-        # ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
+            self.F_pp = LinearForm(fes_pp)
+            self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
 
-        # self.A_pp = BilinearForm(fes_pp, symmetric = True)
-        # self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
-        # self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
-        # self.A_pp += InnerProduct(deviatoric(dX_pp), deviatoric(nu_pp))*ds(deformation = model.ale.Yo)
-        # self.A_pp.Assemble()
-        # self.invA_pp = self.A_pp.mat.Inverse(freedofs = fes_pp.FreeDofs())
+        else:
 
-        # self.F_pp = LinearForm(fes_pp)
-        # self.F_pp += InnerProduct(self.gfu_norm_vel*model.dt, zeta_pp )*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
+            raise Exception('Surface ALE distribution not known')
 
         ###########################
 

@@ -391,7 +391,7 @@ class CosmosAliasMesh:
         self.sections['cd2names'].dim = copy.deepcopy(mesh_to_mark.sections['cd2names'].dim)
         self.sections['cd2names'].entries = copy.deepcopy(mesh_to_mark.sections['cd2names'].entries)
 
-def fill_mesh(old_mesh):
+def fill_mesh(old_mesh, maxh):
 
     new_mesh = ngen.meshing.Mesh()
     fd_outside = new_mesh.Add (ngen.meshing.FaceDescriptor(bc=1,domin=1,surfnr=1))
@@ -406,7 +406,7 @@ def fill_mesh(old_mesh):
     for e in m1.Elements2D():
         new_mesh.Add (ngen.meshing.Element2D (fd_outside, [pmap1[v] for v in e.vertices]))
 
-    new_mesh.GenerateVolumeMesh(maxh = 0.1)
+    new_mesh.GenerateVolumeMesh(maxh = maxh)
     new_mesh = Mesh(new_mesh)
 
     return new_mesh

@@ -162,10 +162,10 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
                     - dir_bnd_gfu*d*InnerProduct(nE, grad(test[i]).Trace())*trial[i]*ds(element_boundary=True, deformation = self.Yhalf)\
                     + dir_bnd_gfu*d*alpha/h*trial[i]*test[i]*ds(element_boundary=True, deformation = self.Yhalf)
 
-            self.A += -(b - self.model.ale.W)*grad(test[i]).Trace() * trial[i]*ds(deformation = self.Yhalf)
+            self.A += -(b - self.model.ale.Wo)*grad(test[i]).Trace() * trial[i]*ds(deformation = self.Yhalf)
             bnd_gfu = GridFunction(facet_space)
             bnd_gfu.Set(1, definedon = self.model.parentmesh.BBoundaries(self.params['Dir_bnd']+'|'+self.params['Neu_bnd']))
-            self.A += bnd_gfu*IfPos((b - self.model.ale.W)*nE, (b - self.model.ale.W)*nE*trial[i], CF(0))*test[i]\
+            self.A += bnd_gfu*IfPos((b - self.model.ale.Wo)*nE, (b - self.model.ale.Wo)*nE*trial[i], CF(0))*test[i]\
                 *ds(element_boundary=True, deformation = self.Yhalf)
 
             self.F += rhs*test[i]*ds(deformation = self.Yhalf)
@@ -178,7 +178,7 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
                 neu_bnd_gfu.Set(1, definedon = self.model.parentmesh.BBoundaries(self.params['Neu_bnd']))
                 self.F += neu_bnd_gfu*d*gradu_bnd*nE*test[i]*ds(element_boundary=True, deformation = self.Yhalf)
 
-            self.F += -bnd_gfu*IfPos((b - self.model.ale.W)*nE, CF(0), (b - self.model.ale.W)*nE*u_bnd)*test[i]*ds(element_boundary=True, deformation = self.Yhalf)
+            self.F += -bnd_gfu*IfPos((b - self.model.ale.Wo)*nE, CF(0), (b - self.model.ale.Wo)*nE*u_bnd)*test[i]*ds(element_boundary=True, deformation = self.Yhalf)
             
             self.A += 1/self.model.dt*trial[i]*test[i]*ds(deformation = self.model.ale.Y)
 

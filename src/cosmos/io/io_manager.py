@@ -37,7 +37,7 @@ class CosmosIOManager:
                 self.sample_rate = self.params['sample_rate']
             elif 'samples' in self.params.keys():
                 self.samples = self.params['samples']
-                self.N = 1
+                self.N = 0
             else:
                 raise Exception(f'Sample rate (or n. of samples) not set for output in folder {self.root}')
 
@@ -111,7 +111,10 @@ class CosmosIOManager:
         if self.root != None:
             # if model.time.iter % self.sample_rate == 0:
 
-            if model.time.t.Get()%((model.time.t1-model.time.t0)%self.samples)>=self.N:
+            dt_save = (model.time.t1-model.time.t0)/self.samples
+            if (model.time.t.Get()-model.time.t0)//dt_save>=self.N:
+
+                print('PRINTED!')
 
                 with open(self.output_step_data, "a") as f:
                     self.print_step_data(model, file=f)

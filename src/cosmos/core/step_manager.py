@@ -22,8 +22,6 @@ class CosmosStepManager:
         self.step_elasped_time = None
         self.adaptive = False
 
-        self.control = []
-
     def initialize(self, model: "CosmosModel"):
 
         if 'coupling_type' in  self.params.keys():
@@ -61,8 +59,6 @@ class CosmosStepManager:
         self.F += -1*InnerProduct(Ps, Grad(xsi).Trace())*ds(deformation = model.ale.Y)
         self.kappa_h = GridFunction(V) 
 
-        self.control.append(self.energy(model))
-
     def solve_step(self, model: "CosmosModel"):
 
         start = time.time()
@@ -76,29 +72,28 @@ class CosmosStepManager:
 
             if self.adaptive:
 
-                print('adaptive')
-
                 dt_tol = 1e-9
-                safety = 0.8
 
                 while model.dt.Get()>dt_tol:
                     
                     if self.coupling_type == 'implicit':
 
+                        safety = 0.9
+
                         order = 1
-                        eps_target = 1e-8
-                        eps_max = 1e-7
-                        eps_min = 1e-9
-                        iter_max = 7
+                        eps_target = 1e-7
+                        eps_max = 5e-7
+                        eps_min = 5e-8
+                        iter_max = 10
 
                         if eps_max<eps_target or eps_target<eps_min:
                             raise Exception('Wrong parameters for adaptive algorithm!!')
 
-                        success, eps, subiter = self.implicit_solve_step_gauss(model, iter_max, eps_max)
+                        success, eps, subiter = self.implicit_solve_step_gauss(model, iter_max, eps_min)
 
                         if eps > eps_max:
                             dt = model.dt.Get()
-                            dt *= safety * (eps_target / eps) ** (1 / (order + 1))
+                            dt *= 0.6
                             model.time.modify_dt(dt)
                             for pde in model.pdes:
                                 pde.reset()
@@ -106,7 +101,7 @@ class CosmosStepManager:
                             print('Control difference is too high, timestep lowered to: ', dt)
                         elif eps < eps_min:
                             dt = model.dt.Get()
-                            dt *= safety * (eps_target / eps) ** (1 / (order + 1))
+                            dt *= 1.25
                             dt = min(dt, model.time.dt0)
 
                             model.time.helper.params['dt'] = dt
@@ -116,60 +111,49 @@ class CosmosStepManager:
                             dt = model.dt.Get()
                             model.time.helper.params['dt'] = dt
                             break
+
+                        # eps_target = 1e-7
+                        # eps_max = 1e-6
+                        # eps_min = 1e-8
+                        # iter_max = 10
+
+                        # if eps_max<eps_target or eps_target<eps_min:
+                        #     raise Exception('Wrong parameters for adaptive algorithm!!')
+
+                        # success, eps, subiter = self.implicit_solve_step_gauss(model, iter_max, eps_min)
+
+                        # if eps > eps_max:
+                        #     dt = model.dt.Get()
+                        #     dt *= 0.6
+                        #     model.time.modify_dt(dt)
+                        #     for pde in model.pdes:
+                        #         pde.reset()
+                        #     model.ale.reset()
+                        #     print('Control difference is too high, timestep lowered to: ', dt)
+                        # else:
+                        #     dt = model.dt.Get()
+                        #     dt_new = dt*safety*(eps_target/eps)**(1/(1+order))
+                        #     dt_new = np.clip(dt_new, dt/2, dt*2)
+                        #     dt = min(dt_new, model.time.dt0)
+                        #     model.time.helper.params['dt'] = dt
+                        #     print('Timestep reset to: ', dt)
+                        #     break
 
                     elif self.coupling_type == 'explicit':
 
-                        previous_control = self.control[-1]
-                        eps_target = 1e-5
-                        eps_max = 1e-4
-                        eps_min = 1e-6
-                        small_floor = 1e-8
-                        order = 1
-
-                        if eps_max<eps_target or eps_target<eps_min:
-                            raise Exception('Wrong parameters for adaptive algorithm!!')
-
-                        self.explicit_solve_step(model)
-
-                        new_control = self.energy(model)
-                        self.control.append(new_control)
-                        eps = np.max([abs((new_control - previous_control)/previous_control), small_floor])
-
-                        print(previous_control, new_control, eps)
-
-                        if eps > eps_max:
-                            dt = model.dt.Get()
-                            dt *= safety * (eps_target / eps) ** (1 / (order + 1))
-                            model.time.modify_dt(dt)
-                            for pde in model.pdes:
-                                pde.reset()
-                            model.ale.reset()
-
-                            print('Control difference is too high, timestep reduced to: ', dt)
-                        elif eps < eps_min:
-                            dt = model.dt.Get()
-                            dt *= safety * (eps_target / eps) ** (1 / (order + 1))
-                            dt = min(dt, model.time.dt0)
-
-                            model.time.helper.params['dt'] = dt
-                            print('Control difference is too low, timestep raised to: ', dt)
-                            break
-                        else:
-                            dt = model.dt.Get()
-                            model.time.helper.params['dt'] = dt
-                            print('Control inside limits, timestep kept as: ', dt)
-                            break
+                        raise Exception('No adaptivity implemented for explicit time stepping')
 
                 if model.dt.Get()<dt_tol:
                     print(self.control)
                     raise Exception('Timestep shrinked to 0!')
                 
-                print('adaptive_end')
-                
             else:
 
                 if self.coupling_type == 'implicit':
-                    success, subiter = self.implicit_solve_step_gauss(model)
+                    eps_max = 5e-7
+                    eps_min = 5e-8
+                    iter_max = 15
+                    success, eps, subiter = self.implicit_solve_step_gauss(model, iter_max, eps_min)
                     if not success:
                         raise Exception('Implicit algorithm couldn\'t converge, max_iter reached')
                 elif self.coupling_type == 'explicit':
@@ -184,26 +168,6 @@ class CosmosStepManager:
         stop = time.time()
         self.step_elasped_time = stop-start
 
-    def energy(self, model: "CosmosModel"):
-
-        model.parentmesh.deformation.vec.data = model.ale.Y.vec.data
-
-        self.A.Assemble()
-        self.invA.Update()
-        self.F.Assemble()
-
-        self.kappa_h.vec.data = self.invA*self.F.vec
-        w_energy = Integrate(self.kappa_h**2, model.parentmesh, VOL_or_BND = BND)
-        if model.dim == 2:
-            v_energy = Integrate(CF((x, 0))*specialcf.normal(model.dim), model.parentmesh, VOL_or_BND = BND)
-        elif model.dim == 3:
-            v_energy = Integrate(CF((x, 0, 0))*specialcf.normal(model.dim), model.parentmesh, VOL_or_BND = BND)
-        a_energy = Integrate(1, model.parentmesh, VOL_or_BND = BND)
-
-        model.parentmesh.deformation.vec.data = model.ale.Yo.vec.data
-
-        return w_energy
-
     def explicit_solve_step(self, model):
 
         for i, pde in enumerate(model.pdes_pre):
@@ -212,16 +176,19 @@ class CosmosStepManager:
         for j, pde in enumerate(model.pdes_post):
             pde.Solve()
 
-    def implicit_solve_step_gauss(self, model, iter_max, eps_target):
+    def implicit_solve_step_gauss(self, model, iter_max, eps_min):
 
         old_sol = []
-        old_sol_ale = model.ale.Y.vec.Copy()
-        tol_floor = 1e-10
+        tol_floor = 1e-12
+
+        if tol_floor>eps_min:
+            raise Exception('The minimum error threshold is too close to machine precision')
 
         for i, pde in enumerate(model.pdes_pre):
             pde.Solve()
             old_sol.append(pde.gfu.vec.Copy())
         model.ale.solve_ale(model)
+        old_sol_ale = model.ale.Y.vec.Copy()
         for j, pde in enumerate(model.pdes_post):
             pde.Solve()
             old_sol.append(pde.gfu.vec.Copy())
@@ -231,7 +198,7 @@ class CosmosStepManager:
         eps = 1e5
 
         subiter = 1
-        while eps>eps_target and subiter < iter_max:
+        while subiter < iter_max and eps>eps_min:
 
             count = 0
             for i, pde in enumerate(model.pdes_pre):
@@ -250,8 +217,11 @@ class CosmosStepManager:
             subiter += 1
             logger.debug(f'Step subiter_bool count: {subiter} | Max error {error_ale:.2e}')
             eps = error_ale
+            eps = np.max([np.max(errors_pde), error_ale])
 
-            print('eps', eps)
+            print('i: ', subiter,',eps: ', f"{eps:.3e}", end='\r')
+
+        print('\n', end = '\r')
 
         if subiter == iter_max:
             return False, eps, subiter

@@ -159,10 +159,10 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
                     - dir_bnd_gfu*d*InnerProduct(nE, grad(test[2*i]).Trace())*trial[2*i]*ds(element_boundary=True, deformation = self.Yhalf)\
                     + dir_bnd_gfu*d*alpha/h*trial[2*i]*test[2*i]*ds(element_boundary=True, deformation = self.Yhalf)
 
-            self.A += -(b - self.model.ale.W)*grad(test[2*i]).Trace() * trial[2*i]*ds(deformation = self.Yhalf)
+            self.A += -(b - self.model.ale.Wo)*grad(test[2*i]).Trace() * trial[2*i]*ds(deformation = self.Yhalf)
             bnd_gfu = GridFunction(facet_space)
             bnd_gfu.Set(1, definedon = self.model.parentmesh.BBoundaries(self.params['Dir_bnd']+'|'+self.params['Neu_bnd']))
-            self.A += bnd_gfu*IfPos((b - self.model.ale.W)*nE, (b - self.model.ale.W)*nE*trial[2*i], CF(0))*test[2*i]\
+            self.A += bnd_gfu*IfPos((b - self.model.ale.Wo)*nE, (b - self.model.ale.Wo)*nE*trial[2*i], CF(0))*test[2*i]\
                 *ds(element_boundary=True, deformation = self.Yhalf)
             
             if self.model.dim == 2:
@@ -172,7 +172,7 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
             elif self.model.dim == 3:
                 jump_dudn = (trial[2*i].Trace().Deriv() - trial[2*i +1].Trace())*nE
                 jump_dvdn = (test[2*i].Trace().Deriv() - test[2*i +1].Trace())*nE
-            stab = Norm((b - self.model.ale.W))*h**2
+            stab = Norm((b - self.model.ale.Wo))*h**2
             self.A +=  IfPos(stab, stab*InnerProduct(jump_dudn,jump_dvdn), InnerProduct(trial[2*i +1].Trace(),test[2*i +1].Trace()) )\
                     *ds(element_boundary=True, deformation = self.Yhalf)
             self.A +=  -1*bnd_gfu*IfPos(stab, stab*InnerProduct(jump_dudn,jump_dvdn), InnerProduct(trial[2*i +1].Trace(),test[2*i +1].Trace()) )\
@@ -190,7 +190,7 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
                 neu_bnd_gfu.Set(1, definedon = self.model.parentmesh.BBoundaries(self.params['Neu_bnd']))
                 self.F += neu_bnd_gfu*d*gradu_bnd*nE*test[2*i]*ds(element_boundary=True, deformation = self.Yhalf)
 
-            self.F += -bnd_gfu*IfPos((b - self.model.ale.W)*nE, CF(0), (b - self.model.ale.W)*nE*u_bnd)*test[2*i]*ds(element_boundary=True, deformation = self.Yhalf)
+            self.F += -bnd_gfu*IfPos((b - self.model.ale.Wo)*nE, CF(0), (b - self.model.ale.Wo)*nE*u_bnd)*test[2*i]*ds(element_boundary=True, deformation = self.Yhalf)
             
             self.A += 1/self.model.dt*trial[2*i]*test[2*i]*ds(deformation = self.model.ale.Y)
             self.F += 1/self.model.dt*self.gfu_old.components[2*i]*test[2*i]*ds(deformation = self.model.ale.Yo)
