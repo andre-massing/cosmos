@@ -56,7 +56,7 @@ def test_quintana_spine_fine_implicit_bounded(
     from cosmos.core.model import CosmosModel
 
     root =  artifacts_path
-    model_name = f"test_spine_coarse_volALE{surface_ALE}_surfALE{volume_ALE}_Re{Re}"
+    model_name = f"test_spine_coarse_volALE{volume_ALE}_surfALE{surface_ALE}_Re{Re}"
     model = CosmosModel(parentmesh=mesh, dt=dt, t=t, t0 = t.Get(), t1 = T,
                         root = root, samples = 400, name = model_name, coupling_type = 'implicit',
                         surface_ALE = surface_ALE, volume_ALE = volume_ALE,
@@ -97,7 +97,7 @@ def test_quintana_spine_fine_implicit_bounded(
     model.initialize()
     dist_fct.Initialize()
     dist_fct.Solve()
-    id_funct = IfPos(dist_fct.sol[0]-0.02, 1, 0)*IfPos(z-0.5, 1, 0)
+    id_funct = IfPos(dist_fct.sol[0]-0.1, 1, 0)*IfPos(z-0.5, 1, 0)
     impulse = IfPos(t, 1, 0)*IfPos(60-t, 1, 0)
 
     d = CF(1e-3)*exp(-Re)
