@@ -23,7 +23,8 @@ def test_quintana_spine_fine_implicit_bounded(
     ):
 
     print(request.path)
-    mesh = Mesh('../../../../data/bio/vol/spine_sliced_fine/closed/filled/spine_refined_sliced_PM_closed_filled_fixed.vol')
+    # mesh = Mesh('../../../../data/bio/vol/spine_sliced_fine/closed/filled/spine_refined_sliced_PM_closed_filled_fixed.vol')
+    mesh = Mesh('./data/bio/vol/spine_sliced_fine/closed/filled/spine_refined_sliced_PM_closed_filled_fixed.vol')
 
     ###################  PARAMETERS  ##################################
 
