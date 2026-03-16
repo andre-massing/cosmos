@@ -136,12 +136,14 @@ def test_quintana_spine_coarseNEW_implicit_bounded(
     }
     model.set_params(output_callables = output_callables)
 
-    # sceneA = Draw(adr_sys.sol[0], mesh)
-    sceneB = Draw(adr_sys.sol[1], mesh)
-    # sceneC = Draw(adr_sys.sol[2], mesh)
-    for i, sol in enumerate(model()):
-        # sceneA.Redraw()
-        sceneB.Redraw()
-        # sceneC.Redraw()
+    # # sceneA = Draw(adr_sys.sol[0], mesh)
+    # sceneB = Draw(adr_sys.sol[1], mesh)
+    # # sceneC = Draw(adr_sys.sol[2], mesh)
+    # for i, sol in enumerate(model()):
+    #     # sceneA.Redraw()
+    #     sceneB.Redraw()
+    #     # sceneC.Redraw()
+
+    model.run()
 
     assert True
