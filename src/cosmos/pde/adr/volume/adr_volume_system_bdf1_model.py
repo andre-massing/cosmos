@@ -37,6 +37,12 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
         else:
             raise Exception('Parameter dim is needed for initialization of ADRBoundarySystemBDF1Model')
         
+        self.params["Neu_bnd"] = ''
+        self.params["Dir_bnd"] = ''
+        self.params["fes_order"] = 1
+        self.params["subdivision"] = 0
+        self.params["conservative"] = False
+        
         V = H1(model.parentmesh, order = self.params["fes_order"], 
                                 definedon = compartment.domain, dgjumps = True)
         self.fes = V
@@ -46,11 +52,6 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
         V2 = VectorH1(model.parentmesh, order = self.params["fes_order"], 
                                 definedon = compartment.domain)
 
-        self.params["Neu_bnd"] = ''
-        self.params["Dir_bnd"] = ''
-        self.params["fes_order"] = 1
-        self.params["subdivision"] = 0
-        self.params["conservative"] = False
         for i in range(self.sys_dim):
             self.params["mass_preserving_" + str(i+1)] = False
             self.params["bounds_" + str(i+1)] = None
