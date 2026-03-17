@@ -41,16 +41,6 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
         self.params["subdivision"] = 0
         self.params["fes_order"] = 1
         self.params["conservative"] = False
-        for i in range(self.sys_dim):
-            self.params["mass_preserving_" + str(i+1)] = False
-            self.params["bounds_" + str(i+1)] = None
-            self.params["u0_" + str(i+1)] = CF(0)
-            self.params["b_" + str(i+1)] = Field(CF((0,)*compartment.dim_emd))
-            self.params["d_" + str(i+1)] = Field(CF(0))
-            self.params["c_" + str(i+1)] = Field(CF(0))
-            self.params["rhs_" + str(i+1)] = Field(CF(0))
-            self.params["gradu_bnd_" + str(i+1)] = Field(CF((0,)*compartment.dim_emd))
-            self.params["u_bnd_" + str(i+1)] = Field(CF(0))
 
         self.V = H1(model.parentmesh, order = self.params["fes_order"], 
                                 definedon = compartment.domain)
@@ -58,6 +48,28 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
         self.fes = self.V
         for i in range(self.sys_dim-1):
             self.fes = self.fes*self.V
+
+        V2 = H1(model.parentmesh, order = self.params["fes_order"], 
+                                definedon = compartment.domain, dim = model.dim)
+
+        for i in range(self.sys_dim):
+            self.params["mass_preserving_" + str(i+1)] = False
+            self.params["bounds_" + str(i+1)] = None
+            self.params["u0_" + str(i+1)] = CF(0)
+
+            self.params["b_" + str(i+1)] = Field(CF((0,)*compartment.dim_emd))
+            self.params["d_" + str(i+1)] = Field(CF(0))
+            self.params["c_" + str(i+1)] = Field(CF(0))
+            self.params["rhs_" + str(i+1)] = Field(CF(0))
+            self.params["gradu_bnd_" + str(i+1)] = Field(CF((0,)*compartment.dim_emd))
+            self.params["u_bnd_" + str(i+1)] = Field(CF(0))
+
+            self.params["gfu_b_" + str(i+1)] = GridFunction(V2)
+            self.params["gfu_d_" + str(i+1)] = GridFunction(self.V)
+            self.params["gfu_c_" + str(i+1)] = GridFunction(self.V)
+            self.params["gfu_rhs_" + str(i+1)] = GridFunction(self.V)
+            self.params["gfu_gradu_bnd_" + str(i+1)] = GridFunction(V2)
+            self.params["gfu_u_bnd_" + str(i+1)] = GridFunction(self.V)
         
         self.gfu = GridFunction(self.fes)
         self.gfu_old = GridFunction(self.fes)
@@ -111,14 +123,6 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
             for i, gfu in enumerate(self.vtk_gfu):
                 gfu.Set(self.sol[i], definedon = self.compartment.domain)
 
-    def PreProcess(self):
-        
-        self.gfu_old.vec.data = self.gfu.vec.data
-
-        self.ns = specialcf.normal(self.model.dim)
-
-    def Solve(self):
-
         if self.sys_dim>1:
             trial, test = self.fes.TnT()
         else:
@@ -126,6 +130,7 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
             test = [self.fes.TestFunction()]
         self.A = BilinearForm(self.fes)
         self.F = LinearForm(self.fes)
+        self.ns = specialcf.normal(self.model.dim)
         Ps = Id(self.model.dim) - OuterProduct(self.ns, self.ns)
         h = self.cfg.h
         alpha = 5 * self.params["fes_order"] * (self.params["fes_order"]+1)
@@ -137,48 +142,35 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
             facet_space = FacetSurface(self.model.parentmesh, order = 0)
             nE = Cross(self.ns, tE)
 
-        self.Yhalf.vec.data = 0.5*self.model.ale.Y.vec.data + 0.5*self.model.ale.Yo.vec.data
-
-        ############### Do I actually need this? Getting rid of it for now
-        ############### might be a problem for manufactured solutions
-        self.model.time.helper.t.Set(self.model.time.t.Get() + 0.5*self.model.time.dt.Get())
-
         for i in range(self.sys_dim):
 
-            c = self.params["c_" + str(i+1)]().Compile()
-            d = self.params["d_" + str(i+1)]().Compile()
-            b = self.params["b_" + str(i+1)]().Compile()
-            rhs = self.params["rhs_" + str(i+1)]().Compile()
-            u_bnd = self.params["u_bnd_" + str(i+1)]().Compile()
-            gradu_bnd = self.params["gradu_bnd_" + str(i+1)]().Compile()
-
-            self.A += c*trial[i]*test[i]*ds(deformation = self.Yhalf)
-            self.A += d*grad(trial[i]).Trace()*grad(test[i]).Trace()*ds(deformation = self.Yhalf)
+            self.A += self.params["gfu_c_" + str(i+1)]*trial[i]*test[i]*ds(deformation = self.Yhalf)
+            self.A += self.params["gfu_d_" + str(i+1)]*grad(trial[i]).Trace()*grad(test[i]).Trace()*ds(deformation = self.Yhalf)
                     
             if self.params['Dir_bnd']:
                 dir_bnd_gfu = GridFunction(facet_space)
                 dir_bnd_gfu.Set(1, definedon = self.model.parentmesh.BBoundaries(self.params['Dir_bnd']))
-                self.A += - dir_bnd_gfu*d*InnerProduct(nE, grad(trial[i]).Trace())*test[i]*ds(element_boundary=True, deformation = self.Yhalf) \
-                    - dir_bnd_gfu*d*InnerProduct(nE, grad(test[i]).Trace())*trial[i]*ds(element_boundary=True, deformation = self.Yhalf)\
-                    + dir_bnd_gfu*d*alpha/h*trial[i]*test[i]*ds(element_boundary=True, deformation = self.Yhalf)
+                self.A += - dir_bnd_gfu*self.params["gfu_d_" + str(i+1)]*InnerProduct(nE, grad(trial[i]).Trace())*test[i]*ds(element_boundary=True, deformation = self.Yhalf) \
+                    - dir_bnd_gfu*self.params["gfu_d_" + str(i+1)]*InnerProduct(nE, grad(test[i]).Trace())*trial[i]*ds(element_boundary=True, deformation = self.Yhalf)\
+                    + dir_bnd_gfu*self.params["gfu_d_" + str(i+1)]*alpha/h*trial[i]*test[i]*ds(element_boundary=True, deformation = self.Yhalf)
 
-            self.A += -(b - self.model.ale.Wo)*grad(test[i]).Trace() * trial[i]*ds(deformation = self.Yhalf)
+            self.A += -(self.params["gfu_b_" + str(i+1)])*grad(test[i]).Trace() * trial[i]*ds(deformation = self.Yhalf)
             bnd_gfu = GridFunction(facet_space)
             bnd_gfu.Set(1, definedon = self.model.parentmesh.BBoundaries(self.params['Dir_bnd']+'|'+self.params['Neu_bnd']))
-            self.A += bnd_gfu*IfPos((b - self.model.ale.Wo)*nE, (b - self.model.ale.Wo)*nE*trial[i], CF(0))*test[i]\
+            self.A += bnd_gfu*IfPos((self.params["gfu_b_" + str(i+1)])*nE, (self.params["gfu_b_" + str(i+1)])*nE*trial[i], CF(0))*test[i]\
                 *ds(element_boundary=True, deformation = self.Yhalf)
 
-            self.F += rhs*test[i]*ds(deformation = self.Yhalf)
+            self.F += self.params["gfu_rhs_" + str(i+1)]*test[i]*ds(deformation = self.Yhalf)
             
             if self.params['Dir_bnd']:
-                self.F += dir_bnd_gfu*d*alpha/h*u_bnd*test[i]*ds(element_boundary=True, deformation = self.Yhalf)\
-                    - dir_bnd_gfu*d*InnerProduct(nE, grad(test[i]).Trace())*u_bnd*ds(element_boundary=True, deformation = self.Yhalf)
+                self.F += dir_bnd_gfu*self.params["gfu_d_" + str(i+1)]*alpha/h*self.params["gfu_u_bnd_" + str(i+1)]*test[i]*ds(element_boundary=True, deformation = self.Yhalf)\
+                    - dir_bnd_gfu*self.params["gfu_d_" + str(i+1)]*InnerProduct(nE, grad(test[i]).Trace())*self.params["gfu_u_bnd_" + str(i+1)]*ds(element_boundary=True, deformation = self.Yhalf)
             if self.params['Neu_bnd']:
                 neu_bnd_gfu = GridFunction(facet_space)
                 neu_bnd_gfu.Set(1, definedon = self.model.parentmesh.BBoundaries(self.params['Neu_bnd']))
-                self.F += neu_bnd_gfu*d*gradu_bnd*nE*test[i]*ds(element_boundary=True, deformation = self.Yhalf)
+                self.F += neu_bnd_gfu*self.params["gfu_d_" + str(i+1)]*self.params["gfu_gradu_bnd_" + str(i+1)]*nE*test[i]*ds(element_boundary=True, deformation = self.Yhalf)
 
-            self.F += -bnd_gfu*IfPos((b - self.model.ale.Wo)*nE, CF(0), (b - self.model.ale.Wo)*nE*u_bnd)*test[i]*ds(element_boundary=True, deformation = self.Yhalf)
+            self.F += -bnd_gfu*IfPos((self.params["gfu_b_" + str(i+1)])*nE, CF(0), (self.params["gfu_b_" + str(i+1)])*nE*self.params["gfu_u_bnd_" + str(i+1)])*test[i]*ds(element_boundary=True, deformation = self.Yhalf)
             
             self.A += 1/self.model.dt*trial[i]*test[i]*ds(deformation = self.model.ale.Y)
 
@@ -197,94 +189,117 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
             
             self.F += -1*eval(nonlin['expr'], env)*test[(nonlin['target']-1)]*ds(deformation = self.Yhalf)
 
-
         self.A.Assemble()
         self.invA = self.A.mat.Inverse(freedofs = self.fes.FreeDofs())
 
-        if self.nonlinearities:
+    def PreProcess(self):
         
-            verbose = True
-            m=5
-            maxit=20
-            tol=1e-10
-            beta=1.0
-            reg=1e-12
+        self.gfu_old.vec.data = self.gfu.vec.data
+
+    def Solve(self):
+
+        self.Yhalf.vec.data = 0.5*self.model.ale.Y.vec.data + 0.5*self.model.ale.Yo.vec.data
+
+        ############### Do I actually need this? Getting rid of it for now
+        ############### might be a problem for manufactured solutions
+        self.model.time.helper.t.Set(self.model.time.t.Get() + 0.5*self.model.time.dt.Get())
+
+        for i in range(self.sys_dim):
+
+            self.params["gfu_c_" + str(i+1)].Set(self.params["c_" + str(i+1)]().Compile(), definedon = self.compartment.domain)
+            self.params["gfu_d_" + str(i+1)].Set(self.params["d_" + str(i+1)]().Compile(), definedon = self.compartment.domain)
+            self.params["gfu_b_" + str(i+1)].Set(self.params["b_" + str(i+1)]().Compile() - self.model.ale.Wo, definedon = self.compartment.domain)
+            self.params["gfu_rhs_" + str(i+1)].Set(self.params["rhs_" + str(i+1)]().Compile(), definedon = self.compartment.domain)
+            self.params["gfu_u_bnd_" + str(i+1)].Set(self.params["u_bnd_" + str(i+1)]().Compile(), definedon = self.compartment.boundary)
+            self.params["gfu_gradu_bnd_" + str(i+1)].Set(self.params["gradu_bnd_" + str(i+1)]().Compile(), definedon = self.compartment.boundary)
+
+        self.A.Assemble()
+        self.invA.Update()
+
+        # if self.nonlinearities:
+        
+        #     verbose = True
+        #     m=5
+        #     maxit=20
+        #     tol=1e-10
+        #     beta=1.0
+        #     reg=1e-12
             
-            u = self.gfu.vec.Copy().FV().NumPy()
+        #     u = self.gfu.vec.Copy().FV().NumPy()
 
-            # History of deltas: Δu_i = u_{i+1} - u_i, Δf_i = f_{i+1} - f_i
-            dU = []
-            dF = []
+        #     # History of deltas: Δu_i = u_{i+1} - u_i, Δf_i = f_{i+1} - f_i
+        #     dU = []
+        #     dF = []
 
-            # Initial evaluation
-            self.F.Assemble()
-            self.gfu.vec.data = self.invA*self.F.vec
-            f = self.gfu.vec.FV().NumPy() - u
+        #     # Initial evaluation
+        #     self.F.Assemble()
+        #     self.gfu.vec.data = self.invA*self.F.vec
+        #     f = self.gfu.vec.FV().NumPy() - u
 
-            norm_u0 = max(np.linalg.norm(u), 1.0)
-            rel = np.linalg.norm(f) / norm_u0
-            if verbose:
-                print(f"it=0  ||f||/||u||={rel:.3e}")
+        #     norm_u0 = max(np.linalg.norm(u), 1.0)
+        #     rel = np.linalg.norm(f) / norm_u0
+        #     if verbose:
+        #         print(f"it=0  ||f||/||u||={rel:.3e}")
 
-            for k in range(1, maxit + 1):
-                if rel < tol:
-                    break
+        #     for k in range(1, maxit + 1):
+        #         if rel < tol:
+        #             break
 
-                # Plain Picard step candidate
-                u_pic = u + beta * f
-                self.gfu.vec.data[:] = u_pic
-                self.F.Assemble()
-                self.gfu.vec.data = self.invA*self.F.vec
-                f_pic = self.gfu.vec.FV().NumPy() - u_pic
+        #         # Plain Picard step candidate
+        #         u_pic = u + beta * f
+        #         self.gfu.vec.data[:] = u_pic
+        #         self.F.Assemble()
+        #         self.gfu.vec.data = self.invA*self.F.vec
+        #         f_pic = self.gfu.vec.FV().NumPy() - u_pic
 
-                # Update histories with newest step information
-                # (use u_pic and f_pic as the "next" quantities)
-                du = (u_pic - u)
-                df = (f_pic - f)
+        #         # Update histories with newest step information
+        #         # (use u_pic and f_pic as the "next" quantities)
+        #         du = (u_pic - u)
+        #         df = (f_pic - f)
 
-                if np.linalg.norm(df) > 0:
-                    dU.append(du)
-                    dF.append(df)
-                    if len(dU) > m:
-                        dU.pop(0)
-                        dF.pop(0)
+        #         if np.linalg.norm(df) > 0:
+        #             dU.append(du)
+        #             dF.append(df)
+        #             if len(dU) > m:
+        #                 dU.pop(0)
+        #                 dF.pop(0)
 
-                # If not enough history yet, accept Picard
-                if len(dF) == 0:
-                    u, f = u_pic, f_pic
-                else:
-                    # Build least squares: minimize || f_pic - DF * gamma ||, DF columns are dF_j
-                    DF = np.column_stack(dF)  # shape (N, p)
-                    # Solve (DF^T DF + reg I) gamma = DF^T f_pic
-                    A = DF.T @ DF
-                    A.flat[::A.shape[0] + 1] += reg  # add reg to diagonal
-                    b = DF.T @ f_pic
-                    gamma = np.linalg.solve(A, b)
+        #         # If not enough history yet, accept Picard
+        #         if len(dF) == 0:
+        #             u, f = u_pic, f_pic
+        #         else:
+        #             # Build least squares: minimize || f_pic - DF * gamma ||, DF columns are dF_j
+        #             DF = np.column_stack(dF)  # shape (N, p)
+        #             # Solve (DF^T DF + reg I) gamma = DF^T f_pic
+        #             A = DF.T @ DF
+        #             A.flat[::A.shape[0] + 1] += reg  # add reg to diagonal
+        #             b = DF.T @ f_pic
+        #             gamma = np.linalg.solve(A, b)
 
-                    # Anderson update:
-                    # u_{new} = u_pic - DU * gamma  (where DU columns are dU_j)
-                    DU = np.column_stack(dU)
-                    u_new = u_pic - DU @ gamma
+        #             # Anderson update:
+        #             # u_{new} = u_pic - DU * gamma  (where DU columns are dU_j)
+        #             DU = np.column_stack(dU)
+        #             u_new = u_pic - DU @ gamma
 
-                    # Recompute f at accelerated iterate
-                    self.gfu.vec.data[:] = u_new
-                    self.F.Assemble()
-                    self.gfu.vec.data = self.invA*self.F.vec
-                    f_new = self.gfu.vec.FV().NumPy() - u_new
+        #             # Recompute f at accelerated iterate
+        #             self.gfu.vec.data[:] = u_new
+        #             self.F.Assemble()
+        #             self.gfu.vec.data = self.invA*self.F.vec
+        #             f_new = self.gfu.vec.FV().NumPy() - u_new
 
-                    u, f = u_new, f_new
+        #             u, f = u_new, f_new
 
-                rel = np.linalg.norm(f) / max(np.linalg.norm(u), 1.0)
-                if verbose:
-                    print(f"it={k}  ||f||/||u||={rel:.3e}  hist={len(dF)}")
+        #         rel = np.linalg.norm(f) / max(np.linalg.norm(u), 1.0)
+        #         if verbose:
+        #             print(f"it={k}  ||f||/||u||={rel:.3e}  hist={len(dF)}")
 
-            if k >= maxit:
-                raise Exception('Exceeded maximum number of iterations') 
+        #     if k >= maxit:
+        #         raise Exception('Exceeded maximum number of iterations') 
             
-        else:
+        # else:
 
-            self.F.Assemble()
-            self.gfu.vec.data = self.invA*self.F.vec
+        self.F.Assemble()
+        self.gfu.vec.data = self.invA*self.F.vec
 
         ############### Do I actually need this? Getting rid of it for now
         ############### might be a problem for manufactured solutions
@@ -327,10 +342,6 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
         if self.model.dim == 2:
             for i, gfu in enumerate(self.vtk_gfu):
                 gfu.Set(self.sol[i], definedon = self.compartment.domain)
-
-        del self.A
-        del self.invA
-        del self.F
 
     def _base_env(self):
         # whitelist of functions (extend as needed)

@@ -30,7 +30,7 @@ class CosmosCompartment:
                 raise Exception(f'Material {kwargs["material"]} for compartment {self.name} not present in given Model')
             if all(x in self.model.bnd_ids for x in kwargs['boundary'].split('|')):
                 self.boundary_id = kwargs['boundary']
-                self.boundary = self.model.parentmesh.Boundaries(kwargs['material'])
+                self.boundary = self.model.parentmesh.Boundaries(kwargs['boundary'])
             else:
                 raise Exception(f'Boundary {kwargs["boundary"]} for compartment {self.name} not present in given Model')
             self.is_bnd = False

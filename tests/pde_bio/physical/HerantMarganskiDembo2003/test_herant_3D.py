@@ -30,7 +30,7 @@ def test_herant_3D_vp_clamped(
     k_deg = 1
     k_prod = 10
     F0 = 100
-    D_m = 2
+    D_m = 5
     gamma_drag = 1000
 
     angle2_deg = 20

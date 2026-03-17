@@ -31,8 +31,8 @@ def test_herant_2D_vp_clamped(
     k_prod = 10
     maxh = 0.8
     F0 = 100
-    D_m = 10
-    gamma_drag = 100
+    D_m = 5
+    gamma_drag = 1000
 
     angle2_deg = 20
     angle2 = angle2_deg/180*pi
@@ -68,7 +68,7 @@ def test_herant_2D_vp_clamped(
     dt = Parameter(2e-3)
     root =  artifacts_path
     model_name = f"phi_cap{phi_cap}_alpha{gamma_curv}_gamma{gamma_tension}"
-    model = CosmosModel(name=model_name, parentmesh=mesh, t0 = 0, t1 = 15,
+    model = CosmosModel(name=model_name, parentmesh=mesh, t0 = 0, t1 = 100,
                         dt = dt, t = t,
                         coupling_type = 'implicit', redistribute = True,
                         root = root, sample_rate = 50)
@@ -78,7 +78,7 @@ def test_herant_2D_vp_clamped(
     adr_bnd = model.create_pde(name = 'indicator', pde_model=ADRBoundarySystemBDF1Model, compartment=comp1, ale_type = 1, dim = 1)
     adr_bnd.set_params(
         Neu_bnd = 'bbnd',
-        b_1 = lambda: model.ale.V,
+        b_1 = lambda: model.ale.Vo,
         u0_1 = 1/(1+exp(-100*(x-R_PMN*phi_cap))),
         printing = True
     )
@@ -91,8 +91,8 @@ def test_herant_2D_vp_clamped(
         Neu_bnd = 'free_bnd|pipette_bnd',
         d_1 = D_m,
         c_1 = k_deg,
-        gradu_bnd_1 = lambda: IfPos(adr_bnd.sol[0], adr_bnd.sol[0], 0)*k_prod/D_m*ns*IfPos(t-5, 0, 1),
-        b_1 = lambda: model.ale.V,
+        gradu_bnd_1 = lambda: IfPos(adr_bnd.sol[0], adr_bnd.sol[0], 0)*k_prod/D_m*ns*IfPos(t-50, 0, 1),
+        b_1 = lambda: model.ale.Vo,
         printing = True
     )
 
