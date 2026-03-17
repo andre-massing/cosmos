@@ -52,7 +52,34 @@ class DistanceVolumeModel(BasePDEModel):
 
     def Initialize(self):
 
-        pass
+        dt = specialcf.mesh_size**2
+
+        fes1 = H1(self.model.parentmesh, order = self.params["fes_order"], 
+                                definedon = self.compartment.domain,
+                                dirichlet = self.params['zero_bnd'])
+        
+        u1, v1 = fes1.TnT()
+        self.A1 = BilinearForm(fes1)
+        self.A1 += (u1*v1 + dt*grad(u1)*grad(v1))*dx(deformation = self.model.ale.Y)
+        self.A1.Assemble()
+        self.invA1 = self.A1.mat.Inverse(freedofs = fes1.FreeDofs())
+        self.gfu1 = GridFunction(fes1)
+
+        u2, v2 = self.fes2.TnT()
+        self.A2 = BilinearForm(self.fes2)
+        self.A2 += u2*v2*dx(deformation = self.model.ale.Y)
+        self.A2.Assemble()
+        self.invA2 = self.A2.mat.Inverse(freedofs = self.fes2.FreeDofs())
+        self.F2 = LinearForm(self.fes2)
+        self.F2 += Normalize(grad(self.gfu1))*v2*dx(deformation = self.model.ale.Y)
+
+        u3, v3 = self.fes.TnT()
+        self.A3 = BilinearForm(self.fes)
+        self.A3 += grad(u3)*grad(v3)*dx(deformation = self.model.ale.Y)
+        self.A3.Assemble()
+        self.invA3 = self.A3.mat.Inverse(freedofs = self.fes.FreeDofs())
+        self.F3 = LinearForm(self.fes)
+        self.F3 += Trace(Grad(self.gfu2))*v3*dx(deformation = self.model.ale.Y)
 
     def PreProcess(self):
 
@@ -62,41 +89,23 @@ class DistanceVolumeModel(BasePDEModel):
 
         self.gfu.vec.data[:] = 0
 
-        dt = specialcf.mesh_size**2
-
-        fes1 = H1(self.model.parentmesh, order = self.params["fes_order"], 
-                                definedon = self.compartment.domain,
-                                dirichlet = self.params['zero_bnd'])
-        
-        u1, v1 = fes1.TnT()
-        A1 = BilinearForm(fes1)
-        A1 += (u1*v1 + dt*grad(u1)*grad(v1))*dx(deformation = self.model.ale.Y)
-        A1.Assemble()
-        gfu1 = GridFunction(fes1)
-        gfu1.Set(1, definedon =  self.model.parentmesh.Boundaries(self.params['zero_bnd']))
-        res1 = -1*A1.mat*gfu1.vec
-        gfu1.vec.data += A1.mat.Inverse(freedofs = fes1.FreeDofs())*res1 
-
-        
-        u2, v2 = self.fes2.TnT()
-        A2 = BilinearForm(self.fes2)
-        A2 += u2*v2*dx(deformation = self.model.ale.Y)
-        A2.Assemble()
-        F2 = LinearForm(self.fes2)
-        F2 += Normalize(grad(gfu1))*v2*dx(deformation = self.model.ale.Y)
-        F2.Assemble()
+        self.A1.Assemble()
+        self.invA1.Update()
+        self.gfu1.Set(1, definedon =  self.model.parentmesh.Boundaries(self.params['zero_bnd']))
+        res1 = -1*self.A1.mat*self.gfu1.vec
+        self.gfu1.vec.data += self.invA1*res1 
+   
+        self.A2.Assemble()
+        self.invA2.Update()
+        self.F2.Assemble()
         self.gfu2.Set(specialcf.normal(self.model.dim), definedon = self.model.parentmesh.Boundaries(self.params['zero_bnd']))
-        res2 =  F2.vec - A2.mat*self.gfu2.vec
-        self.gfu2.vec.data += A2.mat.Inverse(freedofs = self.fes2.FreeDofs())*res2
+        res2 =  self.F2.vec - self.A2.mat*self.gfu2.vec
+        self.gfu2.vec.data += self.invA2*res2
 
-        u3, v3 = self.fes.TnT()
-        A3 = BilinearForm(self.fes)
-        A3 += grad(u3)*grad(v3)*dx(deformation = self.model.ale.Y)
-        A3.Assemble()
-        F3 = LinearForm(self.fes)
-        F3 += Trace(Grad(self.gfu2))*v3*dx(deformation = self.model.ale.Y)
-        F3.Assemble()
-        self.gfu.vec.data += A3.mat.Inverse(freedofs = self.fes.FreeDofs())*F3.vec
+        self.A3.Assemble()
+        self.invA3.Update()
+        self.F3.Assemble()
+        self.gfu.vec.data += self.invA3*self.F3.vec
 
     def PostProcess(self):
 
