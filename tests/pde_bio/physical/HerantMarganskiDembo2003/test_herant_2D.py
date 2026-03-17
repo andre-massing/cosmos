@@ -65,7 +65,7 @@ def test_herant_2D_vp_clamped(
 
     ###################  Solver  ##################################
     t = Parameter(0)
-    dt = Parameter(2e-3)
+    dt = Parameter(0.02)
     root =  artifacts_path
     model_name = f"phi_cap{phi_cap}_alpha{gamma_curv}_gamma{gamma_tension}"
     model = CosmosModel(name=model_name, parentmesh=mesh, t0 = 0, t1 = 100,
