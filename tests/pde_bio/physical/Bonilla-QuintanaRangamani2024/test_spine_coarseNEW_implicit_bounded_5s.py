@@ -14,7 +14,7 @@ logging.getLogger().setLevel(logging.INFO)
 @pytest.mark.parametrize("Re", [7])
 @pytest.mark.parametrize("surface_ALE", ['mdr', 'gnz', 'ms'])
 @pytest.mark.parametrize("volume_ALE", ['laplace', 'linel', 'nonlinel'])
-def test_quintana_spine_coarseNEW_implicit_bounded(
+def test_quintana_spine_coarseNEW_implicit_bounded_5s(
         request,
         artifacts_path,
         Re,
