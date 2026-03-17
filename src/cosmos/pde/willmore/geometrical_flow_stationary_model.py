@@ -38,6 +38,7 @@ class GeometricalFlowStationaryModel(BasePDEModel):
 
         self.vectorspace_bbnd = VectorH1(model.parentmesh, order = 1, definedon = compartment.domain, dirichlet_bbnd = self.cn_bboundary)
         self.vectorspace = VectorH1(model.parentmesh, order = 1, definedon =compartment.domain)
+        self.scalarspace = H1(model.parentmesh, order = 1, definedon =compartment.domain)
         self.scalarspace_bbnd = H1(model.parentmesh, order = 1, definedon =compartment.domain, dirichlet_bbnd = self.cn_bboundary)
         self.scalarspace_navier_bbnd = H1(model.parentmesh, order = 1, definedon =compartment.domain, dirichlet_bbnd = self.navier_bbnd)
         self.discscalarspace = SurfaceL2(model.parentmesh, order = 0, definedon =compartment.domain)
@@ -102,23 +103,10 @@ class GeometricalFlowStationaryModel(BasePDEModel):
         else:
             self.sp_curv_h.vec.data = kappa0_h.vec.data
 
-    def PreProcess(self):
-
-        self.kappa_h_old.vec.data = self.kappa_h.vec.data
-        self.sp_curv_h_old.vec.data = self.sp_curv_h.vec.data
-
-        self.pre_normal.Set(self.ns, dual = True, definedon=self.compartment.domain)
-        self.normal.Set(Normalize(self.pre_normal), dual = True, definedon =self.compartment.domain)
-        self.W_h_old.Set(Norm(grad(self.normal).Trace())**2, definedon =self.compartment.domain)
-        self.Amap_h.Set(self.identity - self.model.dt*self.model.ale.Wo, dual = True, definedon =self.compartment.domain)
-        self.J_h_old.Set(sqrt(Det(Grad(self.Amap_h).Trace().trans*Grad(self.Amap_h).Trace() + OuterProduct(self.ns, self.ns))), definedon=self.compartment.domain)
-
-    def Solve(self):
-
-        rhs = self.params['rhs']()
         alpha = self.params['alpha']
         beta = self.params['beta']
         gamma = self.params['gamma']
+        self.gfu_rhs = GridFunction(self.scalarspace)
 
         (V, kappa, sp_curv), (phi, xsi, zeta) = self.fes.TnT()
         
@@ -151,13 +139,28 @@ class GeometricalFlowStationaryModel(BasePDEModel):
 
         self.F = LinearForm(self.fes)
 
-        self.F += InnerProduct(rhs,phi)*ds(deformation = self.model.ale.Yo)
+        self.F += InnerProduct(self.gfu_rhs,phi)*ds(deformation = self.model.ale.Yo)
 
         self.F += InnerProduct((self.kappa_h_old - self.sp_curv_h_old)/self.model.dt*sqrt(self.J_h_old),xsi)*ds(deformation = self.model.ale.Yo)
         self.F += InnerProduct(self.sp_curv_h_old/self.model.dt, zeta)*ds(deformation = self.model.ale.Yo)
 
         self.F += InnerProduct(self.mu, phi)*ds(deformation = self.model.ale.Yo)
 
+    def PreProcess(self):
+
+        self.kappa_h_old.vec.data = self.kappa_h.vec.data
+        self.sp_curv_h_old.vec.data = self.sp_curv_h.vec.data
+
+        self.pre_normal.Set(self.ns, dual = True, definedon=self.compartment.domain)
+        self.normal.Set(Normalize(self.pre_normal), dual = True, definedon =self.compartment.domain)
+        self.W_h_old.Set(Norm(grad(self.normal).Trace())**2, definedon =self.compartment.domain)
+        self.Amap_h.Set(self.identity - self.model.dt*self.model.ale.Wo, dual = True, definedon =self.compartment.domain)
+        self.J_h_old.Set(sqrt(Det(Grad(self.Amap_h).Trace().trans*Grad(self.Amap_h).Trace() + OuterProduct(self.ns, self.ns))), definedon=self.compartment.domain)
+
+    def Solve(self):
+
+        self.gfu_rhs.Set(self.params['rhs'](), definedon = self.compartment.domain)
+        
         if self.params['area_preserving'] or self.params['volume_preserving']:
 
             iter = 0

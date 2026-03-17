@@ -39,6 +39,7 @@ class GeometricalFlowModel(BasePDEModel):
 
         self.vectorspace_bbnd = VectorH1(model.parentmesh, order = 1, definedon = compartment.domain, dirichlet_bbnd = self.cn_bboundary)
         self.vectorspace = VectorH1(model.parentmesh, order = 1, definedon =compartment.domain)
+        self.scalarspace = H1(model.parentmesh, order = 1, definedon =compartment.domain)
         self.scalarspace_bbnd = H1(model.parentmesh, order = 1, definedon =compartment.domain, dirichlet_bbnd = self.cn_bboundary)
         self.scalarspace_navier_bbnd = H1(model.parentmesh, order = 1, definedon =compartment.domain, dirichlet_bbnd = self.navier_bbnd)
         self.discscalarspace = SurfaceL2(model.parentmesh, order = 0, definedon =compartment.domain)
@@ -107,22 +108,10 @@ class GeometricalFlowModel(BasePDEModel):
                 for i, gfu in enumerate(self.vtk_gfu):
                     gfu.Set(self.gfu.components[i], definedon = self.compartment.domain)
 
-    def PreProcess(self):
-
-        self.kappa_h_old.vec.data = self.kappa_h.vec.data
-        self.pre_normal.Set(self.ns, dual = True, definedon=self.compartment.domain)
-        self.normal.Set(Normalize(self.pre_normal), dual = True, definedon =self.compartment.domain)
-        self.W_h_old.Set(Norm(grad(self.normal).Trace())**2, definedon =self.compartment.domain)
-
-        self.Amap_h.Set(self.identity - self.model.dt*self.model.ale.Wo, dual = True, definedon =self.compartment.domain)
-        self.J_h_old.Set(sqrt(Det(Grad(self.Amap_h).Trace().trans*Grad(self.Amap_h).Trace() + OuterProduct(self.ns, self.ns))), definedon=self.compartment.domain)
-
-    def Solve(self):
-
-        rhs = self.params['rhs']()
         alpha = self.params['alpha']
         beta = self.params['beta']
         gamma = self.params['gamma']
+        self.gfu_rhs = GridFunction(self.scalarspace)
 
         (V, kappa), (phi, xsi) = self.fes.TnT()
         
@@ -147,7 +136,7 @@ class GeometricalFlowModel(BasePDEModel):
 
         self.F = LinearForm(self.fes)
 
-        self.F += InnerProduct(rhs,phi)*ds(deformation = self.model.ale.Yo)
+        self.F += InnerProduct(self.gfu_rhs,phi)*ds(deformation = self.model.ale.Yo)
 
         self.F += alpha*InnerProduct(self.W_h_old*self.params['sp_curv'], phi)*ds(deformation = self.model.ale.Yo)
         self.F += -alpha*0.5*InnerProduct((self.kappa_h_old-self.params['sp_curv'])*self.kappa_h_old*self.params['sp_curv'], phi)*ds(deformation = self.model.ale.Yo)
@@ -157,6 +146,20 @@ class GeometricalFlowModel(BasePDEModel):
         self.F += -0.5*(- InnerProduct(self.model.ale.Wo, grad(xsi).Trace()*self.params['sp_curv']))*ds(deformation = self.model.ale.Yo)
 
         self.F += InnerProduct(self.mu, phi)*ds(deformation = self.model.ale.Yo)
+
+    def PreProcess(self):
+
+        self.kappa_h_old.vec.data = self.kappa_h.vec.data
+        self.pre_normal.Set(self.ns, dual = True, definedon=self.compartment.domain)
+        self.normal.Set(Normalize(self.pre_normal), dual = True, definedon =self.compartment.domain)
+        self.W_h_old.Set(Norm(grad(self.normal).Trace())**2, definedon =self.compartment.domain)
+
+        self.Amap_h.Set(self.identity - self.model.dt*self.model.ale.Wo, dual = True, definedon =self.compartment.domain)
+        self.J_h_old.Set(sqrt(Det(Grad(self.Amap_h).Trace().trans*Grad(self.Amap_h).Trace() + OuterProduct(self.ns, self.ns))), definedon=self.compartment.domain)
+
+    def Solve(self):
+
+        self.gfu_rhs.Set(self.params['rhs'](), definedon = self.compartment.domain)
 
         if self.params['area_preserving'] or self.params['volume_preserving']:
 
@@ -247,80 +250,76 @@ class GeometricalFlowModel(BasePDEModel):
                 for i, gfu in enumerate(self.vtk_gfu):
                     gfu.Set(self.gfu.components[i], definedon = self.compartment.domain)
 
-        del self.A
-        del self.invA
-        del self.F
-
-def MC1(mesh):
-    order_g = mesh.GetCurveOrder()
-    V = VectorH1(mesh, order=order_g)
-    dV = VectorFacetSurface(mesh, order=order_g)
-    W = V*dV
-    (kappa, dkappa), (eta, deta) = W.TnT()
+# def MC1(mesh):
+#     order_g = mesh.GetCurveOrder()
+#     V = VectorH1(mesh, order=order_g)
+#     dV = VectorFacetSurface(mesh, order=order_g)
+#     W = V*dV
+#     (kappa, dkappa), (eta, deta) = W.TnT()
     
-    Idh = GridFunction(V)
-    Idh.Set(CF((x,y,z)), definedon=mesh.Boundaries(".*"))
+#     Idh = GridFunction(V)
+#     Idh.Set(CF((x,y,z)), definedon=mesh.Boundaries(".*"))
     
-    # Compute mesh size, normal and tangential vectors 
-    h = specialcf.mesh_size
-    ns = specialcf.normal(mesh.dim)
-    tE = specialcf.tangential(mesh.dim)
-    nE = Cross(ns, tE)
+#     # Compute mesh size, normal and tangential vectors 
+#     h = specialcf.mesh_size
+#     ns = specialcf.normal(mesh.dim)
+#     tE = specialcf.tangential(mesh.dim)
+#     nE = Cross(ns, tE)
     
-    # Define bilinear form 
-    m = BilinearForm(W)
-    m += InnerProduct(kappa.Trace(), eta.Trace())*ds
-    jump_dkappadn = (kappa.Trace().Deriv()*nE-dkappa.Trace())
-    jump_detadn = (eta.Trace().Deriv()*nE-deta.Trace())
-    # jump_dkappadn = (kappa.Trace().Deriv().trans*nE-dkappa.Trace())
-    # jump_detadn = (eta.Trace().Deriv().trans*nE-deta.Trace())
-    gamma_E = 0.001
-    m += gamma_E*h*InnerProduct(jump_dkappadn,jump_detadn)*ds(element_boundary=True)
+#     # Define bilinear form 
+#     m = BilinearForm(W)
+#     m += InnerProduct(kappa.Trace(), eta.Trace())*ds
+#     jump_dkappadn = (kappa.Trace().Deriv()*nE-dkappa.Trace())
+#     jump_detadn = (eta.Trace().Deriv()*nE-deta.Trace())
+#     # jump_dkappadn = (kappa.Trace().Deriv().trans*nE-dkappa.Trace())
+#     # jump_detadn = (eta.Trace().Deriv().trans*nE-deta.Trace())
+#     gamma_E = 0.001
+#     m += gamma_E*h*InnerProduct(jump_dkappadn,jump_detadn)*ds(element_boundary=True)
     
-    l = LinearForm(W)
-    # TODO: Determine right sign for normal vector
-    l += -1*InnerProduct(grad(Idh).Trace(), grad(eta).Trace())*ds
+#     l = LinearForm(W)
+#     # TODO: Determine right sign for normal vector
+#     l += -1*InnerProduct(grad(Idh).Trace(), grad(eta).Trace())*ds
     
-    # Assemble and solve system
-    m.Assemble()
-    # print(f"Norm(m) = {m.mat.AsVector().Norm()}")
-    l.Assemble()
-    Minv = m.mat.Inverse(W.FreeDofs(), inverse="umfpack")
+#     # Assemble and solve system
+#     m.Assemble()
+#     # print(f"Norm(m) = {m.mat.AsVector().Norm()}")
+#     l.Assemble()
+#     Minv = m.mat.Inverse(W.FreeDofs(), inverse="umfpack")
     
-    wh = GridFunction(W)
-    wh.vec.data = Minv * l.vec
-    kappah, _ = wh.components
+#     wh = GridFunction(W)
+#     wh.vec.data = Minv * l.vec
+#     kappah, _ = wh.components
         
-    return kappah
+#     return kappah
 
-def MC2(mesh):
-    n = specialcf.normal(3)
-    t = specialcf.tangential(3)
-    mu = Cross(n,t)
+# def MC2(mesh):
+#     n = specialcf.normal(3)
+#     t = specialcf.tangential(3)
+#     mu = Cross(n,t)
 
-    order = mesh.GetCurveOrder()
+#     order = mesh.GetCurveOrder()
     
-    # Average normal vector
-    gfF = GridFunction(VectorFacetSurface(mesh,order=order-1))
-    gfF.Set(n, dual=True, definedon=mesh.Boundaries(".*"))
+#     # Average normal vector
+#     gfF = GridFunction(VectorFacetSurface(mesh,order=order-1))
+#     gfF.Set(n, dual=True, definedon=mesh.Boundaries(".*"))
     
-    fes = HDivDivSurface(mesh,order=order-1)
-    sigma,tau = fes.TnT()
-    sigma,tau = sigma.Trace(),tau.Trace()
+#     fes = HDivDivSurface(mesh,order=order-1)
+#     sigma,tau = fes.TnT()
+#     sigma,tau = sigma.Trace(),tau.Trace()
     
-    a = BilinearForm(fes, symmetric=True)
-    a += InnerProduct(sigma,tau)*ds
+#     a = BilinearForm(fes, symmetric=True)
+#     a += InnerProduct(sigma,tau)*ds
     
-    # Grad(n) = specialcf.Weingarten(3)
-    f = LinearForm(fes)
-    f += InnerProduct(Grad(n),tau)*ds \
-            + (pi/2-acos(Normalize(gfF)*mu))*tau*mu*mu*ds(element_boundary=True)
+#     # Grad(n) = specialcf.Weingarten(3)
+#     f = LinearForm(fes)
+#     f += InnerProduct(Grad(n),tau)*ds \
+#             + (pi/2-acos(Normalize(gfF)*mu))*tau*mu*mu*ds(element_boundary=True)
     
-    gflift = GridFunction(fes)
+#     gflift = GridFunction(fes)
     
-    with TaskManager():
-        a.Assemble()
-        f.Assemble()
-        gflift.vec.data = -1*a.mat.Inverse(fes.FreeDofs(),inverse="sparsecholesky")*f.vec
+#     with TaskManager():
+#         a.Assemble()
+#         f.Assemble()
+#         gflift.vec.data = -1*a.mat.Inverse(fes.FreeDofs(),inverse="sparsecholesky")*f.vec
         
-    return gflift
+#     return gflift
