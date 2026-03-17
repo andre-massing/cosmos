@@ -124,8 +124,6 @@ def test_herant_3D_vp_clamped(
                             }
     )
 
-    scene = Draw(adr_vol.gfu ,mesh)
-    for _ in model():
-        scene.Redraw()
+    model.run()
 
     assert 1

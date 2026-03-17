@@ -71,7 +71,7 @@ def test_herant_2D_vp_clamped(
     model = CosmosModel(name=model_name, parentmesh=mesh, t0 = 0, t1 = 100,
                         dt = dt, t = t,
                         coupling_type = 'implicit', redistribute = True,
-                        root = root, sample_rate = 50)
+                        root = root, samples = 100)
 
     ################### INDICATOR ADR ##################################
     comp1 = model.create_compartment(name = 'comp1', boundary = 'free_bnd', bboundary = 'bbnd', clamped_bbnd = "bbnd")
@@ -125,8 +125,6 @@ def test_herant_2D_vp_clamped(
                             'y_max': lambda: np.max(model.ale.X.components[1].vec.FV().NumPy())}
     )
 
-    scene = Draw(adr_vol.gfu ,mesh)
-    for _ in model():
-        scene.Redraw()
+    model.run()
 
     assert 1
