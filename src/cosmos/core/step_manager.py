@@ -112,33 +112,6 @@ class CosmosStepManager:
                             model.time.helper.params['dt'] = dt
                             break
 
-                        # eps_target = 1e-7
-                        # eps_max = 1e-6
-                        # eps_min = 1e-8
-                        # iter_max = 10
-
-                        # if eps_max<eps_target or eps_target<eps_min:
-                        #     raise Exception('Wrong parameters for adaptive algorithm!!')
-
-                        # success, eps, subiter = self.implicit_solve_step_gauss(model, iter_max, eps_min)
-
-                        # if eps > eps_max:
-                        #     dt = model.dt.Get()
-                        #     dt *= 0.6
-                        #     model.time.modify_dt(dt)
-                        #     for pde in model.pdes:
-                        #         pde.reset()
-                        #     model.ale.reset()
-                        #     print('Control difference is too high, timestep lowered to: ', dt)
-                        # else:
-                        #     dt = model.dt.Get()
-                        #     dt_new = dt*safety*(eps_target/eps)**(1/(1+order))
-                        #     dt_new = np.clip(dt_new, dt/2, dt*2)
-                        #     dt = min(dt_new, model.time.dt0)
-                        #     model.time.helper.params['dt'] = dt
-                        #     print('Timestep reset to: ', dt)
-                        #     break
-
                     elif self.coupling_type == 'explicit':
 
                         raise Exception('No adaptivity implemented for explicit time stepping')
