@@ -96,7 +96,7 @@ def test_quintana_spine_coarseNEW_implicit_bounded_5s(
     model.initialize()
     dist_fct.Initialize()
     dist_fct.Solve()
-    id_funct = IfPos(dist_fct.sol[0]-0.1, 1, 0)*IfPos(z-0.5, 1, 0)
+    id_funct = IfPos(dist_fct.sol[0]-0.05, 1, 0)*IfPos(z-0.5, 1, 0)
     impulse = IfPos(t, 1, 0)*IfPos(60-t, 1, 0)
 
     d = CF(1e-3)*exp(-Re)

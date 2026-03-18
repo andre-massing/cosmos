@@ -6,7 +6,7 @@ from cosmos.utils.mesh_fixing import CosmosAliasMesh
 from cosmos.utils.mesh_fixing import fill_mesh
 
 mesh1 = Mesh('../spine_refined_sliced_PM_closed_fixed.vol')
-mesh1 = fill_mesh(mesh1, maxh = 0.1)
+mesh1 = fill_mesh(mesh1, maxh = 0.05)
 name = 'spine_refined_sliced_PM_closed_filled_fixed.vol'
 mesh1.ngmesh.Save(name)
 mesh1 = Mesh(name)
@@ -44,6 +44,9 @@ cf = post_mesh.BoundaryCF({
 })
 gfu.Set(cf, definedon = post_mesh.Boundaries('.*'))
 Draw(gfu, post_mesh)
+
+vtk = VTKOutput(post_mesh, filename = 'mesh')
+vtk.Do()
 # %%
 
 from ngsolve import *
