@@ -16,11 +16,17 @@ if TYPE_CHECKING:
 
 class CosmosALEManager:
 
-    def __init__(self, model:"CosmosModel", kwargs, volume_ALE = 'linel', surface_ALE = 'ms'):
+    def __init__(self, model:"CosmosModel", kwargs):
 
         self.params = kwargs
-        self.volume_ALE = volume_ALE
-        self.surface_ALE = surface_ALE
+        if 'volume_ALE' in kwargs:
+            self.volume_ALE = kwargs['volume_ALE']
+        else:
+            self.volume_ALE = 'linel'
+        if 'surface_ALE' in kwargs:
+            self.surface_ALE = kwargs['surface_ALE']
+        else:
+            self.surface_ALE = 'ms'
         self.redistribute = False
         self.ale_elapsed_time = None
 
