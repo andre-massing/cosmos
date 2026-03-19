@@ -406,7 +406,7 @@ def fill_mesh(old_mesh, maxh):
     for e in m1.Elements2D():
         new_mesh.Add (ngen.meshing.Element2D (fd_outside, [pmap1[v] for v in e.vertices]))
 
-    new_mesh.GenerateVolumeMesh(maxh = maxh)
+    new_mesh.GenerateVolumeMesh(maxh = maxh, grading=0.7)
     new_mesh = Mesh(new_mesh)
 
     return new_mesh
