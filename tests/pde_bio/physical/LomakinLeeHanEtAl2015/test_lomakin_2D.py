@@ -47,9 +47,9 @@ def test_lomakin_2D(
         root = artifacts_path
         model_name = f"angle{angle}_a12_{a12}_a21_{a21}"
         model = CosmosModel(name = model_name, parentmesh = mesh, dt = dt, t0 = t0, t1 = t1,
-                            root = root, sample_rate = 20,
-                            coupling_type = 'implicit',
-                            redistribute = True)
+                            root = root, samples = 100,
+                            coupling_type = 'implicit', 
+                            redistribute = True, adaptive_timestep = True)
 
         comp1 = model.create_compartment(name = 'compartment', boundary = 'default', bboundary = '')
 
@@ -73,17 +73,15 @@ def test_lomakin_2D(
             u0_1 = 0.1,
             d_1 = 0.1,
             c_1 = -r1,
-            b_1 = lambda: model.ale.V,
+            b_1 = lambda: model.ale.Vo,
             bounds_1 = [0, 1e100],
             u0_2 = 1,
             d_2 = 0.1,
             c_2 = -r2,
-            b_2 = lambda: model.ale.V,
+            b_2 = lambda: model.ale.Vo,
             bounds_2 = [0, 1e100],
             printing = True,
         )
-
-        scene = Draw(model.ale.gfu_bnd_ale, mesh)
 
         output_callables = {
             'mass_A': lambda: Integrate(adr_system.sol[0], mesh, VOL_or_BND = BND),
@@ -114,7 +112,6 @@ def test_lomakin_2D(
                 arr = adr_system.sol[1].vec.FV().NumPy()
                 adr_system.sol[1].vec.data[:] = np.clip(arr, a_min=0, a_max = 1e100)
                 depleted = True
-            scene.Redraw()
 
     except Exception as e:
         print('Simulation terminated with error')
@@ -156,9 +153,9 @@ def test_lomakin_2D_feedback(
         root = artifacts_path
         model_name = f"angle{angle}_a12_{a12}_a21_{a21}"
         model = CosmosModel(name = model_name, parentmesh = mesh, dt = dt, t0 = t0, t1 = t1,
-                            root = root, sample_rate = 20,
+                            root = root, samples = 100,
                             coupling_type = 'implicit',
-                            redistribute = True)
+                            redistribute = True, adaptive_timestep = True)
 
         comp1 = model.create_compartment(name = 'compartment', boundary = 'default', bboundary = '')
 
@@ -187,17 +184,15 @@ def test_lomakin_2D_feedback(
             u0_1 = 0.1,
             d_1 = 0.1,
             c_1 = -r1,
-            b_1 = lambda: model.ale.V,
+            b_1 = lambda: model.ale.Vo,
             bounds_1 = [0, 1e100],
             u0_2 = 1,
             d_2 = 0.1,
             c_2 = -r2,
-            b_2 = lambda: model.ale.V,
+            b_2 = lambda: model.ale.Vo,
             bounds_2 = [0, 1e100],
             printing = True,
         )
-
-        scene = Draw(model.ale.gfu_bnd_ale, mesh)
 
         output_callables = {
             'mass_A': lambda: Integrate(adr_system.sol[0], mesh, VOL_or_BND = BND),
@@ -229,7 +224,6 @@ def test_lomakin_2D_feedback(
                 arr = adr_system.sol[1].vec.FV().NumPy()
                 adr_system.sol[1].vec.data[:] = np.clip(arr, a_min=0, a_max = 1e100)
                 depleted = True
-            scene.Redraw()
 
     except Exception as e:
         print('Simulation terminated with error')
