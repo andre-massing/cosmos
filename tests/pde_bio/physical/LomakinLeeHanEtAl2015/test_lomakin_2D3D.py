@@ -42,7 +42,7 @@ def test_lomakin_3D(
         R = 10
         mesh = generate_boundary_sphere(R=R, maxh = 0.8)
         ns = specialcf.normal(3)
-        Area0 = Integrate(CF((x, 0, 0))*ns, mesh, VOL_or_BND=BND)
+        Area0 = Integrate(1, mesh, VOL_or_BND=BND)
 
         from cosmos.core.model import CosmosModel
         root = artifacts_path
@@ -94,7 +94,7 @@ def test_lomakin_3D(
             'y_bary': lambda: Integrate(y, mesh, VOL_or_BND = BND)/Integrate(1, mesh, VOL_or_BND = BND), 
             'z_bary': lambda: Integrate(z, mesh, VOL_or_BND = BND)/Integrate(1, mesh, VOL_or_BND = BND), 
             'area': lambda: Integrate(1, mesh, VOL_or_BND = BND),
-            'volume': lambda: Integrate(CF((x, 0, 0))*ns, mesh, VOL_or_BND = BND),
+            'volume': lambda: Integrate(1, mesh, VOL_or_BND = BND),
             'min_A': lambda: np.min(adr_system.sol[0].vec.FV().NumPy()), 
             'max_A': lambda: np.max(adr_system.sol[0].vec.FV().NumPy()), 
             'min_B': lambda: np.min(adr_system.sol[1].vec.FV().NumPy()), 
@@ -148,7 +148,7 @@ def test_lomakin_3D_feedback(
         R = 10
         mesh = generate_boundary_sphere(R=R, maxh = 0.8)
         ns = specialcf.normal(3)
-        Area0 = Integrate(CF((x, 0, 0))*ns, mesh, VOL_or_BND=BND)
+        Area0 = Integrate(1, mesh, VOL_or_BND=BND)
 
         from cosmos.core.model import CosmosModel
         root = artifacts_path
@@ -165,7 +165,7 @@ def test_lomakin_3D_feedback(
 
         ale = model.create_ale(name = 'ale', compartment=comp1)
         def Tension():
-            Area = Integrate(CF((x, 0, 0))*ns, mesh, VOL_or_BND=BND)
+            Area = Integrate(1, mesh, VOL_or_BND=BND)
             T = (Area**(s+1))/(Area**s + Area0**s)
             return T
         def V():
@@ -206,7 +206,7 @@ def test_lomakin_3D_feedback(
             'y_bary': lambda: Integrate(y, mesh, VOL_or_BND = BND)/Integrate(1, mesh, VOL_or_BND = BND), 
             'z_bary': lambda: Integrate(z, mesh, VOL_or_BND = BND)/Integrate(1, mesh, VOL_or_BND = BND), 
             'area': lambda: Integrate(1, mesh, VOL_or_BND = BND),
-            'volume': lambda: Integrate(CF((x, 0, 0))*ns, mesh, VOL_or_BND = BND),
+            'volume': lambda: Integrate(1, mesh, VOL_or_BND = BND),
             'min_A': lambda: np.min(adr_system.sol[0].vec.FV().NumPy()), 
             'max_A': lambda: np.max(adr_system.sol[0].vec.FV().NumPy()), 
             'min_B': lambda: np.min(adr_system.sol[1].vec.FV().NumPy()), 
@@ -310,7 +310,7 @@ def test_lomakin_2D(
             'x_bary': lambda: Integrate(x, mesh, VOL_or_BND = BND)/Integrate(1, mesh, VOL_or_BND = BND),
             'y_bary': lambda: Integrate(y, mesh, VOL_or_BND = BND)/Integrate(1, mesh, VOL_or_BND = BND), 
             'area': lambda: Integrate(1, mesh, VOL_or_BND = BND),
-            'volume': lambda: Integrate(CF((x, 0))*ns, mesh, VOL_or_BND = BND),
+            'volume': lambda: Integrate(1, mesh, VOL_or_BND = BND),
             'min_A': lambda: np.min(adr_system.sol[0].vec.FV().NumPy()), 
             'max_A': lambda: np.max(adr_system.sol[0].vec.FV().NumPy()), 
             'min_B': lambda: np.min(adr_system.sol[1].vec.FV().NumPy()), 
@@ -364,7 +364,7 @@ def test_lomakin_2D_feedback(
         R = 10
         mesh = generate_boundary_1D_circle(r=R, N = 100)
         ns = specialcf.normal(2)
-        Area0 = Integrate(CF((x, 0))*ns, mesh, VOL_or_BND=BND)
+        Area0 = Integrate(1, mesh, VOL_or_BND=BND)
 
         from cosmos.core.model import CosmosModel
         root = artifacts_path
@@ -381,7 +381,7 @@ def test_lomakin_2D_feedback(
 
         ale = model.create_ale(name = 'ale', compartment=comp1)
         def Tension():
-            Area = Integrate(CF((x, 0))*ns, mesh, VOL_or_BND=BND)
+            Area = Integrate(1, mesh, VOL_or_BND=BND)
             T = (Area**(s+1))/(Area**s + Area0**s)
             return T
         def V():
@@ -421,7 +421,7 @@ def test_lomakin_2D_feedback(
             'x_bary': lambda: Integrate(x, mesh, VOL_or_BND = BND)/Integrate(1, mesh, VOL_or_BND = BND),
             'y_bary': lambda: Integrate(y, mesh, VOL_or_BND = BND)/Integrate(1, mesh, VOL_or_BND = BND), 
             'area': lambda: Integrate(1, mesh, VOL_or_BND = BND),
-            'volume': lambda: Integrate(CF((x, 0))*ns, mesh, VOL_or_BND = BND),
+            'volume': lambda: Integrate(1, mesh, VOL_or_BND = BND),
             'min_A': lambda: np.min(adr_system.sol[0].vec.FV().NumPy()), 
             'max_A': lambda: np.max(adr_system.sol[0].vec.FV().NumPy()), 
             'min_B': lambda: np.min(adr_system.sol[1].vec.FV().NumPy()), 
