@@ -23,7 +23,6 @@ class CosmosIOManager:
 
         self.params = kwargs
         self.root = None
-        self.sample_rate = None
         self.samples = None
         self.output_step_data = None
         self.output_step_headers = ['iter', 'time', 'dt', 'step_elapsed', 'ale_elapsed']
@@ -33,9 +32,7 @@ class CosmosIOManager:
         if 'root' in self.params.keys():
             self.root = os.path.join(self.params['root'], model.name)
             os.makedirs(self.root, exist_ok=True)
-            if 'sample_rate' in self.params.keys():
-                self.sample_rate = self.params['sample_rate']
-            elif 'samples' in self.params.keys():
+            if 'samples' in self.params.keys():
                 self.samples = self.params['samples']
                 self.N = 0
             else:
@@ -109,7 +106,6 @@ class CosmosIOManager:
     def save_step_data(self, model: "CosmosModel"):
 
         if self.root != None:
-            # if model.time.iter % self.sample_rate == 0:
 
             dt_save = (model.time.t1-model.time.t0)/self.samples
             if (model.time.t.Get()-model.time.t0)//dt_save>=self.N:
@@ -133,7 +129,7 @@ class CosmosIOManager:
                         else:
                             raise Exception('Unknown format for 2D BND output')
                     write_curve_meshio(
-                        self.bnd_output_vtk_name + f"_step{round(model.time.iter/self.sample_rate):05d}.vtu",
+                        self.bnd_output_vtk_name + f"_step{self.N:05d}.vtu",
                         points_xy=points_xy,
                         point_scalars=pdata_s,
                         point_vectors=pdata_v

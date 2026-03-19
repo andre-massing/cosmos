@@ -9,6 +9,7 @@ import logging
 import pytest
 from cosmos.utils.generate_meshes import generate_boundary_1D_circle
 from cosmos.pde.adr.boundary.adr_boundary_system_bdf1_model_nostab import ADRBoundarySystemBDF1Model
+import traceback
 
 logging.getLogger().setLevel(logging.INFO)
 
@@ -114,6 +115,7 @@ def test_lomakin_2D(
                 depleted = True
 
     except Exception as e:
+        traceback.print_exc()
         print('Simulation terminated with error')
         print(e)
 
@@ -226,5 +228,6 @@ def test_lomakin_2D_feedback(
                 depleted = True
 
     except Exception as e:
+        traceback.print_exc()
         print('Simulation terminated with error')
         print(e)
