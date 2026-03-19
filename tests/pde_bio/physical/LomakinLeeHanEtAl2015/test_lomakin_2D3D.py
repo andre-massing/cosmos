@@ -364,7 +364,7 @@ def test_lomakin_2D_feedback(
         R = 10
         mesh = generate_boundary_1D_circle(r=R, N = 100)
         ns = specialcf.normal(2)
-        Area0 = Integrate(1, mesh, VOL_or_BND=BND)
+        Area0 = Integrate(CF((x, 0))*ns, mesh, VOL_or_BND=BND)
 
         from cosmos.core.model import CosmosModel
         root = artifacts_path
@@ -381,7 +381,7 @@ def test_lomakin_2D_feedback(
 
         ale = model.create_ale(name = 'ale', compartment=comp1)
         def Tension():
-            Area = Integrate(1, mesh, VOL_or_BND=BND)
+            Area = Integrate(CF((x, 0))*ns, mesh, VOL_or_BND=BND)
             T = (Area**(s+1))/(Area**s + Area0**s)
             return T
         def V():
