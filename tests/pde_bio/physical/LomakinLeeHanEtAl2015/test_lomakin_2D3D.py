@@ -49,7 +49,7 @@ def test_lomakin_3D(
         model_name = f"angle{angle}_a12_{a12}_a21_{a21}"
         model = CosmosModel(name = model_name, parentmesh = mesh, dt = dt, t0 = t0, t1 = t1,
                             root = root, samples = 100,
-                            coupling_type = 'implicit',
+                            coupling_type = 'implicit', surface_ALE = 'mdr',
                             redistribute = True, adaptive_timestep = True)
 
         comp1 = model.create_compartment(name = 'compartment', boundary = 'default', bboundary = '')
@@ -74,12 +74,12 @@ def test_lomakin_3D(
             u0_1 = 0.1,
             d_1 = 0.1,
             c_1 = -r1,
-            b_1 = lambda: model.ale.Vo,
+            b_1 = lambda: model.ale.V,
             bounds_1 = [0, 1e100],
             u0_2 = 1,
             d_2 = 0.1,
             c_2 = -r2,
-            b_2 = lambda: model.ale.Vo,
+            b_2 = lambda: model.ale.V,
             bounds_2 = [0, 1e100],
             printing = True,
         )
@@ -155,7 +155,7 @@ def test_lomakin_3D_feedback(
         model_name = f"angle{angle}_a12_{a12}_a21_{a21}"
         model = CosmosModel(name = model_name, parentmesh = mesh, dt = dt, t0 = t0, t1 = t1,
                             root = root, samples = 100,
-                            coupling_type = 'implicit',
+                            coupling_type = 'implicit', surface_ALE = 'mdr',
                             redistribute = True, adaptive_timestep = True)
 
         comp1 = model.create_compartment(name = 'compartment', boundary = 'default', bboundary = '')
@@ -185,12 +185,12 @@ def test_lomakin_3D_feedback(
             u0_1 = 0.1,
             d_1 = 0.1,
             c_1 = -r1,
-            b_1 = lambda: model.ale.Vo,
+            b_1 = lambda: model.ale.V,
             bounds_1 = [0, 1e100],
             u0_2 = 1,
             d_2 = 0.1,
             c_2 = -r2,
-            b_2 = lambda: model.ale.Vo,
+            b_2 = lambda: model.ale.V,
             bounds_2 = [0, 1e100],
             printing = True,
         )
@@ -266,7 +266,7 @@ def test_lomakin_2D(
         model_name = f"angle{angle}_a12_{a12}_a21_{a21}"
         model = CosmosModel(name = model_name, parentmesh = mesh, dt = dt, t0 = t0, t1 = t1,
                             root = root, samples = 100,
-                            coupling_type = 'implicit',
+                            coupling_type = 'implicit', surface_ALE = 'mdr',
                             redistribute = True, adaptive_timestep = True)
 
         comp1 = model.create_compartment(name = 'compartment', boundary = 'default', bboundary = '')
@@ -291,12 +291,12 @@ def test_lomakin_2D(
             u0_1 = 0.1,
             d_1 = 0.1,
             c_1 = -r1,
-            b_1 = lambda: model.ale.Vo,
+            b_1 = lambda: model.ale.V,
             bounds_1 = [0, 1e100],
             u0_2 = 1,
             d_2 = 0.1,
             c_2 = -r2,
-            b_2 = lambda: model.ale.Vo,
+            b_2 = lambda: model.ale.V,
             bounds_2 = [0, 1e100],
             printing = True,
         )
@@ -371,7 +371,7 @@ def test_lomakin_2D_feedback(
         model_name = f"angle{angle}_a12_{a12}_a21_{a21}"
         model = CosmosModel(name = model_name, parentmesh = mesh, dt = dt, t0 = t0, t1 = t1,
                             root = root, samples = 100,
-                            coupling_type = 'implicit',
+                            coupling_type = 'implicit', surface_ALE = 'mdr',
                             redistribute = True, adaptive_timestep = True)
 
         comp1 = model.create_compartment(name = 'compartment', boundary = 'default', bboundary = '')
@@ -401,12 +401,12 @@ def test_lomakin_2D_feedback(
             u0_1 = 0.1,
             d_1 = 0.1,
             c_1 = -r1,
-            b_1 = lambda: model.ale.Vo,
+            b_1 = lambda: model.ale.V,
             bounds_1 = [0, 1e100],
             u0_2 = 1,
             d_2 = 0.1,
             c_2 = -r2,
-            b_2 = lambda: model.ale.Vo,
+            b_2 = lambda: model.ale.V,
             bounds_2 = [0, 1e100],
             printing = True,
         )
