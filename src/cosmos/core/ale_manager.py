@@ -22,11 +22,11 @@ class CosmosALEManager:
         if 'volume_ALE' in kwargs:
             self.volume_ALE = kwargs['volume_ALE']
         else:
-            self.volume_ALE = 'linel'
+            self.volume_ALE = 'laplace'
         if 'surface_ALE' in kwargs:
             self.surface_ALE = kwargs['surface_ALE']
         else:
-            self.surface_ALE = 'ms'
+            self.surface_ALE = 'mdr'
         self.redistribute = False
         self.ale_elapsed_time = None
 

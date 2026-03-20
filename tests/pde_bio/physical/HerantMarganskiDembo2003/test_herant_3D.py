@@ -75,7 +75,7 @@ def test_herant_3D_vp_clamped(
     adr_bnd = model.create_pde(name = 'indicator', pde_model=ADRBoundarySystemBDF1Model, compartment=comp1, ale_type = 1, dim = 1)
     adr_bnd.set_params(
         Neu_bnd = 'bboundary',
-        b_1 = lambda: model.ale.Vo,
+        b_1 = lambda: model.ale.V,
         u0_1 = 1/(1+exp(-100*(x-R_PMN*phi_cap))),
         printing = True
     )
@@ -89,7 +89,7 @@ def test_herant_3D_vp_clamped(
         d_1 = D_m,
         c_1 = k_deg,
         gradu_bnd_1 = lambda: IfPos(adr_bnd.sol[0], adr_bnd.sol[0], 0)*k_prod/D_m*ns*IfPos(t-50, 0, 1),
-        b_1 = lambda: model.ale.Vo,
+        b_1 = lambda: model.ale.V,
         printing = True
     )
 
