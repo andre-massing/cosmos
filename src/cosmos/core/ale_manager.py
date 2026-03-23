@@ -149,19 +149,19 @@ class CosmosALEManager:
             ale.update(model, self.redistribute)
 
         if self.bnd_ales:
-            self.gfu_bnd_ale.Set(self.bnd_ale_cf, definedon = model.parentmesh.Boundaries('.*'), dual = True)
+            self.gfu_bnd_ale.Set(self.bnd_ale_cf, definedon = model.parentmesh.Boundaries('.*'))
             if model.is_vol:
                 self._extend_displacement_to_bulk(self.gfu_bnd_ale)
             self.dY.vec.data += self.gfu_bnd_ale.vec.data
 
-            self.gfu_bnd_mat.Set(self.bnd_mat_cf, definedon = model.parentmesh.Boundaries('.*'), dual = True)
+            self.gfu_bnd_mat.Set(self.bnd_mat_cf, definedon = model.parentmesh.Boundaries('.*'))
             if model.is_vol:
                 self._extend_displacement_to_bulk(self.gfu_bnd_mat)
             self.dY_mat.vec.data += self.gfu_bnd_mat.vec.data
 
         if self.vol_ales:
-            self.gfu_vol_ale.Set(self.vol_ale_cf, dual = True)
-            self.gfu_vol_mat.Set(self.vol_mat_cf, dual = True)
+            self.gfu_vol_ale.Set(self.vol_ale_cf)
+            self.gfu_vol_mat.Set(self.vol_mat_cf)
 
             self.dY.vec.data += self.gfu_vol_ale.vec.data
             self.dY_mat.vec.data += self.gfu_vol_mat.vec.data
@@ -169,8 +169,8 @@ class CosmosALEManager:
         if self.bnd_ales or self.vol_ales:
             self.Y.vec.data = self.Yo.vec.data + self.dY.vec.data
             self.X.vec.data = self.Xo.vec.data + self.dY.vec.data
-            self.W.Set(self.dY/model.dt, definedon = self.domain, dual = True)
-            self.V.Set(self.dY_mat/model.dt, definedon = self.domain, dual = True)
+            self.W.Set(self.dY/model.dt, definedon = self.domain)
+            self.V.Set(self.dY_mat/model.dt, definedon = self.domain)
 
         stop = time.time()
 
@@ -349,9 +349,9 @@ class CosmosBndALEField:
         # gfu0 = GridFunction(model.ale.Yo.space)
         # X0 = GridFunction(model.ale.Yo.space)
         # if model.dim == 2:
-        #     X0.Set(CF((x, y)), definedon = compartment.domain, dual = True)
+        #     X0.Set(CF((x, y)), definedon = compartment.domain)
         # elif model.dim == 3:
-        #     X0.Set(CF((x, y, z)), definedon = compartment.domain, dual = True)
+        #     X0.Set(CF((x, y, z)), definedon = compartment.domain)
 
         # def deviatoric(u):
         #     return Sym(Grad(u).Trace()) - Trace(Sym(Grad(u).Trace()))/model.dim*Id(model.dim)
@@ -393,7 +393,7 @@ class CosmosBndALEField:
                 raise Exception(f'Tangential velocity for ALE {self.name} must be set')
 
             if redistribute:
-                self.gfu_norm_vel.Set(self.normal_velocity(), definedon = self.compartment.domain, dual = True)
+                self.gfu_norm_vel.Set(self.normal_velocity(), definedon = self.compartment.domain)
                 self.ale_displ.vec.data[:] = 0
                 self.A_pp.Assemble()
                 self.invA_pp.Update()
@@ -402,7 +402,7 @@ class CosmosBndALEField:
                 self.gfu_pp.vec.data = self.invA_pp*self.F_pp.vec
                 self.ale_displ.vec.data = self.gfu_pp.components[0].vec.data
             else:
-                self.gfu_norm_vel.Set(self.normal_velocity(), definedon = self.compartment.domain, dual = True)
+                self.gfu_norm_vel.Set(self.normal_velocity(), definedon = self.compartment.domain)
                 self.ale_displ.Set((self.gfu_norm_vel*self.ns + self.Ps*self.tangential_velocity())*model.time.dt, definedon = self.compartment.domain)
             self.mat_displ.Set((self.normal_velocity()*self.ns + self.Ps*self.tangential_velocity())*model.time.dt, definedon = self.compartment.domain)
 
@@ -431,5 +431,5 @@ class CosmosVolALEField:
         if self.domain_velocity == None:
             raise Exception(f'Domain velocity for ALE {self.name} must be set')
         
-        self.ale_displ.Set(self.domain_velocity()*model.time.dt, definedon = self.compartment.domain, dual = True)
+        self.ale_displ.Set(self.domain_velocity()*model.time.dt, definedon = self.compartment.domain)
         self.mat_displ.vec.data = self.ale_displ.vec.data

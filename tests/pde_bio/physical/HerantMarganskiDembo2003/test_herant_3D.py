@@ -16,8 +16,8 @@ from cosmos.pde.adr.boundary.adr_boundary_system_bdf1_model_nostab import ADRBou
 logging.getLogger().setLevel(logging.INFO)
 
 @pytest.mark.parametrize("gamma_tension", [100])
-@pytest.mark.parametrize("gamma_curv", [0.1])
-@pytest.mark.parametrize("phi_cap", [0.99])
+@pytest.mark.parametrize("gamma_curv", [0.1, 1, 10])
+@pytest.mark.parametrize("phi_cap", [0.99, 0.96, 0.93])
 def test_herant_3D_vp_clamped(
         request,
         artifacts_path,
