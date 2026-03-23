@@ -9,7 +9,7 @@ from cosmos import *
 import pytest
 import logging
 
-from dendritic_spine_geom import generate_synapse2d
+from cosmos.utils.dendritic_spine_geom import generate_synapse2d
 
 logging.getLogger().setLevel(logging.INFO)
 
