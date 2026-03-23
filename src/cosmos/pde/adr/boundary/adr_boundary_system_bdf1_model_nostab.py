@@ -49,8 +49,8 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
         for i in range(self.sys_dim-1):
             self.fes = self.fes*self.V
 
-        V2 = H1(model.parentmesh, order = self.params["fes_order"], 
-                                definedon = compartment.domain, dim = model.dim)
+        V2 = VectorH1(model.parentmesh, order = self.params["fes_order"], 
+                                definedon = compartment.domain)
 
         for i in range(self.sys_dim):
             self.params["mass_preserving_" + str(i+1)] = False
@@ -210,8 +210,8 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
             self.params["gfu_d_" + str(i+1)].Set(self.params["d_" + str(i+1)]().Compile(), definedon = self.compartment.domain)
             self.params["gfu_b_" + str(i+1)].Set(self.params["b_" + str(i+1)]().Compile() - self.model.ale.Wo, definedon = self.compartment.domain)
             self.params["gfu_rhs_" + str(i+1)].Set(self.params["rhs_" + str(i+1)]().Compile(), definedon = self.compartment.domain)
-            self.params["gfu_u_bnd_" + str(i+1)].Set(self.params["u_bnd_" + str(i+1)]().Compile(), definedon = self.compartment.boundary)
-            self.params["gfu_gradu_bnd_" + str(i+1)].Set(self.params["gradu_bnd_" + str(i+1)]().Compile(), definedon = self.compartment.boundary)
+            self.params["gfu_u_bnd_" + str(i+1)].Set(self.params["u_bnd_" + str(i+1)]().Compile(), definedon = self.compartment.domain)
+            self.params["gfu_gradu_bnd_" + str(i+1)].Set(self.params["gradu_bnd_" + str(i+1)]().Compile(), definedon = self.compartment.domain)
 
         self.A.Assemble()
         self.invA.Update()

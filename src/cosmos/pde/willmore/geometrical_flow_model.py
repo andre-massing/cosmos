@@ -161,6 +161,9 @@ class GeometricalFlowModel(BasePDEModel):
 
         self.gfu_rhs.Set(self.params['rhs'](), definedon = self.compartment.domain)
 
+        self.A.Assemble()
+        self.invA.Update()
+
         if self.params['area_preserving'] or self.params['volume_preserving']:
 
             iter = 0

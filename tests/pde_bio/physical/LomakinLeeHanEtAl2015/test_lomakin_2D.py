@@ -49,7 +49,7 @@ def test_lomakin_2D(
         model_name = f"angle{angle}_a12_{a12}_a21_{a21}"
         model = CosmosModel(name = model_name, parentmesh = mesh, dt = dt, t0 = t0, t1 = t1,
                             root = root, samples = 100,
-                            coupling_type = 'implicit', surface_ALE = 'mdr',
+                            coupling_type = 'implicit', surface_ALE = 'ms',
                             redistribute = True, adaptive_timestep = True)
 
         comp1 = model.create_compartment(name = 'compartment', boundary = 'default', bboundary = '')
@@ -156,7 +156,7 @@ def test_lomakin_2D_feedback(
         model_name = f"angle{angle}_a12_{a12}_a21_{a21}"
         model = CosmosModel(name = model_name, parentmesh = mesh, dt = dt, t0 = t0, t1 = t1,
                             root = root, samples = 100,
-                            coupling_type = 'implicit', surface_ALE = 'mdr',
+                            coupling_type = 'implicit', surface_ALE = 'ms',
                             redistribute = True, adaptive_timestep = True)
 
         comp1 = model.create_compartment(name = 'compartment', boundary = 'default', bboundary = '')
