@@ -163,6 +163,9 @@ class GeometricalFlowStationaryModel(BasePDEModel):
         
         if self.params['area_preserving'] or self.params['volume_preserving']:
 
+            self.A.Assemble()
+            self.invA.Update()
+
             iter = 0
             lam_old = 0
             lam_new = 0
@@ -226,7 +229,7 @@ class GeometricalFlowStationaryModel(BasePDEModel):
             self.V_h.vec.data[:] = 0
 
             self.A.Assemble()
-            self.invA = self.A.mat.Inverse(freedofs = self.fes.FreeDofs())
+            self.invA.Update()
             self.F.Assemble()
 
             res = self.A.mat*self.gfu.vec
