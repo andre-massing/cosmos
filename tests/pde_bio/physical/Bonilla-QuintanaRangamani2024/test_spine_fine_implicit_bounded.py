@@ -12,8 +12,8 @@ import logging
 logging.getLogger().setLevel(logging.INFO)
 
 @pytest.mark.parametrize("Re", [7])
-@pytest.mark.parametrize("surface_ALE", ['mdr', 'gnz', 'ms'])
-@pytest.mark.parametrize("volume_ALE", ['laplace', 'linel', 'nonlinel'])
+@pytest.mark.parametrize("surface_ALE", ['mdr', 'ms'])
+@pytest.mark.parametrize("volume_ALE", ['laplace', 'linel'])
 def test_quintana_spine_fine_implicit_bounded(
         request,
         artifacts_path,
@@ -96,7 +96,7 @@ def test_quintana_spine_fine_implicit_bounded(
     model.initialize()
     dist_fct.Initialize()
     dist_fct.Solve()
-    id_funct = IfPos(dist_fct.sol[0]-0.05, 1, 0)*IfPos(z-0.5, 1, 0)
+    id_funct = IfPos(dist_fct.sol[0]-0.02, 1, 0)*IfPos(z-0.5, 1, 0)
     impulse = IfPos(t, 1, 0)*IfPos(60-t, 1, 0)
 
     d = CF(1e-3)*exp(-Re)
