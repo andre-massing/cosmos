@@ -196,7 +196,7 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
 
             self.params["gfu_c_" + str(i+1)].Set(self.params["c_" + str(i+1)]().Compile(), definedon = self.compartment.domain)
             self.params["gfu_d_" + str(i+1)].Set(self.params["d_" + str(i+1)]().Compile(), definedon = self.compartment.domain)
-            self.params["gfu_b_" + str(i+1)].Set(self.params["b_" + str(i+1)]().Compile() - self.model.ale.Wo, definedon = self.compartment.domain)
+            self.params["gfu_b_" + str(i+1)].Set(self.params["b_" + str(i+1)]().Compile() - self.model.ale.W, definedon = self.compartment.domain)
             self.params["gfu_rhs_" + str(i+1)].Set(self.params["rhs_" + str(i+1)]().Compile(), definedon = self.compartment.domain)
             self.params["gfu_u_bnd_" + str(i+1)].Set(self.params["u_bnd_" + str(i+1)]().Compile(), definedon = self.compartment.boundary)
             self.params["gfu_gradu_bnd_" + str(i+1)].Set(self.params["gradu_bnd_" + str(i+1)]().Compile(), definedon = self.compartment.boundary)
