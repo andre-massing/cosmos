@@ -49,7 +49,7 @@ def test_spine2D_5s(
     N = 3
 
     dt = 0.01
-    T = 70
+    T = -55
     dt = Parameter(dt)
     t = Parameter(-60)
 
