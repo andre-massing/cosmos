@@ -348,48 +348,168 @@ class CosmosAliasMesh:
         self.sections["cd2names"].dim = loop_id
 
     def mark_cd_elements(self, mesh_to_mark):
+        """
+        Marks surface elements and edge segments from mesh_to_mark onto this mesh,
+        adding a new boundary condition to the matched surface triangles and
+        remapping edge segments to the new mesh's point indices.
+        """
 
-        pnts_old_to_new = []
-        for i, point_new in enumerate(self.sections['points'].entries, start = 1):
-            found = False
-            for j, point_old in enumerate(mesh_to_mark.sections['points'].entries, start = 1):
-                if all(any(math.isclose(float(m), float(n)) for m in point_old) for n in point_new):
-                    found = True
-                    pnts_old_to_new.append(j)
-            if not found:
-                pnts_old_to_new.append(0)
+        # --- 1. Build point correspondence: new mesh index -> old mesh index ---
+        pts_new = np.array([[float(p[k]) for k in range(3)]
+                            for p in self.sections['points'].entries])
+        pts_old = np.array([[float(p[k]) for k in range(3)]
+                            for p in mesh_to_mark.sections['points'].entries])
 
-        bnd_mark_id = max(self.sections['bcnames'].dim+1, 2)
-        bnd_mark_name = 'boundary' + str(bnd_mark_id)
+        pnts_new_to_old = []
+        unmatched = []
 
-        bbnd_mark_id = max(self.sections['cd2names'].dim+1, 2)
-        bbnd_mark_name = 'bboundary' + str(bbnd_mark_id)
+        for i, point_new in enumerate(pts_new):
+            # Fast exact match first
+            diffs = np.abs(pts_old - point_new)
+            exact = np.where(np.all(diffs < 1e-10, axis=1))[0]
+            if exact.size > 0:
+                pnts_new_to_old.append(int(exact[0]) + 1)  # 1-based
+            else:
+                # Nearest-neighbour fallback for floating point edge cases
+                dists = np.linalg.norm(pts_old - point_new, axis=1)
+                nearest_j = int(np.argmin(dists))
+                nearest_dist = dists[nearest_j]
+                if nearest_dist < 1e-6:
+                    pnts_new_to_old.append(nearest_j + 1)
+                    unmatched.append((i + 1, nearest_dist))
+                else:
+                    pnts_new_to_old.append(0)
 
-        for i, surfel_new in enumerate(self.sections['surfaceelements'].entries, start = 1):
-            for j, surfel_old in enumerate(mesh_to_mark.sections['surfaceelements'].entries, start = 1):
+        n_matched = sum(1 for x in pnts_new_to_old if x != 0)
+        print(f"Matched {n_matched} / {len(pnts_new_to_old)} points.")
+        if unmatched:
+            print(f"  {len(unmatched)} used nearest-neighbour fallback (all distances negligible):")
+            for pnum, dist in unmatched:
+                print(f"    point {pnum}: dist = {dist:.2e}")
+        if n_matched == 0:
+            raise Exception("No points matched — are the two meshes in the same coordinate space?")
 
-                set1 = (int(surfel_old[5]), int(surfel_old[6]), int(surfel_old[7]))
-                set2 = (pnts_old_to_new[int(surfel_new[5])-1], pnts_old_to_new[int(surfel_new[6])-1], pnts_old_to_new[int(surfel_new[7])-1])
-                if all(el in set2 for el in set1):
-                    surfel_new[1] = str(bnd_mark_id)
+        # Reverse map: old index -> new index (for remapping edge segments)
+        old_to_new = {
+            old_idx: new_idx
+            for new_idx, old_idx in enumerate(pnts_new_to_old, start=1)
+            if old_idx != 0
+        }
 
+        # --- 2. Mark surface elements that match mesh_to_mark's surface triangles ---
+        bnd_mark_id   = max(self.sections['bcnames'].dim + 1, 2)
+        bnd_mark_name = f"boundary{bnd_mark_id}"
+
+        # Build a set of canonical triangle keys from mesh_to_mark for O(1) lookup
+        old_surf_keys = {
+            frozenset([int(e[5]), int(e[6]), int(e[7])])
+            for e in mesh_to_mark.sections['surfaceelements'].entries
+        }
+
+        n_marked = 0
+        for surfel_new in self.sections['surfaceelements'].entries:
+            old_indices = {pnts_new_to_old[int(surfel_new[k]) - 1] for k in [5, 6, 7]}
+            if old_indices in [fs for fs in old_surf_keys if fs == old_indices]:
+                surfel_new[1] = str(bnd_mark_id)
+                n_marked += 1
+        print(f"Marked {n_marked} surface elements with bcnr={bnd_mark_id}.")
+
+        # Update bcnames
         if self.sections['bcnames'].dim == 0:
+            self.sections['bcnames'].entries = [['1', 'default'], ['2', 'boundary2']]
             self.sections['bcnames'].dim = 2
-            self.sections['bcnames'].entries.append(['1', 'default'])
-            self.sections['bcnames'].entries.append(['2', 'boundary2'])
         else:
+            self.sections['bcnames'].entries.append([str(bnd_mark_id), bnd_mark_name])
             self.sections['bcnames'].dim += 1
-            self.sections['bcnames'].entries.append([str(bnd_mark_id),  bnd_mark_name])
 
-        self.sections['edgesegmentsgi2'].entries = []
-        for j, edge_el_old in enumerate(mesh_to_mark.sections['edgesegmentsgi2'].entries, start = 1):
-            edge_el_new = [cmp for cmp in edge_el_old]
-            edge_el_new[2] = pnts_old_to_new.index(int(edge_el_old[2]))+1
-            edge_el_new[3] = pnts_old_to_new.index(int(edge_el_old[3]))+1
-            self.sections['edgesegmentsgi2'].entries.append(edge_el_new)
-        self.sections['edgesegmentsgi2'].dim = mesh_to_mark.sections['edgesegmentsgi2'].dim
-        self.sections['cd2names'].dim = copy.deepcopy(mesh_to_mark.sections['cd2names'].dim)
-        self.sections['cd2names'].entries = copy.deepcopy(mesh_to_mark.sections['cd2names'].entries)
+        # --- 3. Remap edge segments from mesh_to_mark into this mesh ---
+        remapped_edges = []
+        skipped_edges  = []
+
+        for j, edge_old in enumerate(mesh_to_mark.sections['edgesegmentsgi2'].entries, start=1):
+            old_p2, old_p3 = int(edge_old[2]), int(edge_old[3])
+            if old_p2 not in old_to_new or old_p3 not in old_to_new:
+                skipped_edges.append((j, old_p2, old_p3))
+                continue
+            edge_new    = list(edge_old)
+            edge_new[2] = old_to_new[old_p2]
+            edge_new[3] = old_to_new[old_p3]
+            remapped_edges.append(edge_new)
+
+        if skipped_edges:
+            print(f"Warning: {len(skipped_edges)} edge segments skipped (unmapped points):")
+            for j, p2, p3 in skipped_edges:
+                print(f"  segment {j}: old points ({p2}, {p3})")
+
+        self.sections['edgesegmentsgi2'].entries = remapped_edges
+        self.sections['edgesegmentsgi2'].dim     = len(remapped_edges)
+        self.sections['cd2names'].dim            = copy.deepcopy(mesh_to_mark.sections['cd2names'].dim)
+        self.sections['cd2names'].entries        = copy.deepcopy(mesh_to_mark.sections['cd2names'].entries)
+
+        print(f"Remapped {len(remapped_edges)} edge segments.")
+        
+    def build_surface_from_volume(self, surfnr=1, bcnr=1, domin=1, domout=0):
+        """
+        Extracts boundary triangles from tetrahedral volume elements and populates
+        the surfaceelements section. Boundary faces are those belonging to exactly
+        one tetrahedron (not shared between two).
+        
+        Args:
+            surfnr: surface number / face descriptor index (default 1)
+            bcnr:   boundary condition number (default 1)
+            domin:  domain index inside the surface (default 1)
+            domout: domain index outside the surface (default 0)
+        """
+        vol_entries = self.sections['volumeelements'].entries
+        if not vol_entries:
+            raise Exception('No volume elements found in mesh.')
+
+        # Count how many tets share each face.
+        # A tet entry format is: matnr  np  p1  p2  p3  p4
+        # Faces are canonical (sorted) tuples so orientation doesn't affect counting.
+        face_count = Counter()
+        face_owners = {}  # canonical face -> original (p1,p2,p3) from first owning tet
+
+        for entry in vol_entries:
+            # entry: [matnr, np, p1, p2, p3, p4]
+            p = [int(entry[2]), int(entry[3]), int(entry[4]), int(entry[5])]
+            # The 4 faces of a tetrahedron (outward-facing winding kept as-is for now)
+            tet_faces = [
+                (p[0], p[1], p[2]),
+                (p[0], p[1], p[3]),
+                (p[0], p[2], p[3]),
+                (p[1], p[2], p[3]),
+            ]
+            for face in tet_faces:
+                canonical = tuple(sorted(face))
+                face_count[canonical] += 1
+                if canonical not in face_owners:
+                    face_owners[canonical] = face  # preserve original winding
+
+        # Boundary faces appear exactly once
+        boundary_faces = [
+            face_owners[canonical]
+            for canonical, count in face_count.items()
+            if count == 1
+        ]
+
+        if not boundary_faces:
+            raise Exception('No boundary faces found — are volume elements tetrahedral?')
+
+        # Populate surfaceelements section
+        self.sections['surfaceelements'].entries = []
+        for (p1, p2, p3) in boundary_faces:
+            self.sections['surfaceelements'].entries.append([
+                str(surfnr),
+                str(bcnr),
+                str(domin),
+                str(domout),
+                str(3),       # np = 3 (triangle)
+                str(p1),
+                str(p2),
+                str(p3),
+            ])
+        self.sections['surfaceelements'].dim = len(boundary_faces)
 
 def fill_mesh(old_mesh, maxh):
 
