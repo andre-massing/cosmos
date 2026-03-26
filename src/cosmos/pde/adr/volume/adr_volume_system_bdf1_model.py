@@ -143,7 +143,7 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
             stab = (Norm(self.params["gfu_b_" + str(i+1)]))*h**2
             jump_u = grad(trial[i])-grad(trial[i]).Other()
             jump_v = grad(test[i])-grad(test[i]).Other()
-            self.A += stab*jump_u*jump_v*dx(deformation = self.Yhalf, skeleton = True)
+            # self.A += stab*jump_u*jump_v*dx(deformation = self.Yhalf, skeleton = True)
             self.A += IfPos((self.params["gfu_b_" + str(i+1)])*n, (self.params["gfu_b_" + str(i+1)])*n*trial[i], CF(0))*test[i]\
                 *ds(deformation = self.Yhalf)
 
@@ -196,7 +196,7 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
 
             self.params["gfu_c_" + str(i+1)].Set(self.params["c_" + str(i+1)]().Compile(), definedon = self.compartment.domain)
             self.params["gfu_d_" + str(i+1)].Set(self.params["d_" + str(i+1)]().Compile(), definedon = self.compartment.domain)
-            self.params["gfu_b_" + str(i+1)].Set(self.params["b_" + str(i+1)]().Compile() - self.model.ale.Wo, definedon = self.compartment.domain)
+            self.params["gfu_b_" + str(i+1)].Set(self.params["b_" + str(i+1)]().Compile() - self.model.ale.W, definedon = self.compartment.domain)
             self.params["gfu_rhs_" + str(i+1)].Set(self.params["rhs_" + str(i+1)]().Compile(), definedon = self.compartment.domain)
             self.params["gfu_u_bnd_" + str(i+1)].Set(self.params["u_bnd_" + str(i+1)]().Compile(), definedon = self.compartment.boundary)
             self.params["gfu_gradu_bnd_" + str(i+1)].Set(self.params["gradu_bnd_" + str(i+1)]().Compile(), definedon = self.compartment.boundary)
