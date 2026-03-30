@@ -9,23 +9,24 @@ from cosmos import *
 import pytest
 import logging
 
-from cosmos.utils.dendritic_spine_geom import generate_synapse2d
-
 logging.getLogger().setLevel(logging.INFO)
 
 @pytest.mark.parametrize("Re", [7])
-@pytest.mark.parametrize("surface_ALE", ['mdr'])
+@pytest.mark.parametrize("surface_ALE", ['ms'])
 @pytest.mark.parametrize("volume_ALE", ['laplace'])
-def test_spine2D_1(
+@pytest.mark.parametrize("dt", [0.01, 0.001])
+def test_spine3D_fine_tetr_3_init(
         request,
         artifacts_path,
         Re,
         surface_ALE,
-        volume_ALE
+        volume_ALE,
+        dt
     ):
 
-    mesh = generate_synapse2d(maxh=0.02)
-    mip = mesh(0, 0.5)
+    print(request.path)
+    # mesh = Mesh('../../../../data/bio/vol/spine_sliced_fine/closed/filled/spine_refined_cut_fixed.vol')
+    mesh = Mesh('./data/bio/vol/spine_sliced_fine/closed/filled/spine_refined_cut_fixed.vol')
 
     ###################  PARAMETERS  ##################################
 
@@ -48,41 +49,42 @@ def test_spine2D_1(
     psi1 = 0.02
     N = 3
 
-    dt = 0.01
-    T = 70
+    T = -59.75
     dt = Parameter(dt)
     t = Parameter(-60)
 
     from cosmos.core.model import CosmosModel
 
     root =  artifacts_path
-    model_name = f"test_spine2D_1_volALE{volume_ALE}_surfALE{surface_ALE}_Re{Re}"
+    model_name = f"test_spine3D_fine_tetr_3_init_dt{dt}_volALE{volume_ALE}_surfALE{surface_ALE}_Re{Re}"
     model = CosmosModel(parentmesh=mesh, dt=dt, t=t, t0 = t.Get(), t1 = T,
-                        root = root, samples=400, name = model_name, coupling_type = 'implicit',
+                        root = root, samples = 400, name = model_name, coupling_type = 'implicit',
                         surface_ALE = surface_ALE, volume_ALE = volume_ALE,
                         redistribute = True, adaptive_timestep = True)
+    
+    model.print_model_data()
 
     ###################  BULK REACTIONS  ##################################
     from cosmos.pde.adr.volume.adr_volume_system_bdf1_model import ADRVolumeSystemBDF1Model
     from cosmos.pde.distance.volume.distance_volume_model import DistanceVolumeModel
     from cosmos.pde.willmore.geometrical_flow_stationary_model import GeometricalFlowStationaryModel
 
-    comp1 = model.create_compartment('bulk', material = 'default', boundary = 'membrane|default')
-    dist_fct = model.create_pde('distance_function', pde_model=DistanceVolumeModel, compartment=comp1, zero_bnd = 'membrane|default', ale_type = -1)
+    comp1 = model.create_compartment('bulk', material = 'cd0_1', boundary = 'boundary2|default')
+    dist_fct = model.create_pde('distance_function', pde_model=DistanceVolumeModel, compartment=comp1, zero_bnd = 'boundary2|default', ale_type = -1)
     dist_fct.set_params(printing = True)
     adr_sys = model.create_pde('adr_system', pde_model=ADRVolumeSystemBDF1Model, compartment=comp1, ale_type = 1, dim = 3)
 
-    comp2 = model.create_compartment('surface', boundary = 'membrane', bboundary = 'membrane_bnd', clamped_bbnd = 'membrane_bnd')
+    comp2 = model.create_compartment('surface', boundary = 'boundary2|default', bboundary = 'bboundary1', clamped_bbnd = 'bboundary1')
     geom_flow = model.create_pde('willmore', pde_model=GeometricalFlowStationaryModel, compartment=comp2, ale_type = 0)
     geom_flow.set_params(
-        rhs = lambda: adr_sys.sol[1]*1e-2,
+        rhs = lambda: adr_sys.sol[1]*1e-3,
         alpha = 1,
         printing = True
     )
 
     ale = model.create_ale('ale', compartment=comp2)
     ale.set_normal_velocity(geom_flow.V_h)
-    ale.set_tangential_velocity(CF((0,0)))
+    ale.set_tangential_velocity(CF((0,0,0)))
 
     adr_sys.add_nonlinearity(target = 1, expression = 'K_nuc*psi1*u1*u2', map={'K_nuc': K_nuc, 'psi1': psi1})
 
@@ -95,32 +97,32 @@ def test_spine2D_1(
     model.initialize()
     dist_fct.Initialize()
     dist_fct.Solve()
-    id_funct = IfPos(dist_fct.sol[0]-0.02, 1, 0)*IfPos(y-0.3, 1, 0)
+    id_funct = IfPos(dist_fct.sol[0]-0.02, 1, 0)*IfPos(z-0.5, 1, 0)
     impulse = IfPos(t, 1, 0)*IfPos(60-t, 1, 0)
 
     d = CF(1e-3)*exp(-Re)
     adr_sys.set_params(
         Neu_bnd = 'membrane|default',
         u0_1 = A0*id_funct,
-        b_1 = lambda:model.ale.Vo,
+        b_1 = lambda: model.ale.V,
         c_1 = K_A,
         d_1 = d,
         rhs_1 = I_A + I_SA*impulse,
-        gradu_bnd_1 = CF((0,0)),
+        gradu_bnd_1 = CF((0,0,0)),
         bounds_1 = [0, 1e100],
         u0_2 = B0*id_funct,
         c_2 = K_B,
-        b_2 = lambda:model.ale.Vo + dist_fct.sol[1]*1e-3*(1-exp(-Re)),
+        b_2 = lambda: model.ale.V + dist_fct.sol[1]*1e-3*(1-exp(-Re)),
         d_2 = d,
         rhs_2 = psi0*(I_B + I_SB*impulse),
-        gradu_bnd_2 = CF((0,0)),
+        gradu_bnd_2 = CF((0,0,0)),
         bounds_2 = [0, 1e100],
         u0_3 = C0*id_funct,
-        b_3 = lambda:model.ale.Vo,
+        b_3 = lambda: model.ale.V,
         c_3 = K_C,
         d_3 = d,
         rhs_3 = I_C + I_SC*impulse,
-        gradu_bnd_3 = CF((0,0)),
+        gradu_bnd_3 = CF((0,0,0)),
         bounds_3 = [0, 1e100],
         printing = True
     )
@@ -132,18 +134,6 @@ def test_spine2D_1(
         'energy': lambda: Integrate(0.5*(geom_flow.kappa_h - geom_flow.sp_curv_h)**2, mesh, VOL_or_BND = BND),
         'area': lambda: Integrate(1, mesh, VOL_or_BND = BND),
         'volume': lambda: Integrate(1, mesh, VOL_or_BND = VOL),
-        'control1_A': lambda: adr_sys.sol[0].vec.data[5],
-        'control1_B': lambda: adr_sys.sol[1].vec.data[5],
-        'control1_C': lambda: adr_sys.sol[2].vec.data[5],
-        'control2_A': lambda: adr_sys.sol[0].vec.data[6],
-        'control2_B': lambda: adr_sys.sol[1].vec.data[6],
-        'control2_C': lambda: adr_sys.sol[2].vec.data[6],
-        'control3_A': lambda: adr_sys.sol[0].vec.data[7],
-        'control3_B': lambda: adr_sys.sol[1].vec.data[7],
-        'control3_C': lambda: adr_sys.sol[2].vec.data[7],
-        'control4_A': lambda: adr_sys.sol[0](mip),
-        'control4_B': lambda: adr_sys.sol[1](mip),
-        'control4_C': lambda: adr_sys.sol[2](mip),
     }
     model.set_params(output_callables = output_callables)
 

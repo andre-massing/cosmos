@@ -76,7 +76,7 @@ def test_spine3D_intermed_1(
     comp2 = model.create_compartment('surface', boundary = 'boundary2|default', bboundary = 'bboundary1', clamped_bbnd = 'bboundary1')
     geom_flow = model.create_pde('willmore', pde_model=GeometricalFlowStationaryModel, compartment=comp2, ale_type = 0)
     geom_flow.set_params(
-        rhs = lambda: adr_sys.sol[1]*1e-2,
+        rhs = lambda: adr_sys.sol[1]*1e-3,
         alpha = 1,
         printing = True
     )

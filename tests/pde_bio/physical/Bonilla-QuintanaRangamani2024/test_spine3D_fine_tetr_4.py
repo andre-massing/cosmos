@@ -14,7 +14,7 @@ logging.getLogger().setLevel(logging.INFO)
 @pytest.mark.parametrize("Re", [7])
 @pytest.mark.parametrize("surface_ALE", ['ms'])
 @pytest.mark.parametrize("volume_ALE", ['linel'])
-def test_spine3D_fine_tetr_1(
+def test_spine3D_fine_tetr_4(
         request,
         artifacts_path,
         Re,
@@ -76,7 +76,7 @@ def test_spine3D_fine_tetr_1(
     comp2 = model.create_compartment('surface', boundary = 'boundary2|default', bboundary = 'bboundary1', clamped_bbnd = 'bboundary1')
     geom_flow = model.create_pde('willmore', pde_model=GeometricalFlowStationaryModel, compartment=comp2, ale_type = 0)
     geom_flow.set_params(
-        rhs = lambda: adr_sys.sol[1]*1e-2,
+        rhs = lambda: adr_sys.sol[1]*1e-3,
         alpha = 1,
         printing = True
     )

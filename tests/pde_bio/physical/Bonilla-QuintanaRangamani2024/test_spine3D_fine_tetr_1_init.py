@@ -12,19 +12,21 @@ import logging
 logging.getLogger().setLevel(logging.INFO)
 
 @pytest.mark.parametrize("Re", [7])
-@pytest.mark.parametrize("surface_ALE", ['mdr', 'ms'])
-@pytest.mark.parametrize("volume_ALE", ['laplace', 'linel'])
-def test_spine3D_intermed_1s(
+@pytest.mark.parametrize("surface_ALE", ['mdr'])
+@pytest.mark.parametrize("volume_ALE", ['laplace'])
+@pytest.mark.parametrize("dt", [0.01, 0.001])
+def test_spine3D_fine_tetr_1_init(
         request,
         artifacts_path,
         Re,
         surface_ALE,
-        volume_ALE
+        volume_ALE,
+        dt
     ):
 
     print(request.path)
-    # mesh = Mesh('../../../../data/bio/vol/spine_sliced_intermed/closed/filled/spine_intermed_sliced_PM_closed_filled_fixed.vol')
-    mesh = Mesh('./data/bio/vol/spine_sliced_intermed/closed/filled/spine_intermed_cut_fixed.vol')
+    # mesh = Mesh('../../../../data/bio/vol/spine_sliced_fine/closed/filled/spine_refined_cut_fixed.vol')
+    mesh = Mesh('./data/bio/vol/spine_sliced_fine/closed/filled/spine_refined_cut_fixed.vol')
 
     ###################  PARAMETERS  ##################################
 
@@ -47,15 +49,14 @@ def test_spine3D_intermed_1s(
     psi1 = 0.02
     N = 3
 
-    dt = 0.01
-    T = -59
+    T = -59.75
     dt = Parameter(dt)
     t = Parameter(-60)
 
     from cosmos.core.model import CosmosModel
 
     root =  artifacts_path
-    model_name = f"test_spine3D_intermed_1s_volALE{volume_ALE}_surfALE{surface_ALE}_Re{Re}"
+    model_name = f"test_spine3D_fine_tetr_1_init_dt{dt}_volALE{volume_ALE}_surfALE{surface_ALE}_Re{Re}"
     model = CosmosModel(parentmesh=mesh, dt=dt, t=t, t0 = t.Get(), t1 = T,
                         root = root, samples = 400, name = model_name, coupling_type = 'implicit',
                         surface_ALE = surface_ALE, volume_ALE = volume_ALE,
@@ -76,7 +77,7 @@ def test_spine3D_intermed_1s(
     comp2 = model.create_compartment('surface', boundary = 'boundary2|default', bboundary = 'bboundary1', clamped_bbnd = 'bboundary1')
     geom_flow = model.create_pde('willmore', pde_model=GeometricalFlowStationaryModel, compartment=comp2, ale_type = 0)
     geom_flow.set_params(
-        rhs = lambda: adr_sys.sol[1]*1e-2,
+        rhs = lambda: adr_sys.sol[1]*1e-3,
         alpha = 1,
         printing = True
     )

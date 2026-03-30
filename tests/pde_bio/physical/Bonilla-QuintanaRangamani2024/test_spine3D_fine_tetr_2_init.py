@@ -12,19 +12,21 @@ import logging
 logging.getLogger().setLevel(logging.INFO)
 
 @pytest.mark.parametrize("Re", [7])
-@pytest.mark.parametrize("surface_ALE", ['mdr', 'gnz', 'ms'])
-@pytest.mark.parametrize("volume_ALE", ['laplace', 'linel', 'nonlinel'])
-def test_quintana_spine_coarseNEW_implicit_bounded(
+@pytest.mark.parametrize("surface_ALE", ['mdr'])
+@pytest.mark.parametrize("volume_ALE", ['linel'])
+@pytest.mark.parametrize("dt", [0.01, 0.001])
+def test_spine3D_fine_tetr_2_init(
         request,
         artifacts_path,
         Re,
         surface_ALE,
-        volume_ALE
+        volume_ALE,
+        dt
     ):
 
     print(request.path)
-    # mesh = Mesh('../../../../data/bio/vol/spine_sliced_coarse/closed/filled/spine_coarseNEW_sliced_PM_closed_filled_fixed.vol')
-    mesh = Mesh('./data/bio/vol/spine_sliced_coarse/closed/filled/spine_coarseNEW_sliced_PM_closed_filled_fixed.vol')
+    # mesh = Mesh('../../../../data/bio/vol/spine_sliced_fine/closed/filled/spine_refined_cut_fixed.vol')
+    mesh = Mesh('./data/bio/vol/spine_sliced_fine/closed/filled/spine_refined_cut_fixed.vol')
 
     ###################  PARAMETERS  ##################################
 
@@ -47,15 +49,14 @@ def test_quintana_spine_coarseNEW_implicit_bounded(
     psi1 = 0.02
     N = 3
 
-    dt = 0.01
-    T = 70
+    T = -59.75
     dt = Parameter(dt)
     t = Parameter(-60)
 
     from cosmos.core.model import CosmosModel
 
     root =  artifacts_path
-    model_name = f"test_spine_coarse_volALE{volume_ALE}_surfALE{surface_ALE}_Re{Re}"
+    model_name = f"test_spine3D_fine_tetr_2_init_dt{dt}_volALE{volume_ALE}_surfALE{surface_ALE}_Re{Re}"
     model = CosmosModel(parentmesh=mesh, dt=dt, t=t, t0 = t.Get(), t1 = T,
                         root = root, samples = 400, name = model_name, coupling_type = 'implicit',
                         surface_ALE = surface_ALE, volume_ALE = volume_ALE,
@@ -68,7 +69,7 @@ def test_quintana_spine_coarseNEW_implicit_bounded(
     from cosmos.pde.distance.volume.distance_volume_model import DistanceVolumeModel
     from cosmos.pde.willmore.geometrical_flow_stationary_model import GeometricalFlowStationaryModel
 
-    comp1 = model.create_compartment('bulk', material = 'default', boundary = 'boundary2|default')
+    comp1 = model.create_compartment('bulk', material = 'cd0_1', boundary = 'boundary2|default')
     dist_fct = model.create_pde('distance_function', pde_model=DistanceVolumeModel, compartment=comp1, zero_bnd = 'boundary2|default', ale_type = -1)
     dist_fct.set_params(printing = True)
     adr_sys = model.create_pde('adr_system', pde_model=ADRVolumeSystemBDF1Model, compartment=comp1, ale_type = 1, dim = 3)
@@ -96,14 +97,14 @@ def test_quintana_spine_coarseNEW_implicit_bounded(
     model.initialize()
     dist_fct.Initialize()
     dist_fct.Solve()
-    id_funct = IfPos(dist_fct.sol[0]-0.05, 1, 0)*IfPos(z-0.5, 1, 0)
+    id_funct = IfPos(dist_fct.sol[0]-0.02, 1, 0)*IfPos(z-0.5, 1, 0)
     impulse = IfPos(t, 1, 0)*IfPos(60-t, 1, 0)
 
     d = CF(1e-3)*exp(-Re)
     adr_sys.set_params(
         Neu_bnd = 'membrane|default',
         u0_1 = A0*id_funct,
-        b_1 = lambda: model.ale.Vo,
+        b_1 = lambda: model.ale.V,
         c_1 = K_A,
         d_1 = d,
         rhs_1 = I_A + I_SA*impulse,
@@ -111,13 +112,13 @@ def test_quintana_spine_coarseNEW_implicit_bounded(
         bounds_1 = [0, 1e100],
         u0_2 = B0*id_funct,
         c_2 = K_B,
-        b_2 = lambda: model.ale.Vo + dist_fct.sol[1]*1e-3*(1-exp(-Re)),
+        b_2 = lambda: model.ale.V + dist_fct.sol[1]*1e-3*(1-exp(-Re)),
         d_2 = d,
         rhs_2 = psi0*(I_B + I_SB*impulse),
         gradu_bnd_2 = CF((0,0,0)),
         bounds_2 = [0, 1e100],
         u0_3 = C0*id_funct,
-        b_3 = lambda: model.ale.Vo,
+        b_3 = lambda: model.ale.V,
         c_3 = K_C,
         d_3 = d,
         rhs_3 = I_C + I_SC*impulse,
@@ -135,14 +136,6 @@ def test_quintana_spine_coarseNEW_implicit_bounded(
         'volume': lambda: Integrate(1, mesh, VOL_or_BND = VOL),
     }
     model.set_params(output_callables = output_callables)
-
-    # # sceneA = Draw(adr_sys.sol[0], mesh)
-    # sceneB = Draw(adr_sys.sol[1], mesh)
-    # # sceneC = Draw(adr_sys.sol[2], mesh)
-    # for i, sol in enumerate(model()):
-    #     # sceneA.Redraw()
-    #     sceneB.Redraw()
-    #     # sceneC.Redraw()
 
     model.run()
 

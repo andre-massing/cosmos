@@ -19,7 +19,8 @@ def test_stationary_closed(
     root =  artifacts_path
     model_name = f"test_stationary_closed_dt{dt}"
 
-    mesh = Mesh('../../../../data/bio/vol/spine_sliced/closed/spine_sliced_PM_closed_fixed.vol')
+    # mesh = Mesh('../../../../data/bio/vol/spine_sliced_coarse/closed/spine_coarse_sliced_PM_closed_fixed.vol')
+    mesh = Mesh('./data/bio/vol/spine_sliced_coarse/closed/spine_coarse_sliced_PM_closed_fixed.vol')
     model = CosmosModel(name = model_name, parentmesh=mesh, t0 = 0,
                         dt = dt, t1=1, redistribute = True,
                         root = root, samples = 100,
@@ -28,7 +29,7 @@ def test_stationary_closed(
     comp1 = model.create_compartment(name = 'comp1', boundary = 'default', bboundary = '')
     geom_flow = model.create_pde(name = 'geom_flow', pde_model=GeometricalFlowStationaryModel, compartment=comp1, ale_type = 0)
     geom_flow.set_params(
-        printing = True,
+        printing = True
     )
 
     ale1 = model.create_ale('ale1', compartment=comp1)
@@ -54,7 +55,8 @@ def test_stationary_open(
     root =  artifacts_path
     model_name = f"test_stationary_open_dt{dt}"
 
-    mesh = Mesh( '../../../../data/bio/vol/spine_sliced/open/spine_sliced_PM_fixed.vol')
+    # mesh = Mesh( '../../../../data/bio/vol/spine_sliced_coarse/open/spine_coarse_sliced_PM_fixed.vol')
+    mesh = Mesh( './data/bio/vol/spine_sliced_coarse/open/spine_coarse_sliced_PM_fixed.vol')
     model = CosmosModel(name = model_name, parentmesh=mesh, t0 = 0,
                         dt = dt, t1=1, redistribute = True,
                         root = root, samples = 100,
@@ -63,7 +65,7 @@ def test_stationary_open(
     comp1 = model.create_compartment(name = 'comp1', boundary = 'default', bboundary = 'bboundary1', clamped_bbnd = 'bboundary1')
     geom_flow = model.create_pde(name = 'geom_flow', pde_model=GeometricalFlowStationaryModel, compartment=comp1, ale_type = 0)
     geom_flow.set_params(
-        printing = True,
+        printing = True
     )
 
     ale1 = model.create_ale('ale1', compartment=comp1)
