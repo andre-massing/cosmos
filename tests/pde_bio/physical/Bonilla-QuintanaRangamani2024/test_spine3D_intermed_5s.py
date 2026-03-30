@@ -55,7 +55,7 @@ def test_spine3D_intermed_5s(
     from cosmos.core.model import CosmosModel
 
     root =  artifacts_path
-    model_name = f"test_spine3D_intermed_1_volALE{volume_ALE}_surfALE{surface_ALE}_Re{Re}"
+    model_name = f"test_spine3D_intermed_5s_volALE{volume_ALE}_surfALE{surface_ALE}_Re{Re}"
     model = CosmosModel(parentmesh=mesh, dt=dt, t=t, t0 = t.Get(), t1 = T,
                         root = root, samples = 400, name = model_name, coupling_type = 'implicit',
                         surface_ALE = surface_ALE, volume_ALE = volume_ALE,
@@ -76,7 +76,7 @@ def test_spine3D_intermed_5s(
     comp2 = model.create_compartment('surface', boundary = 'boundary2|default', bboundary = 'bboundary1', clamped_bbnd = 'bboundary1')
     geom_flow = model.create_pde('willmore', pde_model=GeometricalFlowStationaryModel, compartment=comp2, ale_type = 0)
     geom_flow.set_params(
-        rhs = lambda: adr_sys.sol[1]*1e-3,
+        rhs = lambda: adr_sys.sol[1]*1e-2,
         alpha = 1,
         printing = True
     )

@@ -76,7 +76,7 @@ def test_spine3D_fine_tetr_1(
     comp2 = model.create_compartment('surface', boundary = 'boundary2|default', bboundary = 'bboundary1', clamped_bbnd = 'bboundary1')
     geom_flow = model.create_pde('willmore', pde_model=GeometricalFlowStationaryModel, compartment=comp2, ale_type = 0)
     geom_flow.set_params(
-        rhs = lambda: adr_sys.sol[1]*1e-3,
+        rhs = lambda: adr_sys.sol[1]*1e-2,
         alpha = 1,
         printing = True
     )
@@ -103,7 +103,7 @@ def test_spine3D_fine_tetr_1(
     adr_sys.set_params(
         Neu_bnd = 'membrane|default',
         u0_1 = A0*id_funct,
-        b_1 = lambda: model.ale.Vo,
+        b_1 = lambda: model.ale.V,
         c_1 = K_A,
         d_1 = d,
         rhs_1 = I_A + I_SA*impulse,
@@ -111,13 +111,13 @@ def test_spine3D_fine_tetr_1(
         bounds_1 = [0, 1e100],
         u0_2 = B0*id_funct,
         c_2 = K_B,
-        b_2 = lambda: model.ale.Vo + dist_fct.sol[1]*1e-3*(1-exp(-Re)),
+        b_2 = lambda: model.ale.V + dist_fct.sol[1]*1e-3*(1-exp(-Re)),
         d_2 = d,
         rhs_2 = psi0*(I_B + I_SB*impulse),
         gradu_bnd_2 = CF((0,0,0)),
         bounds_2 = [0, 1e100],
         u0_3 = C0*id_funct,
-        b_3 = lambda: model.ale.Vo,
+        b_3 = lambda: model.ale.V,
         c_3 = K_C,
         d_3 = d,
         rhs_3 = I_C + I_SC*impulse,

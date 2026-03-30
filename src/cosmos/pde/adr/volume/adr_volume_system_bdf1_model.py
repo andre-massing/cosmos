@@ -126,8 +126,9 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
         self.F = LinearForm(self.fes)
 
         n = specialcf.normal(self.model.dim)
-        h = self.cfg.h
+        h = specialcf.mesh_size
         alpha = 5 * self.params["fes_order"] * (self.params["fes_order"]+1)
+
 
         for i in range(self.sys_dim):
 
@@ -140,10 +141,9 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
                     + self.params["gfu_d_" + str(i+1)]*alpha/h*trial[i]*test[i]*ds(definedon = self.params['Dir_bnd'], skeleton = True, deformation = self.Yhalf)\
 
             self.A += -(self.params["gfu_b_" + str(i+1)])*grad(test[i]) * trial[i]*dx(deformation = self.Yhalf)
-            stab = (Norm(self.params["gfu_b_" + str(i+1)]))*h**2
             jump_u = grad(trial[i])-grad(trial[i]).Other()
             jump_v = grad(test[i])-grad(test[i]).Other()
-            # self.A += stab*jump_u*jump_v*dx(deformation = self.Yhalf, skeleton = True)
+            self.A += (Norm(self.params["gfu_b_" + str(i+1)]))*h**2*jump_u*jump_v*dx(deformation = self.Yhalf, skeleton = True)
             self.A += IfPos((self.params["gfu_b_" + str(i+1)])*n, (self.params["gfu_b_" + str(i+1)])*n*trial[i], CF(0))*test[i]\
                 *ds(deformation = self.Yhalf)
 
@@ -207,7 +207,7 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
 
         # if self.nonlinearities:
             
-        #     verbose = True
+        #     verbose = False
         #     m=5
         #     maxit=20
         #     tol=1e-10
