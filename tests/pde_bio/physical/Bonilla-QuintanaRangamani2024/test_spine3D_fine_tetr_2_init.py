@@ -56,7 +56,7 @@ def test_spine3D_fine_tetr_2_init(
     from cosmos.core.model import CosmosModel
 
     root =  artifacts_path
-    model_name = f"test_spine3D_fine_tetr_2_init_dt{dt}_volALE{volume_ALE}_surfALE{surface_ALE}_Re{Re}"
+    model_name = f"test_spine3D_fine_tetr_2_init_dt{dt.Get()}_volALE{volume_ALE}_surfALE{surface_ALE}_Re{Re}"
     model = CosmosModel(parentmesh=mesh, dt=dt, t=t, t0 = t.Get(), t1 = T,
                         root = root, samples = 400, name = model_name, coupling_type = 'implicit',
                         surface_ALE = surface_ALE, volume_ALE = volume_ALE,

@@ -143,7 +143,7 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
             self.A += -(self.params["gfu_b_" + str(i+1)])*grad(test[i]) * trial[i]*dx(deformation = self.Yhalf)
             jump_u = grad(trial[i])-grad(trial[i]).Other()
             jump_v = grad(test[i])-grad(test[i]).Other()
-            # self.A += (Norm(self.params["gfu_b_" + str(i+1)]))*h**2*jump_u*jump_v*dx(deformation = self.Yhalf, skeleton = True)
+            self.A += (Norm(self.params["gfu_b_" + str(i+1)]))*h**2*jump_u*jump_v*dx(deformation = self.Yhalf, skeleton = True)
             self.A += IfPos((self.params["gfu_b_" + str(i+1)])*n, (self.params["gfu_b_" + str(i+1)])*n*trial[i], CF(0))*test[i]\
                 *ds(deformation = self.Yhalf)
 
