@@ -94,7 +94,7 @@ class CosmosALEManager:
                 self.invA = self.A.mat.Inverse(freedofs = self.V0.FreeDofs())
 
             elif self.volume_ALE == 'linel0':
-                gfu0 = GridFunction(model.ale.Yo.space)
+                gfu0 = GridFunction(self.fes)
                 self.V0 = VectorH1(model.parentmesh, order = model.geo_order, dirichlet = model.parentmesh.Boundaries('.*'))
                 u, v = self.V0.TnT()
                 self.A = BilinearForm(self.V0, symmetric = True)
@@ -109,7 +109,7 @@ class CosmosALEManager:
                 self.invA = self.A.mat.Inverse(freedofs = self.V0.FreeDofs())
 
             elif self.volume_ALE == 'nonlinel':
-                gfu0 = GridFunction(model.ale.Yo.space)
+                gfu0 = GridFunction(self.fes)
                 self.V0 = VectorH1(model.parentmesh, order = model.geo_order, dirichlet = model.parentmesh.Boundaries('.*'))
                 u, v = self.V0.TnT()
                 self.A = BilinearForm(self.V0, symmetric = True)
