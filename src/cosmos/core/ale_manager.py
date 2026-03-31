@@ -84,7 +84,7 @@ class CosmosALEManager:
                 u, v = self.V0.TnT()
                 self.A = BilinearForm(self.V0)
                 h = specialcf.mesh_size
-                E, nu = 100, 0.49
+                E, nu = 1/h**model.dim, 0.49
                 mu  = E / 2 / (1+nu)
                 lam = E * nu / ((1+nu)*(1-2*nu))
                 def Stress(strain):

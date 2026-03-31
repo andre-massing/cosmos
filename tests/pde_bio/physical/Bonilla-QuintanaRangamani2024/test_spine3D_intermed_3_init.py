@@ -197,7 +197,7 @@ def test_spine3D_intermed_3_init_v2(
     ###################  BULK REACTIONS  ##################################
     from cosmos.pde.adr.volume.adr_volume_system_bdf1_model import ADRVolumeSystemBDF1Model
     from cosmos.pde.distance.volume.distance_volume_model import DistanceVolumeModel
-    from cosmos.pde.willmore.geometrical_flow_stationary_model import GeometricalFlowStationaryModel
+    from cosmos.pde.willmore.geometrical_flow_stationary_model_v1 import GeometricalFlowStationaryModel
 
     comp1 = model.create_compartment('bulk', material = 'cd0_1', boundary = 'boundary2|default')
     dist_fct = model.create_pde('distance_function', pde_model=DistanceVolumeModel, compartment=comp1, zero_bnd = 'boundary2|default', ale_type = -1)
