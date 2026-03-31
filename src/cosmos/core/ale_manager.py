@@ -82,9 +82,9 @@ class CosmosALEManager:
             elif self.volume_ALE == 'linel':
                 self.V0 = VectorH1(model.parentmesh, order = model.geo_order, dirichlet = model.parentmesh.Boundaries('.*'))
                 u, v = self.V0.TnT()
-                self.A = BilinearForm(self.V0, symmetric = True)
+                self.A = BilinearForm(self.V0)
                 h = specialcf.mesh_size
-                E, nu = 1/h**model.dim, 0.49
+                E, nu = 100, 0.49
                 mu  = E / 2 / (1+nu)
                 lam = E * nu / ((1+nu)*(1-2*nu))
                 def Stress(strain):
