@@ -333,7 +333,7 @@ class CosmosBndALEField:
         elif model.ale.surface_ALE == 'ms':
 
             def deviatoric(u):
-                return Sym(Grad(u).Trace()) - Trace(Sym(Grad(u).Trace()))/model.dim*Id(model.dim)
+                return Sym(Grad(u).Trace()) # - Trace(Sym(Grad(u).Trace()))/model.dim*Id(model.dim)
             ir_segm = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
             ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
 
