@@ -94,6 +94,7 @@ class CosmosALEManager:
                 self.invA = self.A.mat.Inverse(freedofs = self.V0.FreeDofs())
 
             elif self.volume_ALE == 'linel0':
+                gfu0 = GridFunction(model.ale.Yo.space)
                 self.V0 = VectorH1(model.parentmesh, order = model.geo_order, dirichlet = model.parentmesh.Boundaries('.*'))
                 u, v = self.V0.TnT()
                 self.A = BilinearForm(self.V0, symmetric = True)
@@ -103,11 +104,12 @@ class CosmosALEManager:
                 lam = E * nu / ((1+nu)*(1-2*nu))
                 def Stress(strain):
                     return 2*mu*strain + lam*Trace(strain)*Id(model.dim)    
-                self.A += InnerProduct(Stress(Sym(Grad(u))), Sym(Grad(v)))*dx
+                self.A += InnerProduct(Stress(Sym(Grad(u))), Sym(Grad(v)))*dx(deformation = gfu0)
                 self.A.Assemble()
                 self.invA = self.A.mat.Inverse(freedofs = self.V0.FreeDofs())
 
             elif self.volume_ALE == 'nonlinel':
+                gfu0 = GridFunction(model.ale.Yo.space)
                 self.V0 = VectorH1(model.parentmesh, order = model.geo_order, dirichlet = model.parentmesh.Boundaries('.*'))
                 u, v = self.V0.TnT()
                 self.A = BilinearForm(self.V0, symmetric = True)
@@ -123,7 +125,7 @@ class CosmosALEManager:
                     return a**b  # exp (log(a)*b)
                 def NeoHooke (C):
                     return 0.5 * mu * (Trace(C-I) + 2*mu/lam * Pow(Det(C),-lam/2/mu) - 1)
-                self.A += Variation (NeoHooke(C).Compile()*dx)
+                self.A += Variation (NeoHooke(C).Compile()*dx(deformation = gfu0))
 
             else:
                 raise Exception('ALE extension to volume type not known')
@@ -213,9 +215,7 @@ class CosmosALEManager:
             gfu_l0 = GridFunction(gfu.space)
             gfu_l0.vec.data += gfu.vec.data + self.Yo.vec.data
 
-            self.A.Assemble()
             vec = -1*self.A.mat*gfu_l0.vec
-            self.invA.Update()
             gfu_l0.vec.data += self.invA*vec
 
             gfu.vec.data = gfu_l0.vec.data - self.Yo.vec.data
@@ -333,7 +333,7 @@ class CosmosBndALEField:
         elif model.ale.surface_ALE == 'ms':
 
             def deviatoric(u):
-                return Sym(Grad(u).Trace()) # - Trace(Sym(Grad(u).Trace()))/model.dim*Id(model.dim)
+                return Sym(Grad(u).Trace()) - Trace(Sym(Grad(u).Trace()))/model.dim*Id(model.dim)
             ir_segm = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
             ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
 

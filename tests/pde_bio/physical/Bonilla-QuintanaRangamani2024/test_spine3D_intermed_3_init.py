@@ -142,7 +142,7 @@ logging.getLogger().setLevel(logging.INFO)
 #     assert True
 
 @pytest.mark.parametrize("Re", [7])
-@pytest.mark.parametrize("surface_ALE", ['ms'])
+@pytest.mark.parametrize("surface_ALE", ['ms0'])
 @pytest.mark.parametrize("volume_ALE", ['laplace'])
 @pytest.mark.parametrize("dt", [0.01, 0.001])
 def test_spine3D_intermed_3_init_v2(
