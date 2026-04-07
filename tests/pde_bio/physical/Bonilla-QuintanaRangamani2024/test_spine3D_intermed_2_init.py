@@ -141,9 +141,9 @@ logging.getLogger().setLevel(logging.INFO)
 
 #     assert True
 
-@pytest.mark.parametrize("Re", [7])
-@pytest.mark.parametrize("surface_ALE", ['duanli'])
-@pytest.mark.parametrize("volume_ALE", ['linel0'])
+@pytest.mark.parametrize("Re", [0, 2])
+@pytest.mark.parametrize("surface_ALE", ['mdr'])
+@pytest.mark.parametrize("volume_ALE", ['linel'])
 @pytest.mark.parametrize("dt", [0.01, 0.001])
 def test_spine3D_intermed_2_init_v2(
         request,
@@ -239,21 +239,21 @@ def test_spine3D_intermed_2_init_v2(
         d_1 = d,
         rhs_1 = I_A + I_SA*impulse,
         gradu_bnd_1 = CF((0,0,0)),
-        # bounds_1 = [0, 1e100],
+        bounds_1 = [0, 1e100],
         u0_2 = B0*id_funct,
         c_2 = K_B,
         b_2 = lambda: model.ale.V + dist_fct.sol[1]*1e-3*(1-exp(-Re)),
         d_2 = d,
         rhs_2 = psi0*(I_B + I_SB*impulse),
         gradu_bnd_2 = CF((0,0,0)),
-        # bounds_2 = [0, 1e100],
+        bounds_2 = [0, 1e100],
         u0_3 = C0*id_funct,
         b_3 = lambda: model.ale.V,
         c_3 = K_C,
         d_3 = d,
         rhs_3 = I_C + I_SC*impulse,
         gradu_bnd_3 = CF((0,0,0)),
-        # bounds_3 = [0, 1e100],
+        bounds_3 = [0, 1e100],
         printing = True
     )
 
