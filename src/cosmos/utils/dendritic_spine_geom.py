@@ -53,7 +53,8 @@ def generate_synapse3d(maxh, order_g = 1):
 
     geo = occ.OCCGeometry(total, dim = 3)
     mesh = Mesh(geo.GenerateMesh(maxh=maxh, uselocalh=True,
-        optsteps2d=3 ))
+        grading = 0.1
+        ))
     mesh.Curve(order_g)
     Draw(mesh)
 

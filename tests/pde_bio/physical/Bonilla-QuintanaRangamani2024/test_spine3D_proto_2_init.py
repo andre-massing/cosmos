@@ -69,12 +69,12 @@ def test_spine3D_proto_2_init(
     from cosmos.pde.distance.volume.distance_volume_model import DistanceVolumeModel
     from cosmos.pde.willmore.geometrical_flow_stationary_model import GeometricalFlowStationaryModel
 
-    comp1 = model.create_compartment('bulk', material = 'cd0_1', boundary = 'boundary2|default')
-    dist_fct = model.create_pde('distance_function', pde_model=DistanceVolumeModel, compartment=comp1, zero_bnd = 'boundary2|default', ale_type = -1)
+    comp1 = model.create_compartment('bulk', material = 'default', boundary = 'membrane|default')
+    dist_fct = model.create_pde('distance_function', pde_model=DistanceVolumeModel, compartment=comp1, zero_bnd = 'membrane|default', ale_type = -1)
     dist_fct.set_params(printing = True)
     adr_sys = model.create_pde('adr_system', pde_model=ADRVolumeSystemBDF1Model, compartment=comp1, ale_type = 1, dim = 3)
 
-    comp2 = model.create_compartment('surface', boundary = 'boundary2|default', bboundary = 'bboundary1', clamped_bbnd = 'bboundary1')
+    comp2 = model.create_compartment('surface', boundary = 'membrane', bboundary = 'membrane_bnd', clamped_bbnd = 'membrane_bnd')
     geom_flow = model.create_pde('willmore', pde_model=GeometricalFlowStationaryModel, compartment=comp2, ale_type = 0)
     geom_flow.set_params(
         rhs = lambda: adr_sys.sol[1]*1e-3,
