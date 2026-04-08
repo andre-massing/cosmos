@@ -77,7 +77,7 @@ def test_spine3D_proto_4_init(
     comp2 = model.create_compartment('surface', boundary = 'membrane', bboundary = 'membrane_bnd', clamped_bbnd = 'membrane_bnd')
     geom_flow = model.create_pde('willmore', pde_model=GeometricalFlowStationaryModel, compartment=comp2, ale_type = 0)
     geom_flow.set_params(
-        rhs = lambda: adr_sys.sol[1]*1e-3,
+        rhs = lambda: adr_sys.sol[1]*1e-2,
         alpha = 1,
         printing = True
     )
