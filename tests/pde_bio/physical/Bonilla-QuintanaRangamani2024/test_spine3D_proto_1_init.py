@@ -112,7 +112,7 @@ def test_spine3D_proto_1_init(
         bounds_1 = [0, 1e100],
         u0_2 = B0*id_funct,
         c_2 = K_B,
-        b_2 = lambda: model.ale.V + dist_fct.sol[1]*1e-3*(1-exp(-Re)),
+        b_2 = lambda: model.ale.V + dist_fct.sol[1]*1e-3*(1-exp(-Re))*sinh(50*dist_fct.sol[0])/cosh(50*dist_fct.sol[0]),
         d_2 = d,
         rhs_2 = psi0*(I_B + I_SB*impulse),
         gradu_bnd_2 = CF((0,0,0)),
