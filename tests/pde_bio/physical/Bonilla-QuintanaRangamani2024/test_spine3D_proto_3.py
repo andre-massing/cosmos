@@ -13,18 +13,20 @@ logging.getLogger().setLevel(logging.INFO)
 
 @pytest.mark.parametrize("Re", [7])
 @pytest.mark.parametrize("surface_ALE", ['ms'])
-@pytest.mark.parametrize("volume_ALE", ['linel'])
-def test_spine3D_fine_tetr_4(
+@pytest.mark.parametrize("volume_ALE", ['laplace'])
+@pytest.mark.parametrize("dt", [0.01, 0.001])
+def test_spine3D_proto_3(
         request,
         artifacts_path,
         Re,
         surface_ALE,
-        volume_ALE
+        volume_ALE,
+        dt
     ):
 
     print(request.path)
-    # mesh = Mesh('../../../../data/bio/vol/spine_sliced_fine/closed/filled/spine_refined_cut_fixed.vol')
-    mesh = Mesh('./data/bio/vol/spine_sliced_fine/closed/filled/spine_refined_cut_fixed.vol')
+    from cosmos.utils.dendritic_spine_geom import generate_synapse3d
+    mesh = generate_synapse3d(maxh = 0.1)
 
     ###################  PARAMETERS  ##################################
 
@@ -47,7 +49,6 @@ def test_spine3D_fine_tetr_4(
     psi1 = 0.02
     N = 3
 
-    dt = 0.01
     T = 70
     dt = Parameter(dt)
     t = Parameter(-60)
@@ -55,7 +56,7 @@ def test_spine3D_fine_tetr_4(
     from cosmos.core.model import CosmosModel
 
     root =  artifacts_path
-    model_name = f"test_spine3D_fine_tetr_4_volALE{volume_ALE}_surfALE{surface_ALE}_Re{Re}"
+    model_name = f"test_spine3D_proto_3_dt{dt.Get()}_volALE{volume_ALE}_surfALE{surface_ALE}_Re{Re}"
     model = CosmosModel(parentmesh=mesh, dt=dt, t=t, t0 = t.Get(), t1 = T,
                         root = root, samples = 400, name = model_name, coupling_type = 'implicit',
                         surface_ALE = surface_ALE, volume_ALE = volume_ALE,
@@ -68,15 +69,15 @@ def test_spine3D_fine_tetr_4(
     from cosmos.pde.distance.volume.distance_volume_model import DistanceVolumeModel
     from cosmos.pde.willmore.geometrical_flow_stationary_model import GeometricalFlowStationaryModel
 
-    comp1 = model.create_compartment('bulk', material = 'cd0_1', boundary = 'boundary2|default')
-    dist_fct = model.create_pde('distance_function', pde_model=DistanceVolumeModel, compartment=comp1, zero_bnd = 'boundary2|default', ale_type = -1)
+    comp1 = model.create_compartment('bulk', material = 'default', boundary = 'membrane|default')
+    dist_fct = model.create_pde('distance_function', pde_model=DistanceVolumeModel, compartment=comp1, zero_bnd = 'membrane|default', ale_type = -1)
     dist_fct.set_params(printing = True)
     adr_sys = model.create_pde('adr_system', pde_model=ADRVolumeSystemBDF1Model, compartment=comp1, ale_type = 1, dim = 3)
 
-    comp2 = model.create_compartment('surface', boundary = 'boundary2|default', bboundary = 'bboundary1', clamped_bbnd = 'bboundary1')
+    comp2 = model.create_compartment('surface', boundary = 'membrane', bboundary = 'membrane_bnd', clamped_bbnd = 'membrane_bnd')
     geom_flow = model.create_pde('willmore', pde_model=GeometricalFlowStationaryModel, compartment=comp2, ale_type = 0)
     geom_flow.set_params(
-        rhs = lambda: adr_sys.sol[1]*1e-3,
+        rhs = lambda: adr_sys.sol[1]*1e-2,
         alpha = 1,
         printing = True
     )
@@ -96,7 +97,7 @@ def test_spine3D_fine_tetr_4(
     model.initialize()
     dist_fct.Initialize()
     dist_fct.Solve()
-    id_funct = IfPos(dist_fct.sol[0]-0.02, 1, 0)*IfPos(z-0.5, 1, 0)
+    id_funct = IfPos(dist_fct.sol[0]-0.02, 1, 0)*IfPos(z-0.4, 1, 0)
     impulse = IfPos(t, 1, 0)*IfPos(60-t, 1, 0)
 
     d = CF(1e-3)*exp(-Re)
