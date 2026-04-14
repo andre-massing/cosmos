@@ -14,12 +14,14 @@ logging.getLogger().setLevel(logging.INFO)
 @pytest.mark.parametrize("Re", [7])
 @pytest.mark.parametrize("surface_ALE", ['mdr'])
 @pytest.mark.parametrize("volume_ALE", ['laplace'])
+@pytest.mark.parametrize("dt", [0.01])
 def test_spine3D_intermed_1(
         request,
         artifacts_path,
         Re,
         surface_ALE,
-        volume_ALE
+        volume_ALE,
+        dt
     ):
 
     print(request.path)
@@ -55,7 +57,7 @@ def test_spine3D_intermed_1(
     from cosmos.core.model import CosmosModel
 
     root =  artifacts_path
-    model_name = f"test_spine3D_intermed_1_volALE{volume_ALE}_surfALE{surface_ALE}_Re{Re}"
+    model_name = f"test_spine3D_intermed_1_dt{dt.Get()}_volALE{volume_ALE}_surfALE{surface_ALE}_Re{Re}"
     model = CosmosModel(parentmesh=mesh, dt=dt, t=t, t0 = t.Get(), t1 = T,
                         root = root, samples = 400, name = model_name, coupling_type = 'implicit',
                         surface_ALE = surface_ALE, volume_ALE = volume_ALE,
