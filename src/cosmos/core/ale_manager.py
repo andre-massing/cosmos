@@ -307,7 +307,7 @@ class CosmosBndALEField:
 
         elif model.ale.surface_ALE == 'mdr':
 
-            self.A_pp = BilinearForm(fes_pp)
+            self.A_pp = BilinearForm(fes_pp, symmetric = True)
             self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
             self.A_pp += InnerProduct(kappa_pp*self.ns, nu_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
             self.A_pp += InnerProduct(1/model.dt*Grad(dX_pp).Trace(), Grad(nu_pp).Trace())*ds(deformation = model.ale.Yo)
