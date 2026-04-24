@@ -311,8 +311,13 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
 
             if self.params["bounds_" + str(i+1)] and not self.params["mass_preserving_" + str(i+1)]:
 
+                self.Amp.Assemble()
+                rows,cols,vals = self.Amp.mat.COO()
+                weights = sp.csr_matrix((vals,(rows,cols))).diagonal()
                 gfu_vec = self.sol[i].vec.Copy().FV().NumPy()
-                gfu_new = MandBP(gfu_vec, BP = self.params["bounds_" + str(i+1)])
+                
+                gfu_new = MandBP(gfu_vec, weights = weights, BP = self.params["bounds_" + str(i+1)], 
+                                 MP = True, mass0 = np.sum(weights*gfu_vec), dt = dt)
                 self.sol[i].vec.data = gfu_new
 
             elif self.params["mass_preserving_" + str(i+1)]:

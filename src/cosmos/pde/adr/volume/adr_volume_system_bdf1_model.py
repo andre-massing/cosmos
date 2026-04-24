@@ -129,7 +129,6 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
         h = specialcf.mesh_size
         alpha = 5 * self.params["fes_order"] * (self.params["fes_order"]+1)
 
-
         for i in range(self.sys_dim):
 
             self.A += self.params["gfu_c_" + str(i+1)]*trial[i]*test[i]*dx(deformation = self.Yhalf)
@@ -298,8 +297,18 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
 
             if self.params["bounds_" + str(i+1)] and not self.params["mass_preserving_" + str(i+1)]:
 
+                if hasattr(self.model.time, 'dt'):
+                    dt = self.model.dt.Get()
+                else:
+                    logger.error('A time-dependent simulation is needed to impose conservative mass')
+
+                self.Amp.Assemble()
+                rows,cols,vals = self.Amp.mat.COO()
+                weights = sp.csr_matrix((vals,(rows,cols))).diagonal()
                 gfu_vec = self.sol[i].vec.Copy().FV().NumPy()
-                gfu_new = MandBP(gfu_vec, BP = self.params["bounds_" + str(i+1)])
+
+                gfu_new = MandBP(gfu_vec, weights=weights,BP = self.params["bounds_" + str(i+1)], 
+                                 MP = True, mass0 = np.sum(weights*gfu_vec), dt = dt)
                 self.sol[i].vec.data = gfu_new
 
             elif self.params["mass_preserving_" + str(i+1)]:

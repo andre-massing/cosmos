@@ -175,6 +175,19 @@ class CosmosALEManager:
                 self._extend_displacement_to_bulk(self.gfu_bnd_mat)
             self.dY_mat.vec.data += self.gfu_bnd_mat.vec.data
 
+            # ns = specialcf.normal(model.dim)
+            # Qs = OuterProduct(ns, ns)
+            # Ps = Id(model.dim) - OuterProduct(ns, ns)
+            # self.gfu_bnd_mat.Set(self.bnd_mat_cf, definedon = model.parentmesh.Boundaries('.*'))
+            # self.gfu_bnd_ale.Set(self.bnd_ale_cf, definedon = model.parentmesh.Boundaries('.*'))
+            # if model.is_vol:
+            #     self._extend_displacement_to_bulk(self.gfu_bnd_ale)
+            # self.dY.vec.data += self.gfu_bnd_ale.vec.data
+
+            # if model.is_vol:
+            #     self._extend_displacement_to_bulk(self.gfu_bnd_mat)
+            # self.dY_mat.vec.data += self.gfu_bnd_mat.vec.data
+
         if self.vol_ales:
             self.gfu_vol_ale.Set(self.vol_ale_cf)
             self.gfu_vol_mat.Set(self.vol_mat_cf)

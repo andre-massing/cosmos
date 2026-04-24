@@ -1,0 +1,19 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+scipy = "*"
+pandas = "*"
+numpy = "*"
+cosmos = {path = ".", editable = true}
+pytest = "*"
+matplotlib = "*"
+meshio = "*"
+ipykernel = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.14"
