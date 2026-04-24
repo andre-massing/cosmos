@@ -15,7 +15,7 @@ logging.getLogger().setLevel(logging.INFO)
 @pytest.mark.parametrize("surface_ALE", ['mdr'])
 @pytest.mark.parametrize("volume_ALE", ['laplace'])
 @pytest.mark.parametrize("dt", [0.01])
-def test_parallelization(
+def test_parallelization_1(
         request,
         artifacts_path,
         Re,
@@ -56,9 +56,9 @@ def test_parallelization(
     from cosmos.core.model import CosmosModel
 
     root =  artifacts_path
-    model_name = f"test_parallelization_dt{dt.Get()}_volALE{volume_ALE}_surfALE{surface_ALE}_Re{Re}"
+    model_name = f"test_parallelization_1_dt{dt.Get()}_volALE{volume_ALE}_surfALE{surface_ALE}_Re{Re}"
     model = CosmosModel(parentmesh=mesh, dt=dt, t=t, t0 = t.Get(), t1 = T,
-                        root = root, samples = 400, name = model_name, coupling_type = 'implicit',
+                        root = root, samples = 1, name = model_name, coupling_type = 'implicit',
                         surface_ALE = surface_ALE, volume_ALE = volume_ALE,
                         redistribute = True, adaptive_timestep = True)
     
