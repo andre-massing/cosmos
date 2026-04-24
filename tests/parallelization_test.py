@@ -49,7 +49,7 @@ def test_parallelization(
     psi1 = 0.02
     N = 3
 
-    T = -59.9
+    T = -59.99
     dt = Parameter(dt)
     t = Parameter(-60)
 
