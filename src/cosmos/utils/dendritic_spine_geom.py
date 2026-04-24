@@ -29,7 +29,6 @@ def generate_synapse2d(maxh, order_g = 1):
     mesh = Mesh(geo.GenerateMesh(maxh=maxh, uselocalh=True,
         optsteps2d=3 ))
     mesh.Curve(order_g)
-    Draw(mesh)
 
     return mesh
 
@@ -56,6 +55,5 @@ def generate_synapse3d(maxh, order_g = 1):
         grading = 0.1
         ))
     mesh.Curve(order_g)
-    Draw(mesh)
 
     return mesh

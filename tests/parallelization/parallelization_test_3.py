@@ -25,8 +25,8 @@ def test_parallelization_3(
     ):
 
     print(request.path)
-    from cosmos.utils.dendritic_spine_geom import generate_synapse3d
-    mesh = generate_synapse3d(maxh = 0.1)
+    # mesh = Mesh('../../../../data/bio/vol/spine_sliced_intermed/closed/filled/spine_intermed_sliced_PM_closed_filled_fixed.vol')
+    mesh = Mesh('./data/bio/vol/spine_sliced_intermed/closed/filled/spine_intermed_cut_fixed.vol')
 
     ###################  PARAMETERS  ##################################
 
@@ -49,7 +49,8 @@ def test_parallelization_3(
     psi1 = 0.02
     N = 3
 
-    T = -59.99
+    dt = 0.01
+    T = 70
     dt = Parameter(dt)
     t = Parameter(-60)
 
@@ -58,7 +59,7 @@ def test_parallelization_3(
     root =  artifacts_path
     model_name = f"test_parallelization_3_dt{dt.Get()}_volALE{volume_ALE}_surfALE{surface_ALE}_Re{Re}"
     model = CosmosModel(parentmesh=mesh, dt=dt, t=t, t0 = t.Get(), t1 = T,
-                        root = root, samples = 1, name = model_name, coupling_type = 'implicit',
+                        root = root, samples = 400, name = model_name, coupling_type = 'implicit',
                         surface_ALE = surface_ALE, volume_ALE = volume_ALE,
                         redistribute = True, adaptive_timestep = True)
     
@@ -69,15 +70,15 @@ def test_parallelization_3(
     from cosmos.pde.distance.volume.distance_volume_model import DistanceVolumeModel
     from cosmos.pde.willmore.geometrical_flow_stationary_model import GeometricalFlowStationaryModel
 
-    comp1 = model.create_compartment('bulk', material = 'default', boundary = 'membrane|default')
-    dist_fct = model.create_pde('distance_function', pde_model=DistanceVolumeModel, compartment=comp1, zero_bnd = 'membrane|default', ale_type = -1)
+    comp1 = model.create_compartment('bulk', material = 'cd0_1', boundary = 'boundary2|default')
+    dist_fct = model.create_pde('distance_function', pde_model=DistanceVolumeModel, compartment=comp1, zero_bnd = 'boundary2|default', ale_type = -1)
     dist_fct.set_params(printing = True)
     adr_sys = model.create_pde('adr_system', pde_model=ADRVolumeSystemBDF1Model, compartment=comp1, ale_type = 1, dim = 3)
 
-    comp2 = model.create_compartment('surface', boundary = 'membrane', bboundary = 'membrane_bnd', clamped_bbnd = 'membrane_bnd')
+    comp2 = model.create_compartment('surface', boundary = 'boundary2|default', bboundary = 'bboundary1', clamped_bbnd = 'bboundary1')
     geom_flow = model.create_pde('willmore', pde_model=GeometricalFlowStationaryModel, compartment=comp2, ale_type = 0)
     geom_flow.set_params(
-        rhs = lambda: adr_sys.sol[1]*1e-2,
+        rhs = lambda: adr_sys.sol[1]*1e-3,
         alpha = 1,
         printing = True
     )
@@ -97,7 +98,7 @@ def test_parallelization_3(
     model.initialize()
     dist_fct.Initialize()
     dist_fct.Solve()
-    id_funct = IfPos(dist_fct.sol[0]-0.02, 1, 0)*IfPos(z-0.4, 1, 0)
+    id_funct = IfPos(dist_fct.sol[0]-0.02, 1, 0)*IfPos(z-0.5, 1, 0)
     impulse = IfPos(t, 1, 0)*IfPos(60-t, 1, 0)
 
     d = CF(1e-3)*exp(-Re)
