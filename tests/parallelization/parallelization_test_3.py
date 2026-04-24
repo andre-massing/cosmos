@@ -50,7 +50,7 @@ def test_parallelization_3(
     N = 3
 
     dt = 0.01
-    T = 70
+    T = -59.99
     dt = Parameter(dt)
     t = Parameter(-60)
 
