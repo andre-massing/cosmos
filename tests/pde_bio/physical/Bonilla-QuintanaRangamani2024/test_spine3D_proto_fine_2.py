@@ -26,7 +26,7 @@ def test_spine3D_proto_fine_2(
 
     print(request.path)
     from cosmos.utils.dendritic_spine_geom import generate_synapse3d
-    mesh = generate_synapse3d(maxh = 0.1)
+    mesh = generate_synapse3d(maxh = 0.03)
 
     ###################  PARAMETERS  ##################################
 

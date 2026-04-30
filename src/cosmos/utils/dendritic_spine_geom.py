@@ -41,7 +41,7 @@ def generate_synapse3d(maxh, order_g = 1):
     wp.Line(0.6)
 
     synapse = wp.Face()
-    synapse.edges.maxh = maxh/4
+    # synapse.edges.maxh = maxh/4
 
     for i in range(4):
         synapse.edges[i+1].name = "membrane"
@@ -51,9 +51,7 @@ def generate_synapse3d(maxh, order_g = 1):
     total = synapse.Revolve(occ.Axis((0,0,0),occ.Y),360).Rotate(occ.Axis((0,0,0),occ.X), 90)
 
     geo = occ.OCCGeometry(total, dim = 3)
-    mesh = Mesh(geo.GenerateMesh(maxh=maxh, uselocalh=True,
-        grading = 0.1
-        ))
+    mesh = Mesh(geo.GenerateMesh(maxh=maxh, uselocalh=True))
     mesh.Curve(order_g)
 
     return mesh
