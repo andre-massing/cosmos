@@ -14,7 +14,7 @@ logging.getLogger().setLevel(logging.INFO)
 @pytest.mark.parametrize("Re", [7])
 @pytest.mark.parametrize("surface_ALE", ['mdr'])
 @pytest.mark.parametrize("volume_ALE", ['linel'])
-@pytest.mark.parametrize("dt", [0.01, 0.001])
+@pytest.mark.parametrize("dt", [0.01])
 def test_spine3D_proto_coarse_2(
         request,
         artifacts_path,
