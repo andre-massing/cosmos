@@ -112,7 +112,7 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
                 raise Exception('Bounds preservation not yet implemented for fes_order>1')
             
             if self.params["mass_preserving_" + str(i+1)]:
-                gfu0_vec = self.output_fields["sol_" + str(i+1)]._coef.vec.Copy().FV().NumPy()
+                gfu0_vec = self.sol[i].vec.Copy().FV().NumPy()
                 self.mass0[i] = np.sum(self.weights0*gfu0_vec)
             
             if self.params["bounds_" + str(i+1)]:
@@ -310,6 +310,11 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
         for i in range(self.sys_dim):
 
             if self.params["bounds_" + str(i+1)] and not self.params["mass_preserving_" + str(i+1)]:
+
+                if hasattr(self.model.time, 'dt'):
+                    dt = self.model.dt.Get()
+                else:
+                    logger.error('A time-dependent simulation is needed to impose conservative mass')
 
                 self.Amp.Assemble()
                 rows,cols,vals = self.Amp.mat.COO()

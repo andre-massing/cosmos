@@ -63,7 +63,7 @@ def test_convergence_bnd(
 
         model_name = f'model_{mesh.nv}_{dt:.2e}'
         model = CosmosModel(name = model_name, parentmesh = mesh, dt = dt, t0 = 0, t1 = T, t = t,
-                            root = out, sample_rate = 1)
+                            root = out, samples = 10)
         if bnd == 'neu' or bnd == 'dir':
             comp = model.create_compartment(name = 'comp', boundary = 'default', bboundary = 'bboundary')
         else:

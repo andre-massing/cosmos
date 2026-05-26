@@ -4,8 +4,8 @@ from ngsolve.webgui import Draw
 from cosmos.utils.generate_meshes import generate_boundary_sphere, generate_boundary_half_sphere, \
     generate_boundary_torus, generate_boundary_half_torus
 from cosmos.core.model import CosmosModel
-from cosmos.pde.willmore.geometrical_flow_model import GeometricalFlowModel
-from cosmos.pde.willmore.geometrical_flow_stationary_model import GeometricalFlowStationaryModel
+from cosmos.pde.willmore.geometrical_flow_model_v1 import GeometricalFlowModel
+from cosmos.pde.willmore.geometrical_flow_stationary_model_v1 import GeometricalFlowStationaryModel
 from scipy.integrate import solve_ivp
 import numpy as np
 import logging
@@ -15,7 +15,7 @@ import pandas as pd
 logging.getLogger().setLevel(logging.INFO)
 
 @pytest.mark.parametrize("redistribute", [False, True])
-def test_convergence_bio_sphere(
+def test_convergence_bio_sphere_v1(
         request,
         artifacts_path,
         redistribute):
@@ -88,7 +88,7 @@ def test_convergence_bio_sphere(
     assert 1
 
 @pytest.mark.parametrize("redistribute", [False, True])
-def test_convergence_bio_half_sphere(
+def test_convergence_bio_half_sphere_v1(
         request,
         artifacts_path,
         redistribute):
@@ -163,7 +163,7 @@ def test_convergence_bio_half_sphere(
     assert 1
 
 @pytest.mark.parametrize("redistribute", [False, True])
-def test_convergence_bio_torus(
+def test_convergence_bio_torus_v1(
         request,
         artifacts_path,
         redistribute):
@@ -237,7 +237,7 @@ def test_convergence_bio_torus(
     assert 1
 
 @pytest.mark.parametrize("redistribute", [False, True])
-def test_convergence_bio_half_torus(
+def test_convergence_bio_half_torus_v1(
         request,
         artifacts_path,
         redistribute):
@@ -313,7 +313,7 @@ def test_convergence_bio_half_torus(
 
 
 @pytest.mark.parametrize("redistribute", [False, True])
-def test_convergence_bio_sphere_kappa0(
+def test_convergence_bio_sphere_kappa0_v1(
         request,
         artifacts_path,
         redistribute):
@@ -398,7 +398,7 @@ def test_convergence_bio_sphere_kappa0(
     assert 1
 
 @pytest.mark.parametrize("redistribute", [False, True])
-def test_convergence_bio_sphere_kappa0_stationary(
+def test_convergence_bio_sphere_kappa0_stationary_v1(
         request,
         artifacts_path,
         redistribute):

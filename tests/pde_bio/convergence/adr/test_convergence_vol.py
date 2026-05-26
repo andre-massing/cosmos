@@ -63,7 +63,7 @@ def test_convergence_vol(
 
         model_name = f'model_{mesh.nv}_{dt:.2e}'
         model = CosmosModel(name = model_name, parentmesh = mesh, dt = dt, t0 = 0, t1 = T, t = t,
-                            root = out, sample_rate = 1)
+                            root = out, samples = 10)
         comp = model.create_compartment(name = 'comp', material = 'default', boundary = 'boundary')
         ale = model.create_ale(name = 'ale', compartment=comp)
 

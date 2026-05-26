@@ -58,7 +58,7 @@ def test_sigar(
     elif shape == '51':
         mesh = generate_boundary_cigar(maxh = maxh, r=1, h=5)
         model = CosmosModel(name = model_name, parentmesh=mesh, t0 = 0,
-                            dt = dt, t=Tend, redistribute = redistribute,
+                            dt = dt, t1=Tend, redistribute = redistribute,
                             root = root, sample_rate = 20)
         
         comp1 = model.create_compartment(name = 'comp1', boundary = 'default', bboundary = '')
