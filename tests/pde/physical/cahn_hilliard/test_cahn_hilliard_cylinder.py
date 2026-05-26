@@ -37,7 +37,7 @@ def ch_params(ch_params_type):
         params['fes_order'] = 2
     return params
 
-@pytest.mark.parametrize("ch_solver", [CahnHilliardBoundaryBachiniLogBDF1Model])
+@pytest.mark.parametrize("ch_solver", [CahnHilliardBoundaryBachiniBDF1Model])
 @pytest.mark.parametrize("maxh", [0.1, 0.05])
 @pytest.mark.parametrize("ch_params_type", [1, 2, 3, 4, 0])
 def test_cahn_hilliard_cylinder(

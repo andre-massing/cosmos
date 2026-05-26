@@ -44,7 +44,7 @@ def test_tumor3D(
     dt = params['dt']
     Tend = params['Tend']
     solvertime = SolverTime(dt = dt, initial_t=0, final_t=Tend)
-    solver = Solver(solvermesh, solvertime, iter=False,
+    solver = Solver(solvermesh, solvertime, iter=True,
                     name = filename, printing=True)
     solver.output_params(out, sample_rate=30)
 

@@ -21,7 +21,6 @@ from cosmos.pde.willmore.willmore_boundary_ap_bdf1_model import WillmoreBoundary
 from cosmos.pde.willmore.willmore_boundary_vp_bdf1_model import WillmoreBoundaryVPBDF1Model
 from cosmos.pde.willmore.willmore_boundary_apvp_bdf1_model import WillmoreBoundaryAPVPBDF1Model
 from cosmos.pde.willmore.willmore_boundary_inex_bdf1_model import WillmoreBoundaryInexBDF1Model
-from cosmos.pde.fluid.volume.navier_stokes_aland_volume_bdf1 import NavierStokesVolumeAlandBDF1Model
 
 from cosmos.io.logger import *
 from cosmos.coupling.ale_model import ALEModel
@@ -50,7 +49,6 @@ __all__ = [
     "WillmoreBoundaryVPBDF1Model",
     "WillmoreBoundaryAPVPBDF1Model",
     "WillmoreBoundaryInexBDF1Model",
-    "NavierStokesVolumeAlandBDF1Model",
     "ALEModel",
     "SolverMesh",
     "SolverTime",

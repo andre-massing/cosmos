@@ -40,9 +40,9 @@ def input_params(params_type, u0):
     return params
 
 @pytest.mark.parametrize("adr_solver", [
-    # ADRBoundaryBDF1Model,
+    ADRBoundaryBDF1Model,
     # ADRBoundaryBDF2Model,
-    ADRBoundaryStabBDF1Model,
+    # ADRBoundaryStabBDF1Model,
     # ADRBoundaryStabBDF2Model
 ])
 @pytest.mark.parametrize("params_type", [0, 1, 2, 3])

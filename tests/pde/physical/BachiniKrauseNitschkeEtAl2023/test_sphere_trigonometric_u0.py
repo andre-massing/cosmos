@@ -32,7 +32,7 @@ def solver_time_params(dt):
 
 @pytest.mark.parametrize("kappa, dt", [(0.5, 1e-4), (0.1, 1e-4), (0.02, 2.5e-5)])
 @pytest.mark.parametrize("maxh", [0.08])
-@pytest.mark.parametrize("pp", ["DuanLi", "MDR"])
+@pytest.mark.parametrize("pp", ["None", "DuanLi", "MDR"])
 def test_sphere_trigonometric_u0(
         request,
         artifacts_path,
@@ -80,7 +80,11 @@ def test_sphere_trigonometric_u0(
 
     def displ():
         return Qs*willmore.displacement
-    ale.set_bnd_displacement(displ, 'default', redistribute=True, redistribute_type=pp)
+    
+    if pp == "None":
+        ale.set_bnd_displacement(displ, 'default', redistribute=False)
+    else:
+        ale.set_bnd_displacement(displ, 'default', redistribute=True, redistribute_type=pp)
     
     ch.set_input_fields({
         "b": ale.wind-Ps*grad(willmore.multiplier).Trace()
