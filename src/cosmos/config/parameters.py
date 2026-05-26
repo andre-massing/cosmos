@@ -8,6 +8,13 @@ from ngsolve import *
 
 @dataclass
 class Config:
+    """Global configuration dataclass for the Cosmos solver.
+
+    Stores shared numerical settings (mesh-size reference ``h``, floating-point
+    precision, buffer size, and an optional random seed) that are read by PDE
+    models via :func:`get_config`.
+    """
+
     # h = MyMeshSize()
     h = specialcf.mesh_size
     seed: Optional[int] = None

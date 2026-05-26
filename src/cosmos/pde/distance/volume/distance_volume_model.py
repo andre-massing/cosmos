@@ -6,15 +6,22 @@ import scipy.sparse as sp
 
 from ngsolve import *
 from cosmos.pde.base import BasePDEModel
-from cosmos.core.field import InputField, OutputField, Field
+from cosmos.core.field import Field
 from cosmos.core.compartment import CosmosCompartment
 from cosmos.core.model import CosmosModel
 from cosmos.core.utils import MandBP
 from ngsolve.webgui import Draw
 import numbers
-import time
 
 class DistanceVolumeModel(BasePDEModel):
+    """Computes a smoothed distance function and its gradient on a volume compartment.
+
+    Uses a penalised Poisson solve to obtain a smooth approximation to the
+    signed distance from a prescribed zero-boundary, then projects the gradient
+    direction via an L2 projection and solves a second Poisson problem for a
+    smoother distance. The resulting distance field and normalised-gradient
+    (velocity) field are available as output for other PDE models.
+    """
 
     def __init__(self, name:str = 'DistanceVolumeModel', model:CosmosModel = None, compartment:CosmosCompartment = None, **kwargs):
         
@@ -27,7 +34,7 @@ class DistanceVolumeModel(BasePDEModel):
         self.compartment = compartment
 
         if 'zero_bnd' not in kwargs.keys():
-            raise Exception('The argument -zero_bnd- has to be passed at initialization for DistanceVolumeModel')
+            raise ValueError('The argument -zero_bnd- has to be passed at initialization for DistanceVolumeModel')
         else:
             self.params["zero_bnd"] = kwargs['zero_bnd']
 

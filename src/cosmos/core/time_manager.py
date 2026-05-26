@@ -1,16 +1,19 @@
 import logging
 logger = logging.getLogger(__name__)
 
-import os
-import time
-from dataclasses import dataclass
 from ngsolve import *
 import numpy as np
 import numbers
 
-@dataclass
 class CosmosTimeManager:
-    
+    """Manages the simulation time state (current time, time step, iteration counter).
+
+    Exposes NGSolve ``Parameter`` objects for ``t`` and ``dt`` so they can be
+    embedded directly inside coefficient functions and weak forms. Delegates
+    time-advancement logic to a :class:`CosmosTimeHelper` that is created when
+    :meth:`initialize` is called.
+    """
+
     def __init__(self, kwargs):
 
         self.params = kwargs
@@ -49,6 +52,13 @@ class CosmosTimeManager:
 
 
 class CosmosTimeHelper:
+    """Parses time-discretisation parameters and implements step advancement.
+
+    Accepts scalar, list, or ``numpy.ndarray`` time-step specifications; when a
+    sequence is provided the time step is updated from the sequence at each
+    iteration. Validates that ``t0``, ``t1``, and ``dt`` are present and that
+    ``dt`` is strictly positive.
+    """
 
     def __init__(self, **kwargs):
         
@@ -59,12 +69,12 @@ class CosmosTimeHelper:
             if isinstance(kwargs['t0'], numbers.Number):
                 self.t0 = kwargs['t0']
             else:
-                raise Exception("Initial time t0 must be a number")
+                raise TypeError("Initial time t0 must be a number")
 
             if isinstance(kwargs['t1'], numbers.Number):
                 self.t1 = kwargs['t1']
             else:
-                raise Exception("Final time t1 must be a number")
+                raise TypeError("Final time t1 must be a number")
 
             if isinstance(kwargs['dt'], Parameter):
                 self.dt = kwargs['dt']
@@ -75,22 +85,22 @@ class CosmosTimeHelper:
             elif isinstance(kwargs['dt'], numbers.Number):
                 self.dt = Parameter(kwargs['dt'])
             else:
-                raise Exception("dt must be either a number or a list of numbers")
+                raise TypeError("dt must be either a number or a list of numbers")
 
             if self.dt.Get() <= 0:
-                raise Exception("Time-step has been set to negative value")
+                raise ValueError("Time-step has been set to negative value")
             else:
                 self.dt0 = self.dt.Get()
             
         else:
-            raise Exception('The parameters t0, t1 and dt are needed for the model')
+            raise ValueError('The parameters t0, t1 and dt are needed for the model')
         
         if 't' in kwargs.keys():
             if isinstance(kwargs['t'], Parameter):
                 self.t = kwargs['t']
                 self.t.Set(self.t0)
             else:
-                raise Exception('Variable t must be a Parameter')
+                raise TypeError('Variable t must be a Parameter')
         else:
             self.t = Parameter(self.t0)
 
@@ -114,10 +124,10 @@ class CosmosTimeHelper:
         elif isinstance(self.params["dt"], numbers.Number):
             self.dt.Set(self.params["dt"])
         else:
-            raise Exception("dt must be either a number or a list of numbers")
+            raise TypeError("dt must be either a number or a list of numbers")
         
         if self.dt.Get() <= 0:
-            raise Exception("Time-step has been set to negative value")
+            raise ValueError("Time-step has been set to negative value")
         
         dt.Set(self.dt.Get())
 

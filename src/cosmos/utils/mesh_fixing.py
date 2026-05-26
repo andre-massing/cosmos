@@ -46,7 +46,13 @@ SECTION_NAMES = [
 ]
 
 class CosmosAliasMeshSection:
-    
+    """Represents a single named section of a Netgen mesh file.
+
+    Stores the section name, its optional header comment, the element count
+    (``dim``), and the list of data rows (``entries``). Provides helpers to
+    print, add, or replace entries and to copy state from another section.
+    """
+
     def __init__(self, name = '', header = '', dim = 0, entries = None):
 
         self.name = name
@@ -82,6 +88,13 @@ class CosmosAliasMeshSection:
 
 
 class CosmosAliasMesh:
+    """Reads, parses, and exposes a Netgen ``.vol`` mesh file for programmatic editing.
+
+    Loads the mesh both as an NGSolve ``Mesh`` object and as a collection of
+    :class:`CosmosAliasMeshSection` objects, allowing individual sections
+    (points, surface elements, volume elements, boundary names, etc.) to be
+    inspected and rewritten before exporting a modified ``.vol`` file.
+    """
 
     def __init__(self, filename: str):
 
@@ -100,7 +113,7 @@ class CosmosAliasMesh:
             self._parse_sections()
         except Exception as e:
             print('Error:', e)
-            raise Exception('Impossible to generate NgSolve mesh from given filename')
+            raise OSError('Impossible to generate NgSolve mesh from given filename')
 
     def _parse_sections(self):
 
@@ -324,7 +337,7 @@ class CosmosAliasMesh:
     def fix_dim2_boundary(self, override = False):
 
         if self.sections["edgesegmentsgi2"].dim != 0 and not override:
-            raise Exception('BBoundary list is non-empty, use the flag override to add them')
+            raise ValueError('BBoundary list is non-empty, use the flag override to add them')
         elif self.sections["edgesegmentsgi2"].dim != 0 and override:
             self.sections["edgesegmentsgi2"].dim = 0
             self.sections["edgesegmentsgi2"].entries = []
@@ -387,7 +400,7 @@ class CosmosAliasMesh:
             for pnum, dist in unmatched:
                 print(f"    point {pnum}: dist = {dist:.2e}")
         if n_matched == 0:
-            raise Exception("No points matched — are the two meshes in the same coordinate space?")
+            raise RuntimeError("No points matched — are the two meshes in the same coordinate space?")
 
         # Reverse map: old index -> new index (for remapping edge segments)
         old_to_new = {
@@ -462,7 +475,7 @@ class CosmosAliasMesh:
         """
         vol_entries = self.sections['volumeelements'].entries
         if not vol_entries:
-            raise Exception('No volume elements found in mesh.')
+            raise RuntimeError('No volume elements found in mesh.')
 
         # Count how many tets share each face.
         # A tet entry format is: matnr  np  p1  p2  p3  p4
@@ -494,7 +507,7 @@ class CosmosAliasMesh:
         ]
 
         if not boundary_faces:
-            raise Exception('No boundary faces found — are volume elements tetrahedral?')
+            raise RuntimeError('No boundary faces found — are volume elements tetrahedral?')
 
         # Populate surfaceelements section
         self.sections['surfaceelements'].entries = []

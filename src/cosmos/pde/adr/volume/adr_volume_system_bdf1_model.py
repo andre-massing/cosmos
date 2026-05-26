@@ -6,16 +6,23 @@ import scipy.sparse as sp
 
 from ngsolve import *
 from cosmos.pde.base import BasePDEModel
-from cosmos.core.field import InputField, OutputField, Field
+from cosmos.core.field import Field
 from cosmos.core.compartment import CosmosCompartment
 from cosmos.core.model import CosmosModel
 from cosmos.core.utils import MandBP
 from ngsolve.webgui import Draw
 import numbers
-import time
 from ngsolve.solvers import *
 
 class ADRVolumeSystemBDF1Model(BasePDEModel):
+    """BDF1 advection–diffusion–reaction system on a volume compartment.
+
+    Discretises a coupled system of ``dim`` scalar species on a volumetric domain
+    using H1 finite elements with interior-penalty (SIP) stabilisation and a
+    first-order backward-difference time scheme. Supports Dirichlet, Neumann,
+    and total-flux boundary conditions, nonlinear reaction terms, mass
+    preservation, and bound-preserving post-processing.
+    """
 
     def __init__(self, name:str = 'ADRVolumeSystemBDF1Model', model:CosmosModel = None, compartment:CosmosCompartment = None, **kwargs):
         
@@ -33,9 +40,9 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
             if isinstance(kwargs['dim'], numbers.Number):
                 self.sys_dim = kwargs['dim']
             else:
-                raise Exception(f'Dimension of systems {self.name} must be a number')
+                raise TypeError(f'Dimension of systems {self.name} must be a number')
         else:
-            raise Exception('Parameter dim is needed for initialization of ADRBoundarySystemBDF1Model')
+            raise ValueError('Parameter dim is needed for initialization of ADRBoundarySystemBDF1Model')
         
         self.params["Neu_bnd"] = ''
         self.params["Dir_bnd"] = ''
@@ -105,9 +112,9 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
             self.sol[i].Set(self.params["u0_" + str(i+1)], definedon = self.compartment.domain, dual = True)
 
             if self.params["mass_preserving_" + str(i+1)] and self.params["fes_order"]>1:
-                raise Exception('Mass preservation not yet implemented for fes_order>1')
+                raise NotImplementedError('Mass preservation not yet implemented for fes_order>1')
             if self.params["bounds_" + str(i+1)] and self.params["fes_order"]>1:
-                raise Exception('Bounds preservation not yet implemented for fes_order>1')
+                raise NotImplementedError('Bounds preservation not yet implemented for fes_order>1')
             
             if self.params["mass_preserving_" + str(i+1)]:
                 gfu0_vec = self.sol[i].vec.Copy().FV().NumPy()
@@ -282,7 +289,7 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
         #             print(f"it={k}  ||f||/||u||={rel:.3e}  hist={len(dF)}")
 
         #     if k >= maxit:
-        #         raise Exception('Exceeded maximum number of iterations') 
+        #         raise RuntimeError('Exceeded maximum number of iterations') 
             
         # else:
 
@@ -344,7 +351,9 @@ class ADRVolumeSystemBDF1Model(BasePDEModel):
             "IfPos": IfPos, "x": x, "y": y, "z": z
         }
 
-    def add_nonlinearity(self, target, expression, map = {}):
+    def add_nonlinearity(self, target, expression, map=None):
+        if map is None:
+            map = {}
 
         nonlin = {}
         nonlin["expr"] = expression

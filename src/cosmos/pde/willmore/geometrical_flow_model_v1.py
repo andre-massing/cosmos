@@ -6,14 +6,19 @@ import scipy.sparse as sp
 
 from ngsolve import *
 from cosmos.pde.base import BasePDEModel
-from cosmos.core.field import InputField, OutputField, Field
+from cosmos.core.field import Field
 from cosmos.core.compartment import CosmosCompartment
 from cosmos.core.model import CosmosModel
 from cosmos.core.utils import MandBP
 from ngsolve.webgui import Draw
-import time
 
 class GeometricalFlowModel(BasePDEModel):
+    """BDF1 Willmore / mean-curvature flow model on a surface compartment (v1 variant).
+
+    Alternative implementation of :class:`GeometricalFlowModel` with the same
+    interface. See the primary module for a full description of supported
+    parameters and constraints.
+    """
 
     def __init__(self, name:str = 'GeometricalFlowModel', model:CosmosModel = None, compartment:CosmosCompartment = None):
         
@@ -227,7 +232,7 @@ class GeometricalFlowModel(BasePDEModel):
                     break
 
             if iter == max_iter:
-                raise Exception('Number of iterations for internal solver exceeded')
+                raise RuntimeError('Number of iterations for internal solver exceeded')
 
         else:
 

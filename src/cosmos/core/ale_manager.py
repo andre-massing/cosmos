@@ -4,7 +4,6 @@ logger = logging.getLogger(__name__)
 import numpy as np
 import time
 from ngsolve import *
-from cosmos.config.parameters import get_config
 from cosmos.core.field import Field
 from cosmos.core.compartment import CosmosCompartment
 from ngsolve.webgui import Draw
@@ -15,6 +14,14 @@ if TYPE_CHECKING:
     from cosmos.core.model import CosmosModel
 
 class CosmosALEManager:
+    """Manages ALE (Arbitrary Lagrangian–Eulerian) mesh motion for a CosmosModel.
+
+    Maintains displacement, velocity, and reference-position GridFunctions for
+    the whole mesh. At each time step it collects per-compartment displacements
+    from registered boundary and volume ALE fields, optionally extends boundary
+    displacements to the bulk via a Laplace or linear-elasticity solve, and
+    updates the mesh deformation in NGSolve.
+    """
 
     def __init__(self, model:"CosmosModel", kwargs):
 
@@ -67,7 +74,7 @@ class CosmosALEManager:
             if isinstance(self.params['redistribute'], bool):
                 self.redistribute = self.params['redistribute']
             else:
-                raise Exception(f'Mesh redistribution for for model {model.name} must be either True or False')      
+                raise ValueError(f'Mesh redistribution for model {model.name} must be either True or False')      
         
         if model.is_vol:
 
@@ -128,7 +135,7 @@ class CosmosALEManager:
                 self.A += Variation (NeoHooke(C).Compile()*dx(deformation = gfu0))
 
             else:
-                raise Exception('ALE extension to volume type not known')
+                raise ValueError('ALE extension to volume type not known')
 
         self.vtk_gfu=[self.dY, self.Y, self.X, self.W, 
                     self.V]
@@ -247,26 +254,15 @@ class CosmosALEManager:
         self.W.vec.data = self.Wo.vec.data
         self.V.vec.data = self.Vo.vec.data
 
-def SimpleNewtonSolve(gfu,a,tol=1e-13,maxits=25):
-    res = gfu.vec.CreateVector()
-    du = gfu.vec.CreateVector()
-    fes = gfu.space
-    for it in range(maxits):
-        print ("Iteration {:3}  ".format(it),end="")
-        a.Apply(gfu.vec, res)
-        a.AssembleLinearization(gfu.vec)
-        du.data = a.mat.Inverse(fes.FreeDofs()) * res
-        gfu.vec.data -= du
-
-        #stopping criteria
-        stopcritval = sqrt(abs(InnerProduct(du,res)))
-        print ("<A u",it,", A u",it,">_{-1}^0.5 = ", stopcritval)
-        if stopcritval < tol:
-            break
-    if it == maxits-1:
-        raise Exception('Maximum number of iterations reached for the Newton Solver')
-        
 class CosmosBndALEField:
+    """ALE displacement field defined on a boundary (surface) compartment.
+
+    Prescribes the mesh displacement from a user-supplied normal velocity
+    (and optionally a tangential velocity) on the associated surface. Several
+    surface redistribution strategies are available: ``'mdr'`` (mesh-dependent
+    redistribution), ``'gnz'``, ``'ms'``/``'ms0'`` (membrane-style), and
+    ``'duanli'``.
+    """
 
     def __init__(self, name:str, model:"CosmosModel", compartment:CosmosCompartment):
 
@@ -388,7 +384,7 @@ class CosmosBndALEField:
 
         else:
 
-            raise Exception('Surface ALE distribution not known')
+            raise ValueError('Surface ALE distribution not known')
         
     def set_normal_velocity(self, coef):
         self.normal_velocity = Field(coef)
@@ -401,14 +397,14 @@ class CosmosBndALEField:
         
     def update(self, model: "CosmosModel", redistribute: bool):
 
-        if self.domain_velocity != None:
+        if self.domain_velocity is not None:
             self.ale_displ.Set(self.domain_velocity()*model.time.dt, definedon = self.compartment.domain)
             self.mat_displ.vec.data = self.ale_displ.vec.data
         else:
-            if self.normal_velocity == None:
-                raise Exception(f'Normal velocity for ALE {self.name} must be set')
-            if self.tangential_velocity == None:
-                raise Exception(f'Tangential velocity for ALE {self.name} must be set')
+            if self.normal_velocity is None:
+                raise ValueError(f'Normal velocity for ALE {self.name} must be set')
+            if self.tangential_velocity is None:
+                raise ValueError(f'Tangential velocity for ALE {self.name} must be set')
 
             if redistribute:
                 self.gfu_norm_vel.Set(self.normal_velocity(), definedon = self.compartment.domain)
@@ -425,6 +421,12 @@ class CosmosBndALEField:
             self.mat_displ.Set((self.normal_velocity()*self.ns + self.Ps*self.tangential_velocity())*model.time.dt, definedon = self.compartment.domain)
 
 class CosmosVolALEField:
+    """ALE displacement field defined on a volume compartment.
+
+    Prescribes the mesh motion inside a volumetric region through a user-supplied
+    domain velocity CoefficientFunction. The computed displacement is passed back
+    to :class:`CosmosALEManager` each step.
+    """
 
     def __init__(self, name:str, model:"CosmosModel", compartment:CosmosCompartment):
 
@@ -446,8 +448,8 @@ class CosmosVolALEField:
         
     def update(self, model: "CosmosModel", redistribute: bool):
 
-        if self.domain_velocity == None:
-            raise Exception(f'Domain velocity for ALE {self.name} must be set')
+        if self.domain_velocity is None:
+            raise ValueError(f'Domain velocity for ALE {self.name} must be set')
         
         self.ale_displ.Set(self.domain_velocity()*model.time.dt, definedon = self.compartment.domain)
         self.mat_displ.vec.data = self.ale_displ.vec.data

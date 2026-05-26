@@ -6,14 +6,20 @@ import scipy.sparse as sp
 
 from ngsolve import *
 from cosmos.pde.base import BasePDEModel
-from cosmos.core.field import InputField, OutputField, Field
+from cosmos.core.field import Field
 from cosmos.core.compartment import CosmosCompartment
 from cosmos.core.model import CosmosModel
 from cosmos.core.utils import MandBP
 from ngsolve.webgui import Draw
-import time
 
 class GeometricalFlowStationaryModel(BasePDEModel):
+    """BDF1 geometrical flow model that co-evolves the spontaneous curvature field.
+
+    Extends :class:`GeometricalFlowModel` by treating the spontaneous curvature
+    as an additional unknown advected by the ALE mesh velocity. The resulting
+    three-component system (normal velocity, mean curvature, spontaneous
+    curvature) is assembled and solved as a single linear system each time step.
+    """
 
     def __init__(self, name:str = 'GeometricalFlowStationaryModel', model:CosmosModel = None, compartment:CosmosCompartment = None):
         
@@ -220,7 +226,7 @@ class GeometricalFlowStationaryModel(BasePDEModel):
                     break
 
             if iter == max_iter:
-                raise Exception('Number of iterations for internal solver exceeded')
+                raise RuntimeError('Number of iterations for internal solver exceeded')
             
         else:
 

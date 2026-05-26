@@ -2,7 +2,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 import os
-import time
 from ngsolve import *
 import numpy as np
 from contextlib import redirect_stdout
@@ -18,6 +17,13 @@ if TYPE_CHECKING:
     from cosmos.core.model import CosmosModel
 
 class CosmosIOManager:
+    """Handles output for a CosmosModel simulation.
+
+    Creates an output directory tree under a user-specified root path, writes
+    VTK/VTU/PVD files for volume and boundary fields at a configurable sample
+    rate, and logs per-step scalar data (iteration index, time, elapsed times,
+    and user-defined callables) to a tab-separated text file.
+    """
 
     def __init__(self, kwargs):
 
@@ -36,7 +42,7 @@ class CosmosIOManager:
                 self.samples = self.params['samples']
                 self.N = 0
             else:
-                raise Exception(f'Sample rate (or n. of samples) not set for output in folder {self.root}')
+                raise ValueError(f'Sample rate (or n. of samples) not set for output in folder {self.root}')
 
             output_model_data = os.path.join(self.root, 'model_data.txt')
             with open(output_model_data, "w") as f:
@@ -48,7 +54,7 @@ class CosmosIOManager:
                     for key in self.params['output_callables'].keys():
                         self.output_step_headers.append(key)
                 else:
-                    raise Exception('output_callables has to be a dictionary of callables')
+                    raise TypeError('output_callables has to be a dictionary of callables')
 
             with open(self.output_step_data, "w") as f:
                 print(*[x for x in self.output_step_headers], sep="\t", file=f)
@@ -105,7 +111,7 @@ class CosmosIOManager:
 
     def save_step_data(self, model: "CosmosModel"):
 
-        if self.root != None:
+        if self.root is not None:
 
             dt_save = (model.time.t1-model.time.t0)/self.samples
             if (model.time.t.Get()-model.time.t0)//dt_save>=self.N:
@@ -127,7 +133,7 @@ class CosmosIOManager:
                         elif gfu.space.type == 'VectorH1':
                             pdata_v[gfu_name] = gfu.vec.FV().NumPy().reshape((npoints, 2), order = 'F')
                         else:
-                            raise Exception('Unknown format for 2D BND output')
+                            raise ValueError('Unknown format for 2D BND output')
                     write_curve_meshio(
                         self.bnd_output_vtk_name + f"_step{self.N:05d}.vtu",
                         points_xy=points_xy,
@@ -207,40 +213,10 @@ class CosmosIOManager:
                 for value in self.params['output_callables'].values():
                     numbers.append(value())
             else:
-                raise Exception('output_callables has to be a dictionary of callables')
+                raise TypeError('output_callables has to be a dictionary of callables')
 
         with redirect_stdout(file):
             print(*[x for x in numbers], sep="\t", file=file)
-
-import numpy as np
-
-import numpy as np
-import meshio
-
-def write_curve_vtp(filename, points_xy, closed=False, point_data=None, cell_data=None):
-    pts2 = np.asarray(points_xy, float)
-    N = pts2.shape[0]
-    points = np.column_stack([pts2, np.zeros(N)])
-
-    if closed:
-        lines = np.column_stack([np.arange(N), np.roll(np.arange(N), -1)]).astype(np.int64)
-    else:
-        lines = np.column_stack([np.arange(N-1), np.arange(1, N)]).astype(np.int64) if N > 1 else np.empty((0,2), np.int64)
-
-    point_data = point_data or {}
-    cell_data  = cell_data  or {}
-
-    # meshio wants cell_data as lists (one per cell block)
-    cell_data_listed = {k: [np.asarray(v)] for k, v in cell_data.items()}
-
-    mesh = meshio.Mesh(
-        points=points,
-        cells=[("line", lines)],
-        point_data={k: np.asarray(v) for k, v in point_data.items()},
-        cell_data=cell_data_listed,
-    )
-    meshio.write(filename, mesh)   # filename ".vtp" -> XML PolyData
-
 
 def write_polyline_vtk(
     filename,

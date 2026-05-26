@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.optimize import brentq
 
 def MandBP(gfu_vec, dt = None, weights=None, BP=None, MP=False, mass0=None):
 
@@ -22,7 +23,7 @@ def MandBP(gfu_vec, dt = None, weights=None, BP=None, MP=False, mass0=None):
     - array-like: The corrected vector, clipped to bounds.
 
     Notes:
-    - MP uses a secant method to solve for the threshold that preserves mass.
+    - MP uses ``scipy.optimize.brentq`` to solve for the threshold that preserves mass.
     - Tolerance for convergence in MP is set to 1e-10.
     """
 
@@ -35,38 +36,16 @@ def MandBP(gfu_vec, dt = None, weights=None, BP=None, MP=False, mass0=None):
     elif MP:
 
         def F(xsi):
-
-            result = 0
-
             temp = gfu_vec + dt * xsi
+            return np.sum(weights * np.clip(temp, BP[0], BP[1])) - mass0
 
-            result -= mass0
-            dummy = np.clip(temp, BP[0], BP[1])
-            result += np.sum(weights * dummy)
-
-            return result
-
-        xsi_old0 = 0
-        xsi_old1 = -dt
-        xsi2 = -2
-
-        while abs(F(xsi_old1) - F(xsi_old0))>tol or xsi2==-2:
-
-            if F(xsi_old1) == F(xsi_old0):
-
-                xsi2 = -1
-
-            else:
-
-                F1 = F(xsi_old1)
-                F0 = F(xsi_old0)
-
-                xsi2 = xsi_old1-F1*(xsi_old1 - xsi_old0)/(F1 - F0)
-
-                xsi_old0 = xsi_old1
-                xsi_old1 = xsi2
+        # F is monotone increasing in xsi (for dt > 0).
+        # Bracket: at xsi_lo every value clips to BP[0]; at xsi_hi to BP[1].
+        xsi_lo = (BP[0] - float(np.max(gfu_vec))) / dt
+        xsi_hi = (BP[1] - float(np.min(gfu_vec))) / dt
+        xsi2 = brentq(F, xsi_lo, xsi_hi, xtol=tol)
 
         threshold = dt * xsi2
-        gfu_data = np.clip(gfu_vec + threshold, BP[0], BP[1]) 
+        gfu_data = np.clip(gfu_vec + threshold, BP[0], BP[1])
 
     return gfu_data

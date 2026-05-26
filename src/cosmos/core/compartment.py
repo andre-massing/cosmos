@@ -1,16 +1,20 @@
 import logging
 logger = logging.getLogger(__name__)
 
-import os
-import time
 from ngsolve import *
 from typing import Dict, TYPE_CHECKING
-import traceback
 
 if TYPE_CHECKING:
     from cosmos.core.model import CosmosModel
 
 class CosmosCompartment:
+    """Represents a computational sub-domain (compartment) within a CosmosModel.
+
+    A compartment wraps either a volume domain—identified by a material name and
+    its bounding surface—or a surface domain—identified by a boundary name and
+    its co-dimension-2 boundary. It stores a list of PDE models assigned to it
+    and an optional ALE field.
+    """
 
     def __init__(self, name = '', model:"CosmosModel" = None, **kwargs):
 
@@ -27,12 +31,12 @@ class CosmosCompartment:
                 self.domain_id = kwargs['material']
                 self.domain = self.model.parentmesh.Materials(kwargs['material'])
             else:
-                raise Exception(f'Material {kwargs["material"]} for compartment {self.name} not present in given Model')
+                raise ValueError(f'Material {kwargs["material"]} for compartment {self.name} not present in given Model')
             if all(x in self.model.bnd_ids for x in kwargs['boundary'].split('|')):
                 self.boundary_id = kwargs['boundary']
                 self.boundary = self.model.parentmesh.Boundaries(kwargs['boundary'])
             else:
-                raise Exception(f'Boundary {kwargs["boundary"]} for compartment {self.name} not present in given Model')
+                raise ValueError(f'Boundary {kwargs["boundary"]} for compartment {self.name} not present in given Model')
             self.is_bnd = False
             self.is_vol = True
             self.dim = self.model.dim
@@ -43,12 +47,12 @@ class CosmosCompartment:
                 self.domain_id = kwargs['boundary']
                 self.domain = self.model.parentmesh.Boundaries(kwargs['boundary'])
             else:
-                raise Exception(f'Boundary {kwargs["boundary"]} for compartment {self.name} not present in given Model')
+                raise ValueError(f'Boundary {kwargs["boundary"]} for compartment {self.name} not present in given Model')
             if all(x in self.model.bbnd_ids for x in kwargs['bboundary'].split('|')) or kwargs['bboundary']=='':
                 self.boundary_id = kwargs['bboundary']
                 self.boundary = self.model.parentmesh.BBoundaries(kwargs['bboundary'])
             else:
-                raise Exception(f'BBoundary {kwargs["bboundary"]} for compartment {self.name} not present in given Model')
+                raise ValueError(f'BBoundary {kwargs["bboundary"]} for compartment {self.name} not present in given Model')
             self.is_bnd = True
             self.is_vol = False
             self.dim = self.model.dim-1
@@ -62,7 +66,7 @@ class CosmosCompartment:
             else:
                 self.navier_bbnd = ''
         else:
-            raise Exception(f'Compartment {self.name} has to be initialized with the couple: \n {{material, boundary}} or {{boundary, bboundary}}')
+            raise ValueError(f'Compartment {self.name} has to be initialized with the couple: \n {{material, boundary}} or {{boundary, bboundary}}')
         
         gfu = GridFunction(H1(model.parentmesh, order = model.geo_order))
         gfu.Set(1, definedon = self.domain)

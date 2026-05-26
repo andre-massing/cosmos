@@ -1,11 +1,9 @@
 import logging
 logger = logging.getLogger(__name__)
 
-import os
 import time
 from ngsolve import *
 from typing import Dict, TYPE_CHECKING
-import traceback
 import numpy as np
 from ngsolve.webgui import Draw
 
@@ -13,6 +11,14 @@ if TYPE_CHECKING:
     from cosmos.core.model import CosmosModel
 
 class CosmosStepManager:
+    """Orchestrates the per-time-step solve sequence for a CosmosModel.
+
+    Dispatches the Initialize, PreProcess, Solve, and PostProcess phases to all
+    registered PDE models in the correct order (pre-ALE PDEs → ALE solve →
+    post-ALE PDEs). Supports explicit coupling and implicit (Gauss–Seidel
+    iteration) coupling modes, with optional adaptive time-stepping driven by a
+    relative solution-change tolerance.
+    """
 
     def __init__(self, kwargs):
 
@@ -28,7 +34,7 @@ class CosmosStepManager:
             if {self.params['coupling_type']} <= {'implicit', 'explicit'}:
                 self.coupling_type = self.params['coupling_type']
             else:
-                raise Exception('Coupling type must be either implicit or explicit')
+                raise ValueError('Coupling type must be either implicit or explicit')
             
         if 'adaptive_timestep' in  self.params.keys():
             if self.params['adaptive_timestep']:
@@ -87,7 +93,7 @@ class CosmosStepManager:
                         iter_max = 10
 
                         if eps_max<eps_target or eps_target<eps_min:
-                            raise Exception('Wrong parameters for adaptive algorithm!!')
+                            raise ValueError('Wrong parameters for adaptive algorithm!!')
 
                         success, eps, subiter = self.implicit_solve_step_gauss(model, iter_max, eps_min)
 
@@ -114,11 +120,11 @@ class CosmosStepManager:
 
                     elif self.coupling_type == 'explicit':
 
-                        raise Exception('No adaptivity implemented for explicit time stepping')
+                        raise NotImplementedError('No adaptivity implemented for explicit time stepping')
 
                 if model.dt.Get()<dt_tol:
                     print(self.control)
-                    raise Exception('Timestep shrinked to 0!')
+                    raise RuntimeError('Timestep shrinked to 0!')
                 
             else:
 
@@ -128,7 +134,7 @@ class CosmosStepManager:
                     iter_max = 15
                     success, eps, subiter = self.implicit_solve_step_gauss(model, iter_max, eps_min)
                     if not success:
-                        raise Exception('Implicit algorithm couldn\'t converge, max_iter reached')
+                        raise RuntimeError('Implicit algorithm couldn\'t converge, max_iter reached')
                 elif self.coupling_type == 'explicit':
                     self.explicit_solve_step(model)
                 
@@ -155,7 +161,7 @@ class CosmosStepManager:
         tol_floor = 1e-12
 
         if tol_floor>eps_min:
-            raise Exception('The minimum error threshold is too close to machine precision')
+            raise ValueError('The minimum error threshold is too close to machine precision')
 
         for i, pde in enumerate(model.pdes_pre):
             pde.Solve()
