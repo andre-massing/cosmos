@@ -343,8 +343,6 @@ class CosmosBndALEField:
 
             def deviatoric(u):
                 return Sym(Grad(u).Trace()) - Trace(Sym(Grad(u).Trace()))/model.dim*Id(model.dim)
-            ir_segm = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
-            ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
 
             self.A_pp = BilinearForm(fes_pp, symmetric = True)
             self.A_pp += InnerProduct(dX_pp*self.ns, zeta_pp)*ds(intrules = { SEGM : ir_segm, TRIG: ir_trig }, deformation = model.ale.Yo)
