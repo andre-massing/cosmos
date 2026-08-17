@@ -1,3 +1,13 @@
+# Surface (boundary) two-field Cahn-Hilliard model, first-order BDF1
+# (implicit Euler) time discretization, following Bachini et al.'s surface
+# discretization of the mixed Cahn-Hilliard system using tangential
+# (surface-gradient) operators, with a LOGARITHMIC Flory-Huggins-style
+# double-well potential:
+#   du/dt + div_Gamma(b u) - div_Gamma(M grad_Gamma w) = rhs_u
+#   w - sigma*epsilon*Delta_Gamma(u) = sigma/epsilon*dW(u_old)
+# The potential is evaluated explicitly at u_old (no ddW-based linearization
+# here, mirroring the volume log model). See docs/pde_models.md.
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -11,13 +21,33 @@ from cosmos.core.field import InputField, OutputField
 from cosmos.core.utils import MandBP
 
 class CahnHilliardBoundaryBachiniLogBDF1Model(BasePDEModel):
+    """First-order (BDF1/implicit Euler) mixed Cahn-Hilliard solver on a surface
+    (boundary) domain, following Bachini et al.'s tangential-operator
+    discretization, with a logarithmic (Flory-Huggins-style) double-well
+    potential evaluated explicitly at the previous time step."""
 
     def __init__(self, solver:Solver,
                  model_order:int,
                  domain:str = '.*',
                  name:str = 'CahnHilliardBoundaryBachiniLogBDF1Model',
                  input_params = {}):
-        
+        """
+        Args:
+            solver: The Solver this model attaches to.
+            model_order: Execution order among the solver's attached models.
+            domain: Boundary region name(s) the equation is posed on (default: all).
+            name: Unique name for this model instance within the solver.
+            input_params: Overrides for the default scalar options (see below).
+
+        Recognized input_params keys: `periodic`, `mass_preserving`, `bounds`
+        (`[low, high]`), `fes_order` (bound/mass preservation only implemented
+        for `fes_order == 1`), `u0`/`w0` (initial conditions for phase `u` and
+        potential `w`), `M` (mobility), `epsilon` (interface-width parameter),
+        `sigma` (surface tension), `Neu_bnd_phase`/`Neu_bnd_potential`
+        (Neumann boundary-of-the-surface region names for the phase/potential
+        equations).
+        """
+
         super().__init__()
         
         self.VorB = BND
@@ -35,6 +65,9 @@ class CahnHilliardBoundaryBachiniLogBDF1Model(BasePDEModel):
         n = specialcf.normal(self._solver.ngsmesh.dim)
         tE = specialcf.tangential(self._solver.ngsmesh.dim)
         Ps = Id(self._solver.ngsmesh.dim) - OuterProduct(n, n)
+        # facet_space/nE are only used to mark and orient the co-dimension-2
+        # Neumann boundary-of-the-surface (a curve in 3D, a point in 2D) further
+        # below; nE is the outward conormal within the surface at that boundary.
         if self._solver.ngsmesh.dim == 2:
             facet_space = H1(self._solver.ngsmesh, order = 1, 
                                             definedon = self.domain)
@@ -68,6 +101,8 @@ class CahnHilliardBoundaryBachiniLogBDF1Model(BasePDEModel):
             fes_vector = Compress(VectorH1(self._solver.ngsmesh, order = self.input_params["fes_order"], 
                                    definedon = self.domain))
           
+        # Mixed space: component 0 is the phase field u, component 1 is the
+        # chemical potential w, both restricted to the surface `self.domain`.
         (trial_u, trial_w), (test_u, test_w) = fes.TnT()
         self.A = BilinearForm(fes)
         self.F = LinearForm(fes)
@@ -95,13 +130,24 @@ class CahnHilliardBoundaryBachiniLogBDF1Model(BasePDEModel):
         self.input_fields["grad_phase_bnd"] = InputField(grad_phase_bnd_gfu, CF((0,)*self._solver.ngsmesh.dim), "grad_phase_bnd", self._solver.ngsmesh.Boundaries('.*'))
         self.input_fields["grad_potential_bnd"] = InputField(grad_potential_bnd_gfu, CF((0,)*self._solver.ngsmesh.dim), "grad_potential_bnd", self._solver.ngsmesh.Boundaries('.*'))
 
+        # Logarithmic double-well potential derivative dW(u) =
+        # 0.25*(log10(1+u) - log10(1-u)) - u, evaluated explicitly at the
+        # previous time level u_old (see F below); note this uses base-10 log
+        # via the self.log10 helper method defined near the end of this class.
         def dW(phase):
             return 0.25*(self.log10(1+phase)-self.log10(1-phase))-phase 
 
+        # BDF1 time derivative plus tangential advection of u.
         self.A += 1/self._solver.time.dt*trial_u*test_u*ds(deformation = deform)
         self.A += b_gfu*grad(trial_u).Trace()*test_u*ds(deformation = deform)
+        # Mixed-form coupling: -div_Gamma(M grad_Gamma w) (u-equation) tested
+        # weakly as M*grad_Gamma(w).grad_Gamma(test_u) (surface gradients via
+        # .Trace()).
         self.A += self.input_params["M"]*grad(trial_w).Trace()*grad(test_u).Trace()*ds(deformation = deform)
         self.A += trial_w*test_w*ds(deformation = deform)
+        # w-equation: -sigma*epsilon*Delta_Gamma(u) (integrated by parts); the
+        # potential term dW(u_old) is added explicitly to F below (no implicit
+        # linearization for the logarithmic potential in this variant).
         self.A += -self.input_params["sigma"]*self.input_params["epsilon"]*grad(trial_u).Trace()*grad(test_w).Trace()*ds(deformation = deform)
 
         self.A.Assemble()
@@ -109,20 +155,28 @@ class CahnHilliardBoundaryBachiniLogBDF1Model(BasePDEModel):
 
         self.F += rhs_u_gfu*test_u*ds(deformation = deform)
         self.F += rhs_w_gfu*test_w*ds(deformation = deform)
-        
+
+        # BDF1 time derivative term plus the explicit potential source dW(u_old).
         self.F += 1/self._solver.time.dt*self.gfu_u_old*test_u*ds(deformation = deform)
         self.F += self.input_params["sigma"]/self.input_params["epsilon"]*dW(self.gfu_u_old)*test_w*ds(deformation = deform)
 
         if self.input_params["Neu_bnd_phase"]:
+            # Neumann flux for the phase equation, imposed weakly on the
+            # boundary-of-the-surface curve/point selected via Neu_bnd_phase;
+            # neu_bnd_gfu_phase is an indicator restricting the term to it.
             neu_bnd_gfu_phase = GridFunction(facet_space)
             neu_bnd_gfu_phase.Set(1, definedon = self._solver.ngsmesh.BBoundaries(self.input_params['Neu_bnd_phase']))
             self.F += -1*neu_bnd_gfu_phase*self.input_params["sigma"]*self.input_params["epsilon"]*grad_phase_bnd_gfu*nE*test_w*ds(element_boundary = True, deformation = deform)
         if self.input_params["Neu_bnd_potential"]:
+            # Neumann flux for the potential equation, same mechanism.
             neu_bnd_gfu_potential = GridFunction(facet_space)
             neu_bnd_gfu_potential.Set(1, definedon = self._solver.ngsmesh.BBoundaries(self.input_params['Neu_bnd_potential']))
             self.F += neu_bnd_gfu_potential*self.input_params["M"]*grad_potential_bnd_gfu*nE*test_u*ds(element_boundary=True, deformation = deform)
 
         if self.input_params["mass_preserving"]:
+            # Mass-lumped (vertex-based) surface quadrature rules used to build
+            # a diagonal mass matrix whose entries serve as quadrature weights
+            # for MandBP.
             ir_segm = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
             ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
             ds_lumped = ds(intrules = {  SEGM : ir_segm, TRIG : ir_trig })
@@ -134,7 +188,10 @@ class CahnHilliardBoundaryBachiniLogBDF1Model(BasePDEModel):
             self.weights = sp.csr_matrix((vals,(rows,cols))).diagonal()
 
     def PreProcess(self):
-        
+        """Snapshot the current solution as the previous time level; on the first
+        iteration, validate fes_order for bound/mass preservation and, if mass
+        preservation is requested, record the target mass."""
+
         self.gfu_old.vec.data = self.gfu.vec.data
 
         if self._solver.time.iter == 0:
@@ -143,12 +200,15 @@ class CahnHilliardBoundaryBachiniLogBDF1Model(BasePDEModel):
                 raise Exception('Mass preservation not yet implemented for fes_order>1')
             if self.input_params["bounds"] and self.input_params["fes_order"]>1:
                 raise Exception('Bounds preservation not yet implemented for fes_order>1')
-        
+
             if self.input_params["mass_preserving"]:
                 gfu0_vec = self.gfu_u.vec.Copy().FV().NumPy()
                 self.mass0 = np.sum(self.weights*gfu0_vec)
 
     def Solve(self):
+        """Refresh input fields, re-assemble and solve the linear system for this
+        step, then optionally apply bound/mass-preservation post-processing to
+        the phase."""
 
         self.update_input_fields()
 
@@ -187,34 +247,42 @@ class CahnHilliardBoundaryBachiniLogBDF1Model(BasePDEModel):
             self.gfu_u.vec.data = gfu_new
 
     def PostProcess(self):
-        
+        """No auxiliary state to advance for this model."""
+
         pass
 
     def log10(self, a):
+        """Base-10 logarithm of a coefficient function, via natural log."""
         return log(a)/log(10)
 
     @property
     def phase(self):
+        """The current phase field GridFunction (u)."""
         return self.gfu_u
-    
+
     @phase.setter
     def phase(self, cf):
+        """Overwrite the current phase field by interpolating a coefficient."""
         self.gfu_u.Set(cf, definedon = self.domain)
 
     @property
     def potential(self):
+        """The current chemical potential GridFunction (w)."""
         return self.gfu_w
-    
+
     @potential.setter
     def potential(self, cf):
+        """Overwrite the current chemical potential by interpolating a coefficient."""
         self.gfu_w.Set(cf, definedon = self.domain)
 
     @property
     def energy(self):
+        """Total logarithmic (Flory-Huggins) free energy, combining the entropic
+        mixing term, the double-well term, and the gradient (interface) term,
+        integrated over the boundary domain."""
         energy = Integrate(self.input_params['sigma']*(0.25/self.input_params['epsilon']*((1-self.phase)*self.log10(1-self.phase) 
                             + (1+self.phase)*self.log10(1+self.phase)) + 0.5/self.input_params['epsilon']*(1-self.phase**2)
                            + self.input_params['epsilon']/2*Norm(grad(self.phase).Trace())**2), 
                            self._solver.ngsmesh, VOL_or_BND = BND)
         return energy
 
-        

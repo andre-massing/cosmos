@@ -1,3 +1,6 @@
+# Top-level simulation orchestrator: owns the mesh, the clock, and the registry of
+# attached PDE models, and drives the time-stepping loop.
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -12,9 +15,22 @@ from typing import Dict
 import traceback
 
 class Solver:
+    """Orchestrates a simulation: owns a SolverMesh and SolverTime, holds the
+    registry of attached PDE models, and exposes the time-stepping loop as a
+    generator (`solver()`) or a blocking call (`solver.run()`)."""
 
     def __init__(self, solvermesh:SolverMesh, solvertime:SolverTime = None, name:str = 'solver',
                  iter:bool = False, printing:bool = False):
+        """
+        Args:
+            solvermesh: The mesh (and deformation state) the simulation runs on.
+            solvertime: The time-stepping manager; defaults to a zero-length,
+                single-instant SolverTime if omitted.
+            name: Identifies this solver, used to namespace output folders/files.
+            iter: If True, PDE models are solved with fixed-point sub-iteration each
+                step (see SolverIterator) to resolve implicit multi-physics coupling.
+            printing: If True, print progress information during the run.
+        """
 
         if not isinstance(name, str):
             raise Exception('Name must be a string')
@@ -47,9 +63,16 @@ class Solver:
             self.time.print_info()
 
     def __call__(self):
+        """Return the step-by-step simulation generator (see `_generator`)."""
         return self._generator()
 
     def _attach_model(self, pde:BasePDEModel, order:int):
+        """Register a PDE model with this solver under a given execution order.
+
+        Called by PDE model constructors (not typically by user code directly).
+        Raises if `pde` is not a BasePDEModel, `order` is not an int, or a model
+        with the same name is already registered.
+        """
 
         if not isinstance(pde, BasePDEModel):
             raise Exception('The attached model must derive from BasePDEModel')
@@ -60,8 +83,16 @@ class Solver:
                 raise Exception('PDE Models'' names must be unique in order to avoid conflicts')
             else:
                 self.pdes[pde.name] = pde
-    
+
     def _generator(self):
+        """Generator driving the simulation one time step per iteration.
+
+        Each iteration runs SolverTime/SolverIterator pre/postprocess and
+        Solver-Iterator's solve_step (see cosmos.core.iterator.SolverIterator),
+        writes periodic output, then yields control back to the caller. On
+        uncaught exception, the last state is saved and an error report is written
+        to `<output_folder>/<name>/<name>.err` before the exception propagates.
+        """
 
         if self.printing:
             print('\n !!! SIMULATION HAS STARTED !!! \n')
@@ -113,10 +144,17 @@ class Solver:
                 traceback.print_exc(file=fw)
 
     def run(self):
-        for step in self(): 
+        """Run the simulation to completion, discarding per-step control (use
+        `for _ in solver():` directly instead if intermediate access is needed)."""
+        for step in self():
                 pass
 
     def save_model_solution(self, pde: BasePDEModel, subdivision = 0):
+        """Opt an attached PDE model into periodic VTK output of its output_fields.
+
+        Must be called after `output_params()` has set `self.output_folder`. Raises
+        if `pde` is not registered with this solver.
+        """
 
         if pde.name in self.pdes.keys():
             pde.save = True
@@ -130,17 +168,22 @@ class Solver:
                                 subdivision = subdivision)
         else:
             raise Exception('PDE ' + pde.name + ' is not registered as a Model in Solver ' + self.name)
-        
+
     def _save_pdes_solutions(self):
+        """Write a VTK output frame for every model with `save == True`, every
+        `output_sample_rate` iterations."""
         for _, pde in self.pdes.items():
             if pde.save:
                 if self.time.iter % self.output_sample_rate == 0:
                     pde.vtk.Do(time = self.time.t.Get(), vb = pde.VorB)
 
     def output_params(self, folder, sample_rate):
+        """Configure the output folder and how often (in iterations) results are
+        written; must be called before `save_model_solution()`."""
         self.output_folder = folder
         self.output_sample_rate = sample_rate
 
     @property
     def current_time(self):
+        """The current simulation time."""
         return self.time.t.Get()

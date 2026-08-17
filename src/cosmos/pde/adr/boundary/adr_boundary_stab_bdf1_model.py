@@ -1,3 +1,11 @@
+# Boundary (surface) advection-diffusion-reaction PDE model, first-order BDF
+# (implicit Euler) time discretization, with a facet flux-jump stabilization
+# term for advection-dominated regimes. Solves the same equation as the volume
+# model but intrinsically on a codimension-1 surface, using tangential
+# (.Trace()) gradients, an auxiliary facet-normal-derivative unknown, and
+# Dirichlet/Neumann conditions imposed along the surface's edge (codimension-2
+# "BBoundary"). See docs/pde_models.md.
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -12,12 +20,32 @@ from cosmos.core.utils import MandBP
 from ngsolve.webgui import Draw
 
 class ADRBoundaryStabBDF1Model(BasePDEModel):
+    """First-order (BDF1/implicit Euler) advection-diffusion-reaction solver posed
+    intrinsically on a surface (codimension-1) domain, using tangential
+    gradients. An auxiliary facet-normal-derivative unknown is added (a compound
+    finite element space) and a flux-jump penalization term stabilizes
+    advection-dominated regimes."""
 
     def __init__(self, solver:Solver,
                  model_order:int,
                  domain:str = '.*',
                  name:str = 'ADRBoundaryStabBDF1Model',
                  input_params = {}):
+        """
+        Args:
+            solver: The Solver this model attaches to.
+            model_order: Execution order among the solver's attached models.
+            domain: Boundary region name(s) the equation is posed on (default: all).
+            name: Unique name for this model instance within the solver.
+            input_params: Overrides for the default scalar options (see below).
+
+        Recognized input_params keys: `Neu_bnd`/`Dir_bnd` (Neumann/Dirichlet edge
+        region names, i.e. codimension-2 BBoundaries of the surface), `periodic`,
+        `mass_preserving`, `bounds` (`[low, high]`), `fes_order`, `u0` (initial
+        condition). The jump stabilization coefficient is not user-configurable;
+        it is fixed to Norm(b)*h**2, evaluated from the current advection field
+        `b`.
+        """
         
         super().__init__()
         
@@ -43,6 +71,10 @@ class ADRBoundaryStabBDF1Model(BasePDEModel):
 
         self.set_input_params(input_params)
 
+        # V is the primal scalar unknown; dV is an auxiliary unknown representing
+        # the facet-normal derivative used by the stabilization below (a second
+        # H1 field in 2D, a NormalFacetSurface field in 3D). fes = V*dV below is
+        # a compound (mixed) space.
         V = H1(self._solver.ngsmesh, order = self.input_params["fes_order"], 
                                             definedon = self.domain)
         if self._solver.ngsmesh.dim == 2:
@@ -66,6 +98,10 @@ class ADRBoundaryStabBDF1Model(BasePDEModel):
         h = self.cfg.h
         alpha = 5 * self.input_params["fes_order"] * (self.input_params["fes_order"]+1)
         tE = specialcf.tangential(self._solver.ngsmesh.dim)
+        # In 2D the surface's edge is a set of points, and the outward co-normal
+        # nE coincides with the surface's own tangent; in 3D the edge is a
+        # genuine 1D facet, so edge (BBoundary) indicator data lives on a
+        # FacetSurface space and nE = n x tE is the outward co-normal.
         if self._solver.ngsmesh.dim == 2:
             facet_space = V
             nE = specialcf.tangential(self._solver.ngsmesh.dim)
@@ -73,14 +109,21 @@ class ADRBoundaryStabBDF1Model(BasePDEModel):
         else:
             facet_space = FacetSurface(self._solver.ngsmesh, order = 0)
             nE = Cross(n, tE)
+        # bnd_gfu marks the edge elements on the prescribed (Dirichlet or
+        # Neumann) boundary; used below both for the upwind flux and to blend
+        # the stabilization term off there.
         bnd_gfu = GridFunction(facet_space)
         bnd_gfu.Set(1, definedon = self._solver.ngsmesh.BBoundaries(self.input_params['Dir_bnd']+'|'+self.input_params['Neu_bnd']))
           
+        # trial/test are the primal unknown; trial_d/test_d the auxiliary facet
+        # (normal-derivative) unknown of the compound space.
         (trial, trial_d), (test, test_d) = fes.TnT()
         self.A = BilinearForm(fes)
         self.F = LinearForm(fes)
         
         self.gfu = GridFunction(fes)
+        # Split the compound solution GridFunction into its primal (gfu_sol) and
+        # auxiliary facet (gfu_sol_d) components.
         self.gfu_sol, self.gfu_sol_d = self.gfu.components
         self.gfu_old = GridFunction(fes)
         gfu_sol_old = self.gfu_old.components[0]
@@ -105,6 +148,9 @@ class ADRBoundaryStabBDF1Model(BasePDEModel):
         self.input_fields["u_bnd"] = InputField(u_bnd_gfu, CF(0), "u_bnd", self._solver.ngsmesh.Boundaries('.*'))
 
         if self.input_params["mass_preserving"]:
+            # Mass-lumped quadrature rules (vertex-based, over segments/triangles)
+            # used to build a diagonal mass matrix whose entries serve as
+            # quadrature weights for MandBP.
             ir_segm = IntegrationRule(points = [(0,0), (1,0)], weights = [1/2, 1/2])
             ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
             ds_lumped = ds(intrules = {  SEGM : ir_segm, TRIG : ir_trig }, deformation = deform)
@@ -115,20 +161,34 @@ class ADRBoundaryStabBDF1Model(BasePDEModel):
             rows,cols,vals = self.Amp.mat.COO()
             self.weights = sp.csr_matrix((vals,(rows,cols))).diagonal()
 
+        # Reaction and (tangential) diffusion terms.
         self.A += c_gfu*trial*test*ds(deformation = deform)
         self.A += d_gfu*grad(trial).Trace()*grad(test).Trace()*ds(deformation = deform)
                 
         if self.input_params['Dir_bnd']:
+            # dir_bnd_gfu is a 0/1 indicator on facet_space marking the edge
+            # elements lying in the Dirichlet region, since
+            # ds(element_boundary=True) integrates over the whole edge skeleton
+            # and this term must vanish outside it.
             dir_bnd_gfu = GridFunction(facet_space)
             dir_bnd_gfu.Set(1, definedon = self._solver.ngsmesh.BBoundaries(self.input_params['Dir_bnd']))
+            # Symmetric interior penalty (Nitsche-type) weak imposition of the
+            # Dirichlet condition on the diffusive flux, evaluated along the edge.
             self.A += - dir_bnd_gfu*d_gfu*InnerProduct(nE, grad(trial).Trace())*test*ds(element_boundary=True, deformation = deform) \
                 - dir_bnd_gfu*d_gfu*InnerProduct(nE, grad(test).Trace())*trial*ds(element_boundary=True, deformation = deform)\
                 + dir_bnd_gfu*d_gfu*alpha/h*trial*test*ds(element_boundary=True, deformation = deform)\
 
+        # Advection term, integrated by parts using the tangential gradient, plus
+        # upwind flux on the outflow portion of the edge (IfPos selects
+        # b.nE > 0), restricted to the prescribed boundary via bnd_gfu.
         self.A += -b_gfu*grad(test).Trace() * trial*ds(deformation = deform)
         self.A += bnd_gfu*IfPos(b_gfu*nE, b_gfu*nE*trial, CF(0))*test\
             *ds(element_boundary=True, deformation = deform)
         
+        # jump_dudn/jump_dvdn measure the mismatch between the tangential
+        # gradient's co-normal component and the independent facet unknown
+        # trial_d/test_d, i.e. the facet flux jump penalized below to stabilize
+        # the coupling between the primal and auxiliary unknowns.
         if self._solver.ngsmesh.dim == 2:
             tEc = CF((-n[1], n[0]))
             jump_dudn = (trial.Trace().Deriv() - trial_d*tEc)*nE
@@ -136,12 +196,20 @@ class ADRBoundaryStabBDF1Model(BasePDEModel):
         elif self._solver.ngsmesh.dim == 3:
             jump_dudn = (trial.Trace().Deriv() - trial_d.Trace())*nE
             jump_dvdn = (test.Trace().Deriv() - test_d.Trace())*nE
+        # Jump-penalization weight, proportional to Norm(b)*h**2, as in the
+        # volume stab models.
         stab = Norm(b_gfu)*h**2
+        # Regularize b_gfu away from zero for this initial assembly (avoids a
+        # degenerate stabilization weight); the real advection field overwrites
+        # it via update_input_fields() at the start of each Solve().
         epsilon = 1e-8
         if self._solver.ngsmesh.dim == 2:
             b_gfu.Set(CF((epsilon, epsilon)), definedon = self.domain)
         elif self._solver.ngsmesh.dim == 3:
             b_gfu.Set(CF((epsilon, epsilon, epsilon)), definedon = self.domain)
+        # Penalize the flux jump everywhere, then relax that penalty (and
+        # instead couple trial_d/test_d directly) on the prescribed boundary,
+        # via bnd_gfu.
         self.A +=  stab*InnerProduct(jump_dudn,jump_dvdn)\
                 *ds(element_boundary=True, deformation = deform)
         self.A +=  -1*stab*bnd_gfu*InnerProduct(jump_dudn,jump_dvdn)\
@@ -149,6 +217,7 @@ class ADRBoundaryStabBDF1Model(BasePDEModel):
         self.A +=  bnd_gfu*InnerProduct(trial_d.Trace(),test_d.Trace())\
                 *ds(element_boundary=True, deformation = deform)
         
+        # Implicit-Euler (BDF1) time derivative term.
         self.A += 1/self._solver.time.dt*trial*test*ds(deformation = deform)
 
         self.A.Assemble()
@@ -166,9 +235,14 @@ class ADRBoundaryStabBDF1Model(BasePDEModel):
 
         self.F += -bnd_gfu*IfPos(b_gfu*nE, CF(0), b_gfu*nE*u_bnd_gfu)*test*ds(element_boundary=True, deformation = deform)
 
+        # BDF1 time derivative term evaluated on the previous configuration.
         self.F += 1/self._solver.time.dt*gfu_sol_old*test*ds(deformation = deform_old)
 
     def PreProcess(self):
+        """Snapshot the current solution as the previous time level. On the first
+        iteration, validate that mass/bounds preservation is only requested for
+        fes_order == 1 (not yet implemented otherwise), and record the target
+        mass if mass preservation is requested."""
         
         self.gfu_old.vec.data = self.gfu.vec.data
 
@@ -185,6 +259,8 @@ class ADRBoundaryStabBDF1Model(BasePDEModel):
 
 
     def Solve(self):
+        """Refresh input fields, re-assemble and solve the linear system for this
+        step, then optionally apply bound/mass-preservation post-processing."""
         
         self._solver.time.advance_tcoef()
         self._solver.mesh.advance_mesh()
@@ -228,15 +304,19 @@ class ADRBoundaryStabBDF1Model(BasePDEModel):
         self._solver.mesh.reset_mesh()
 
     def PostProcess(self):
+        """No auxiliary state to advance for this model."""
         
         pass
 
     @property
     def sol(self):
+        """The current solution GridFunction (the primal component of the
+        compound space; excludes the auxiliary facet unknown)."""
         return self.gfu_sol
     
     @sol.setter
     def sol(self, cf):
+        """Overwrite the current solution by interpolating a coefficient."""
         self.gfu_sol.Set(cf, definedon = self.domain)
 
         

@@ -1,3 +1,6 @@
+# Process-wide simulation configuration: mesh-size symbol, time-level buffer size,
+# random seed and numerical precision, shared by all core objects and PDE models.
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -8,6 +11,16 @@ from ngsolve import *
 
 @dataclass
 class Config:
+    """Container for global simulation settings.
+
+    Attributes:
+        h: NGSolve mesh-size symbol used in stabilization/penalty terms.
+        seed: Optional random seed (reserved for reproducible randomness).
+        buffer: Number of previous time levels retained by SolverMesh/SolverTime
+            (must be >= the number of previous levels a time-discretization needs,
+            e.g. 2 for BDF2).
+        precision: Reserved floating-point precision setting.
+    """
     # h = MyMeshSize()
     h = specialcf.mesh_size
     seed: Optional[int] = None

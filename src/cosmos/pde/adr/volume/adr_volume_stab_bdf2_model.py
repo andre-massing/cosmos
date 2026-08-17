@@ -1,3 +1,10 @@
+# Volume (bulk-domain) advection-diffusion-reaction PDE model, second-order BDF
+# (BDF2) time discretization plus a facet jump-penalization stabilization term
+# for advection-dominated regimes. Solves:
+#   du/dt + div(b u) + c u - div(d grad u) = rhs
+# with Dirichlet/Neumann boundary conditions imposed via a symmetric interior
+# penalty (SIP) formulation. See docs/pde_models.md.
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -11,12 +18,32 @@ from cosmos.core.field import InputField, OutputField
 from cosmos.core.utils import MandBP
 
 class ADRVolumeStabBDF2Model(BasePDEModel):
+    """Second-order (BDF2) advection-diffusion-reaction solver on a volume (bulk)
+    domain, with a facet jump-penalization term (proportional to Norm(b)*h**2,
+    on a dgjumps=True space) added to stabilize advection-dominated regimes.
+    Requires two previous time levels: the first step falls back to a BDF1
+    (implicit Euler) update, and the true BDF2 coefficients are switched on from
+    the second step onward."""
 
     def __init__(self, solver:Solver,
                  model_order:int,
                  domain:str = '.*',
                  name:str = 'ADRVolumeStabBDF2Model',
                  input_params = {}):
+        """
+        Args:
+            solver: The Solver this model attaches to.
+            model_order: Execution order among the solver's attached models.
+            domain: Material region name(s) the equation is posed on (default: all).
+            name: Unique name for this model instance within the solver.
+            input_params: Overrides for the default scalar options (see below).
+
+        Recognized input_params keys: `Neu_bnd`/`Dir_bnd` (Neumann/Dirichlet
+        boundary region names), `periodic`, `mass_preserving`, `bounds`
+        (`[low, high]`), `fes_order`, `u0` (initial condition). The jump
+        stabilization coefficient is not user-configurable; it is fixed to
+        Norm(b)*h**2, evaluated from the current advection field `b`.
+        """
         
         super().__init__()
         
@@ -89,6 +116,8 @@ class ADRVolumeStabBDF2Model(BasePDEModel):
         self.input_fields["u_bnd"] = InputField(u_bnd_gfu, CF(0), "u_bnd", self._solver.ngsmesh.Boundaries('.*'))
 
         if self.input_params["mass_preserving"]:
+            # Mass-lumped quadrature rules (vertex-based) used to build a diagonal
+            # mass matrix whose entries serve as quadrature weights for MandBP.
             ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
             ir_tet = IntegrationRule(points  = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)], \
                                      weights = [1/24, 1/24, 1/24, 1/24])
@@ -100,23 +129,35 @@ class ADRVolumeStabBDF2Model(BasePDEModel):
             rows,cols,vals = self.Amp.mat.COO()
             self.weights = sp.csr_matrix((vals,(rows,cols))).diagonal()
 
+        # Reaction and diffusion terms.
         self.A += c_gfu*trial*test*dx(deformation = deform)
         self.A += d_gfu*grad(trial)*grad(test)*dx(deformation = deform)
                 
         if self.input_params['Dir_bnd']:
+            # Symmetric interior penalty (Nitsche-type) weak imposition of the
+            # Dirichlet condition on the diffusive flux.
             self.A += - d_gfu*InnerProduct(n, grad(trial))*test*ds(definedon = self.input_params['Dir_bnd'], skeleton=True, deformation = deform) \
                 - d_gfu*InnerProduct(n, grad(test))*trial*ds(definedon = self.input_params['Dir_bnd'], skeleton=True, deformation = deform)\
                 + d_gfu*alpha/h*trial*test*ds(definedon = self.input_params['Dir_bnd'], skeleton = True, deformation = deform)\
 
+        # Advection term, integrated by parts.
         self.A += -b_gfu*grad(test) * trial*dx(deformation = deform)
+        # Facet jump-penalization stabilization: penalizes the jump of the
+        # gradient across interior facets (dgjumps=True space), weighted by
+        # Norm(b)*h**2, to suppress spurious oscillations in advection-dominated
+        # regimes.
         stab = (Norm(b_gfu))*h**2
         jump_u = grad(test)-grad(test).Other()
         jump_v = grad(trial)-grad(trial).Other()
         self.A += stab*jump_u*jump_v*dx(deformation = deform, skeleton = True)
         
+        # Upwind flux on the outflow boundary (IfPos selects the outgoing-flux
+        # branch b.n > 0).
         self.A += IfPos(b_gfu*n, b_gfu*n*trial, CF(0))*test\
             *ds(deformation = deform)
         
+        # BDF2 time derivative coefficient: starts at 1 (i.e. a BDF1 first step)
+        # and is reset to 3/2 in PreProcess() once a second previous level exists.
         self.alpha0 = Parameter(1.0)
         self.A += self.alpha0/self._solver.time.dt*trial*test*dx(deformation = deform)
 
@@ -133,12 +174,19 @@ class ADRVolumeStabBDF2Model(BasePDEModel):
 
         self.F += -IfPos(b_gfu*n, CF(0), b_gfu*n*u_bnd_gfu)*test*ds(deformation = deform)
 
+        # BDF2 combination of the two previous time levels; alpha1/alpha2 start
+        # as 1/0 (BDF1 first step) and are reset to 2/-0.5 in PreProcess() once a
+        # second previous level ("oldold") is available.
         self.alpha1 = Parameter(1.0)
         self.F += self.alpha1/self._solver.time.dt*self.gfu_old*test*dx(deformation = deform_old)
         self.alpha2 = Parameter(0.0)
         self.F += self.alpha2/self._solver.time.dt*self.gfu_oldold*test*dx(deformation = deform_oldold)
 
     def PreProcess(self):
+        """Shift the previous-time-level snapshots (old -> oldold, current -> old);
+        on the first iteration, record the target mass if mass preservation is
+        requested; from the second iteration onward, switch the BDF2 coefficients
+        on (1.5, 2, -0.5) now that a second previous level is available."""
         
         self.gfu_oldold.vec.data = self.gfu_old.vec.data
         self.gfu_old.vec.data = self.gfu.vec.data
@@ -153,6 +201,8 @@ class ADRVolumeStabBDF2Model(BasePDEModel):
             self.alpha2.Set(-0.5)
 
     def Solve(self):
+        """Refresh input fields, re-assemble and solve the linear system for this
+        step, then optionally apply bound/mass-preservation post-processing."""
 
         self._solver.time.advance_tcoef()
         self._solver.mesh.advance_mesh()
@@ -196,15 +246,18 @@ class ADRVolumeStabBDF2Model(BasePDEModel):
         self._solver.mesh.reset_mesh()
 
     def PostProcess(self):
+        """No auxiliary state to advance for this model."""
         
         pass
 
     @property
     def sol(self):
+        """The current solution GridFunction."""
         return self.gfu
     
     @sol.setter
     def sol(self, cf):
+        """Overwrite the current solution by interpolating a coefficient."""
         self.gfu.Set(cf, definedon = self.domain)
 
         

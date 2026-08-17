@@ -1,3 +1,7 @@
+# Field abstraction used by PDE models to accept coefficients (scalars, NGSolve
+# CoefficientFunctions/GridFunctions, or Python callables) uniformly, and to expose
+# named input/output solution components.
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -7,6 +11,8 @@ import numbers
 from ngsolve.webgui import Draw
 
 class Field:
+    """Wraps a value that may be a number, a CoefficientFunction/GridFunction, or a
+    zero-argument callable returning one of those, and evaluates it uniformly."""
 
     def __init__(self, coef):
 
@@ -36,6 +42,12 @@ class Field:
         return f"Field({repr(self._coef)})"
         
 class InputField(Field):
+    """A named, model-owned input coefficient backed by a GridFunction.
+
+    ``update()`` interpolates the current coefficient (``self()``) into ``gfu`` so that
+    downstream bilinear/linear forms, which reference ``gfu`` directly, see the latest
+    value. Used for diffusion coefficients, right-hand sides, boundary data, etc.
+    """
 
     def __init__(self, gfu: GridFunction, default: CoefficientFunction, name:str, domain):
 
@@ -55,10 +67,14 @@ class InputField(Field):
 
     @property
     def cf(self):
+        """The evaluated CoefficientFunction currently backing this input."""
         return self._eval()
 
     @cf.setter
     def cf(self, new_coef):
+        """Replace the underlying coefficient (number, CoefficientFunction,
+        GridFunction, or callable); does not itself refresh ``gfu`` (call
+        ``update()`` for that)."""
         if isinstance(new_coef, GridFunction) or isinstance(new_coef, CoefficientFunction):
             self._coef = new_coef
         elif isinstance(new_coef, numbers.Number):
@@ -67,11 +83,14 @@ class InputField(Field):
             self._coef = new_coef
         else:
             raise Exception("Unsupported type for Field " +  self.name)
-        
+
     def update(self):
+        """Interpolate the current coefficient into the backing GridFunction."""
         self.gfu.Set(self(), definedon = self.domain, dual = True)
-        
+
 class OutputField(Field):
+    """A named GridFunction exposed for output/visualization (e.g. VTK export via
+    Solver.save_model_solution)."""
 
     def __init__(self, coef, name, domain):
 
@@ -86,6 +105,7 @@ class OutputField(Field):
 
     @property
     def cf(self):
+        """The evaluated CoefficientFunction (the underlying GridFunction)."""
         return self._eval()
 
     

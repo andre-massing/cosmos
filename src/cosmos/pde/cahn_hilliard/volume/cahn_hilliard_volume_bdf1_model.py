@@ -1,3 +1,12 @@
+# Volume (bulk-domain) two-field Cahn-Hilliard model, first-order BDF1
+# (implicit Euler) time discretization, with a LOGARITHMIC Flory-Huggins-style
+# double-well potential:
+#   du/dt - div(D grad w) = rhs_u
+#   w - epsilon*Delta(u) = theta1*(log(1+u_old) - log(1-u_old)) - theta2*u_old
+# The potential term is evaluated explicitly at the previous time level
+# (no ddW-based linearization here, unlike the Aland/Bachini variants). See
+# docs/pde_models.md.
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -12,13 +21,33 @@ from cosmos.core.utils import MandBP
 from ngsolve.webgui import Draw
 
 class CahnHilliardVolumeBDF1Model(BasePDEModel):
+    """First-order (BDF1/implicit Euler) mixed Cahn-Hilliard solver on a volume
+    (bulk) domain, using a logarithmic (Flory-Huggins-style) double-well
+    potential linearized explicitly about the previous time step."""
 
     def __init__(self, solver:Solver,
                  model_order:int,
                  domain:str = '.*',
                  name:str = 'CahnHilliardVolumeBDF1Model',
                  input_params = {}):
-        
+        """
+        Args:
+            solver: The Solver this model attaches to.
+            model_order: Execution order among the solver's attached models.
+            domain: Material region name(s) the equation is posed on (default: all).
+            name: Unique name for this model instance within the solver.
+            input_params: Overrides for the default scalar options (see below).
+
+        Recognized input_params keys: `periodic`, `mass_preserving`, `bounds`
+        (`[low, high]`), `fes_order` (bound/mass preservation only implemented
+        for `fes_order == 1`), `u0`/`w0` (initial conditions for phase `u` and
+        potential `w`), `epsilon` (interface-width parameter), `theta1`/`theta2`
+        (coefficients of the logarithmic double-well potential
+        `theta1*(log(1+u) - log(1-u)) - theta2*u`). Neumann/Dirichlet boundary
+        conditions and advection are not yet implemented for this variant (see
+        the commented-out TODO blocks below).
+        """
+
         super().__init__()
         
         self.VorB = VOL
@@ -64,10 +93,12 @@ class CahnHilliardVolumeBDF1Model(BasePDEModel):
             fes_vector = Compress(VectorH1(self._solver.ngsmesh, order = self.input_params["fes_order"], 
                                    definedon = self.domain))
           
+        # Mixed space: component 0 is the phase field u, component 1 is the
+        # chemical potential w.
         (trial_u, trial_w), (test_u, test_w) = fes.TnT()
         self.A = BilinearForm(fes)
         self.F = LinearForm(fes)
-        
+
         self.gfu = GridFunction(fes)
         self.gfu_u, self.gfu_w = self.gfu.components
         self.gfu_old = GridFunction(fes)
@@ -96,11 +127,14 @@ class CahnHilliardVolumeBDF1Model(BasePDEModel):
         # self.input_fields["gradu_bnd"] = InputField(gradu_gfu, CF((0,)*solver.mesh.dim), "gradu_bnd", self._solver.ngsmesh.Boundaries('.*'))
         # self.input_fields["u_bnd"] = InputField(u_bnd_gfu, CF(0), "u_bnd", self._solver.ngsmesh.Boundaries('.*'))
 
+        # BDF1 time derivative of u, plus the mixed-form coupling: -div(D grad w)
+        # (u-equation) tested weakly as D*grad(w).grad(test_u), and w - epsilon*
+        # Delta(u) (w-equation, second term integrated by parts below).
         self.A += 1/self._solver.time.dt*trial_u*test_u*dx(deformation = deform)
         self.A += D_gfu*grad(trial_w)*grad(test_u)*dx(deformation = deform)
         self.A += trial_w*test_w*dx(deformation = deform)
         self.A += -self.input_params["epsilon"]*grad(trial_u)*grad(test_w)*dx(deformation = deform)
-                
+
         # if self.input_params['Dir_bnd']:
         #     self.A += - d_gfu*InnerProduct(n, grad(trial))*test*ds(definedon = self.input_params['Dir_bnd'], skeleton=True, deformation = deform) \
         #         - d_gfu*InnerProduct(n, grad(test))*trial*ds(definedon = self.input_params['Dir_bnd'], skeleton=True, deformation = deform)\
@@ -124,11 +158,17 @@ class CahnHilliardVolumeBDF1Model(BasePDEModel):
 
         # self.F += -IfPos(b_gfu*n, CF(0), b_gfu*n*u_bnd_gfu)*test*ds(deformation = deform)
 
+        # Logarithmic double-well potential dW(u) = theta1*(log(1+u) - log(1-u))
+        # - theta2*u, evaluated explicitly at the previous time level u_old
+        # (hard-coded here rather than via a dW/ddW helper closure).
         self.F += self.input_params["theta1"]*(log(1+self.gfu_u_old) - log(1-self.gfu_u_old))*test_w*dx(deformation = deform)
         self.F += -1*self.input_params["theta2"]*self.gfu_u_old*test_w*dx(deformation = deform)
+        # BDF1 time derivative term evaluated on the previous configuration.
         self.F += 1/self._solver.time.dt*self.gfu_u_old*test_u*dx(deformation = deform_old)
 
         if self.input_params["mass_preserving"]:
+            # Mass-lumped quadrature rules (vertex-based) used to build a diagonal
+            # mass matrix whose entries serve as quadrature weights for MandBP.
             ir_trig = IntegrationRule(points = [(0,0), (1,0), (0,1)], weights = [1/6, 1/6, 1/6])
             ir_tet = IntegrationRule(points  = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)], \
                                      weights = [1/24, 1/24, 1/24, 1/24])
@@ -141,7 +181,10 @@ class CahnHilliardVolumeBDF1Model(BasePDEModel):
             self.weights = sp.csr_matrix((vals,(rows,cols))).diagonal()
 
     def PreProcess(self):
-        
+        """Snapshot the current solution as the previous time level; on the first
+        iteration, validate fes_order for bound/mass preservation and, if mass
+        preservation is requested, record the target mass."""
+
         self.gfu_old.vec.data = self.gfu.vec.data
 
         if self._solver.time.iter == 0:
@@ -150,12 +193,15 @@ class CahnHilliardVolumeBDF1Model(BasePDEModel):
                 raise Exception('Mass preservation not yet implemented for fes_order>1')
             if self.input_params["bounds"] and self.input_params["fes_order"]>1:
                 raise Exception('Bounds preservation not yet implemented for fes_order>1')
-        
+
             if self.input_params["mass_preserving"]:
                 gfu0_vec = self.gfu_u.vec.Copy().FV().NumPy()
                 self.mass0 = np.sum(self.weights*gfu0_vec)
 
     def Solve(self):
+        """Refresh input fields, re-assemble and solve the linear system for this
+        step (A is constant, but F depends on gfu_u_old and the fields), then
+        optionally apply bound/mass-preservation post-processing to the phase."""
 
         self.update_input_fields()
 
@@ -194,23 +240,27 @@ class CahnHilliardVolumeBDF1Model(BasePDEModel):
             self.gfu_u.vec.data = gfu_new
 
     def PostProcess(self):
-        
+        """No auxiliary state to advance for this model."""
+
         pass
 
     @property
     def phase(self):
+        """The current phase field GridFunction (u)."""
         return self.gfu_u
-    
+
     @phase.setter
     def phase(self, cf):
+        """Overwrite the current phase field by interpolating a coefficient."""
         self.gfu_u.Set(cf, definedon = self.domain)
 
     @property
     def potential(self):
+        """The current chemical potential GridFunction (w)."""
         return self.gfu_w
-    
+
     @potential.setter
     def potential(self, cf):
+        """Overwrite the current chemical potential by interpolating a coefficient."""
         self.gfu_w.Set(cf, definedon = self.domain)
 
-        
