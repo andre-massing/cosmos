@@ -54,7 +54,9 @@ Update one or more fields of the process-wide `Config`.
 
 | Name | Type | Description |
 |---|---|---|
-| `**kwargs` | any | Key-value pairs matching attributes of `Config`. Unknown keys are logged as errors but do not raise. |
+| `**kwargs` | any | Key-value pairs matching attributes of `Config`. |
+
+**Raises:** `ValueError` if a key does not match an existing `Config` attribute.
 
 **Example:**
 

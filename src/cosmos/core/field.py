@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 from typing import Callable, Union
 from ngsolve import *
 import numbers
+
 
 class Field:
     """Uniform wrapper around an NGSolve coefficient or callable.
@@ -30,7 +32,9 @@ class Field:
             self._coef = coef
             self.is_callable = True
         else:
-            raise TypeError('Coef must be one of these: CoefficientFunction (GridFunction) or callable')
+            raise TypeError(
+                "Coef must be one of these: CoefficientFunction (GridFunction) or callable"
+            )
 
     def _eval(self) -> CoefficientFunction:
         """Evaluate and return CoefficientFunction."""
@@ -47,7 +51,7 @@ class Field:
 
     def __repr__(self) -> str:
         return f"Field({repr(self._coef)})"
-    
+
     @property
     def cf(self):
         return self._eval()
@@ -62,6 +66,4 @@ class Field:
             self._coef = new_coef
             self.is_callable = True
         else:
-            raise TypeError("Unsupported type for Field " +  self.name)
-
-    
+            raise TypeError("Unsupported type for new Field")

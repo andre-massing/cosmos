@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 from abc import ABC, abstractmethod
@@ -11,6 +12,7 @@ from cosmos.config.parameters import get_config
 if TYPE_CHECKING:
     from cosmos.core.model import CosmosModel
     from cosmos.core.compartment import CosmosCompartment
+
 
 class BasePDEModel(ABC):
     """Abstract base class for all PDE models in Cosmos.
@@ -25,34 +27,31 @@ class BasePDEModel(ABC):
 
     def __init__(
         self,
-        name: str = 'BasePDEModel',
+        name: str = "BasePDEModel",
         model: Optional[CosmosModel] = None,
         compartment: Optional[CosmosCompartment] = None,
     ) -> None:
         self.name = name
         self.model = model
         self.compartment = compartment
-        self.params: Dict[str, Any] = {'printing': False}
+        self.params: Dict[str, Any] = {"printing": False}
         self.cfg = get_config()
-        self.vtk = None
-        self.is_bnd: Optional[bool] = None
-        self.is_vol: Optional[bool] = None
 
     @abstractmethod
     def Initialize(self) -> None:
-        raise NotImplementedError('Base class Initialize is being called')
+        raise NotImplementedError("Base class Initialize is being called")
 
     @abstractmethod
     def PreProcess(self) -> None:
-        raise NotImplementedError('Base class PreProcess is being called')
+        raise NotImplementedError("Base class PreProcess is being called")
 
     @abstractmethod
     def Solve(self) -> None:
-        raise NotImplementedError('Base class Solve is being called')
+        raise NotImplementedError("Base class Solve is being called")
 
     @abstractmethod
     def PostProcess(self) -> None:
-        raise NotImplementedError('Base class PostProcess is being called')
+        raise NotImplementedError("Base class PostProcess is being called")
 
     def set_params(self, **kwargs: Any) -> None:
         for key, value in kwargs.items():
@@ -62,7 +61,7 @@ class BasePDEModel(ABC):
                 else:
                     self.params[key] = value
             else:
-                raise ValueError(f'Parameter {key} not present in PDEModel')
+                raise ValueError(f"Parameter {key} not present in PDEModel")
 
     def adaptive_timestep_cap(self) -> bool:
         return False

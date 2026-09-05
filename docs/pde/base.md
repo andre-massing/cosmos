@@ -25,8 +25,8 @@ Defines the four-phase lifecycle every concrete model must implement:
 ```python
 BasePDEModel(
     name: str = 'BasePDEModel',
-    model: CosmosModel = None,
-    compartment: CosmosCompartment = None,
+    model: Optional[CosmosModel] = None,
+    compartment: Optional[CosmosCompartment] = None,
 )
 ```
 
@@ -50,10 +50,14 @@ Do not instantiate directly; subclass and pass to
 | `compartment` | `CosmosCompartment` | Associated compartment. |
 | `params` | `dict` | Dictionary of named parameters (access via `set_params`). |
 | `cfg` | `Config` | Global solver configuration (from `get_config()`). |
-| `is_bnd` | `bool \| None` | `True` if the PDE lives on a boundary. |
-| `is_vol` | `bool \| None` | `True` if the PDE lives on a volume. |
 | `vtk_gfu` | `list[GridFunction]` | GridFunctions written to VTK when `printing=True`. |
 | `vtk_names` | `list[str]` | Names of the VTK fields. |
+
+`is_bnd`/`is_vol` are **class attributes**, not instance attributes — each
+concrete subclass declares them once at the top of the class body (e.g.
+`is_bnd = True; is_vol = False` for a surface model), since whether a given
+PDE type lives on a boundary or a volume never varies between instances of
+that class. `BasePDEModel` itself does not set a default for either.
 
 ---
 

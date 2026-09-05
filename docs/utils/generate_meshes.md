@@ -1,8 +1,6 @@
 # Mesh generation utilities
 
-**Sources:**
-- `src/cosmos/utils/generate_meshes.py`
-- `src/cosmos/utils/dendritic_spine_geom.py`
+**Source:** `src/cosmos/utils/generate_meshes.py`
 
 Factory functions for common geometries. Every function returns an NGSolve
 `Mesh` object, curved to the requested `order_g`.
@@ -304,32 +302,3 @@ Import and re-mesh an STL surface file using Netgen.
 | `fname` | `str` | Path to the `.stl` file. |
 | `maxh` | `float` | Maximum element size. |
 | `order_g` | `int` | Curving order. |
-
----
-
-## Dendritic spine geometries
-
-**Source:** `src/cosmos/utils/dendritic_spine_geom.py`
-
-### `generate_synapse2d`
-
-```python
-def generate_synapse2d(maxh: float, order_g: int = 1) -> Mesh
-```
-
-Generate a 2D cross-sectional mesh of a dendritic spine (axon + neck +
-head). The membrane boundary is labelled `"membrane"` and the membrane
-endpoints are labelled `"membrane_bnd"`.
-
----
-
-### `generate_synapse3d`
-
-```python
-def generate_synapse3d(maxh: float, order_g: int = 1) -> Mesh
-```
-
-Generate a 3D dendritic spine mesh obtained by revolving the 2D cross-section.
-The membrane surface is labelled `"membrane"` and the boundary circle
-`"membrane_bnd"`. High-quality meshing parameters (optimisation steps, grading)
-are applied automatically.

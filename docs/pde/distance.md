@@ -1,9 +1,11 @@
 # DistanceVolumeModel
 
-**Source:** `src/cosmos/pde/distance/volume/distance_volume_model.py`
+**Source:** `src/cosmos/pde/distance/distance_volume_model.py`
 
 ```python
-from cosmos.pde.distance.volume.distance_volume_model import DistanceVolumeModel
+from cosmos.pde import DistanceVolumeModel
+# or the full path:
+from cosmos.pde.distance.distance_volume_model import DistanceVolumeModel
 ```
 
 ```python
@@ -33,11 +35,13 @@ The three-stage solve at each step:
 ```python
 DistanceVolumeModel(
     name: str = 'DistanceVolumeModel',
-    model: CosmosModel = None,
-    compartment: CosmosCompartment = None,
+    model: Optional[CosmosModel] = None,
+    compartment: Optional[CosmosCompartment] = None,
     **kwargs,
 )
 ```
+
+`is_bnd = False` / `is_vol = True` are declared as class attributes.
 
 | Parameter | Type | Description |
 |---|---|---|

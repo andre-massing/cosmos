@@ -1,13 +1,11 @@
 # ADRVolumeSystemBDF1Model
 
-**Sources:**
-- `src/cosmos/pde/adr/volume/adr_volume_system_bdf1_model.py` *(primary)*
-- `src/cosmos/pde/adr/volume/adr_volume_system_bdf1_model_v1.py` *(v1 — full reassembly each step)*
+**Source:** `src/cosmos/pde/adr/adr_volume_system_bdf1_model.py`
 
 ```python
-from cosmos.pde.adr.volume.adr_volume_system_bdf1_model import ADRVolumeSystemBDF1Model
-# or
-from cosmos.pde.adr.volume.adr_volume_system_bdf1_model_v1 import ADRVolumeSystemBDF1Model
+from cosmos.pde import ADRVolumeSystemBDF1Model
+# or the full path:
+from cosmos.pde.adr.adr_volume_system_bdf1_model import ADRVolumeSystemBDF1Model
 ```
 
 BDF1 advection–diffusion–reaction system on a volume compartment.
@@ -18,31 +16,24 @@ first-order backward-difference time scheme. Supports Dirichlet, Neumann, and
 total-flux boundary conditions, nonlinear reaction terms, mass preservation,
 and bound-preserving post-processing.
 
-### Primary vs v1
-
-| Variant | Assembly strategy |
-|---|---|
-| Primary (`_model.py`) | Assembles the stiffness matrix once in `Initialize()` and only re-assembles the parameter-dependent part each `Solve()`. |
-| v1 (`_model_v1.py`) | Reassembles the full system matrix at every `Solve()` call. Simpler code; recommended when coefficients change every step in a way that affects the stiffness matrix structure. |
-
----
-
 ## Constructor
 
 ```python
 ADRVolumeSystemBDF1Model(
     name: str = 'ADRVolumeSystemBDF1Model',
-    model: CosmosModel = None,
-    compartment: CosmosCompartment = None,
+    model: Optional[CosmosModel] = None,
+    compartment: Optional[CosmosCompartment] = None,
     **kwargs,
 )
 ```
+
+`is_bnd = False` / `is_vol = True` are declared as class attributes.
 
 | Parameter | Type | Description |
 |---|---|---|
 | `name` | `str` | Identifier shown in VTK output names. |
 | `model` | `CosmosModel` | Owning model. |
-| `compartment` | `CosmosCompartment` | Volume compartment (`is_vol = True`). |
+| `compartment` | `CosmosCompartment` | Volume compartment. |
 | `dim` | `int` *(required via kwargs)* | Number of coupled scalar species. |
 
 **Raises:** `Exception` if `dim` is absent or not a number.
@@ -119,7 +110,3 @@ def add_nonlinearity(
 Append a nonlinear source term to species `target`. See
 [`ADRBoundarySystemBDF1Model.add_nonlinearity`](adr_boundary.md#add_nonlinearity)
 for the full signature description — the interface is identical.
-
-> **Note:** In the primary volume variant, nonlinear terms use `gfu_old`
-> (lagged) for the species values inside the expression, so the system remains
-> linear each step.

@@ -28,32 +28,6 @@ projection matrix `P`.
 
 ---
 
-## `compute_stab_mc`
-
-```python
-def compute_stab_mc(data, gfu, params) -> None
-```
-
-Compute the stabilised mean curvature of a surface and store it in `gfu`.
-
-Uses a mixed VectorH1 × (VectorFacetSurface or H1) finite-element system with
-gradient-jump stabilisation to compute a smooth, stabilised approximation to
-the mean curvature vector:
-
-```
-κ_h n_h ≈ −Δ_Γ id
-```
-
-| Parameter | Type | Description |
-|---|---|---|
-| `data` | object | Must expose `data.mesh` (an NGSolve `Mesh`). |
-| `gfu` | `GridFunction` | Output: mean curvature scalar GridFunction (modified in place). |
-| `params` | `dict` | Must contain `"stab"` (stabilisation coefficient). Optionally `"clamped_bnd"` (boundary name for clamped conditions). |
-
-**Raises:** nothing explicitly; will fail if `data.mesh.dim` is not 2 or 3.
-
----
-
 ## `MandBP` *(in `cosmos.core.utils`)*
 
 **Source:** `src/cosmos/core/utils.py`

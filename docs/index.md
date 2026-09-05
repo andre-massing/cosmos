@@ -9,10 +9,13 @@ Cosmos is a finite-element PDE solver built on top of [NGSolve](https://ngsolve.
 | Module | Contents |
 |---|---|
 | [`cosmos.config`](config.md) | Global solver configuration (`Config`, `get_config`, `set_config`) |
-| [`cosmos.core`](core/index.md) | Core runtime: model, compartments, fields, ALE, time and step managers |
-| [`cosmos.pde`](pde/index.md) | PDE model classes (ADR, distance, Willmore flow) |
-| [`cosmos.io`](io.md) | I/O manager, VTK/PVD writers |
-| [`cosmos.utils`](utils/index.md) | Mesh generation, mesh fixing, manufactured-solution tools |
+| [`cosmos.core`](core/index.md) | Core runtime: model, compartments, fields, ALE, time/step managers, I/O manager |
+| [`cosmos.pde`](pde/index.md) | PDE model classes (ADR, distance, geometrical/Willmore flow) |
+| [`cosmos.utils`](utils/index.md) | Mesh generation and mesh fixing |
+
+Each subpackage's `__init__.py` re-exports its stable public classes, so
+`from cosmos.pde import ADRVolumeSystemBDF1Model` works alongside the full
+module path shown in the class-level docs.
 
 ---
 
@@ -21,7 +24,7 @@ Cosmos is a finite-element PDE solver built on top of [NGSolve](https://ngsolve.
 ```python
 from ngsolve import *
 from cosmos.core.model import CosmosModel
-from cosmos.pde.adr.boundary.adr_boundary_system_bdf1_model_nostab import ADRBoundarySystemBDF1Model
+from cosmos.pde import ADRBoundarySystemBDF1Model
 
 mesh = Mesh(...)  # any NGSolve Mesh
 

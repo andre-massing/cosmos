@@ -19,7 +19,7 @@ tolerance.
 ## Constructor
 
 ```python
-CosmosStepManager(kwargs: dict)
+CosmosStepManager(model: CosmosModel, kwargs: dict)
 ```
 
 Do not call directly; it is instantiated automatically by `CosmosModel.__init__`.
@@ -48,7 +48,7 @@ Reads the following keys from `kwargs`:
 ### `initialize`
 
 ```python
-def initialize(model: CosmosModel) -> None
+def initialize() -> None
 ```
 
 - Calls `BasePDEModel.Initialize()` on every PDE model.
@@ -59,7 +59,7 @@ def initialize(model: CosmosModel) -> None
 ### `solve_step`
 
 ```python
-def solve_step(model: CosmosModel) -> None
+def solve_step() -> None
 ```
 
 Advance one full time step:
@@ -75,7 +75,7 @@ Advance one full time step:
 ### `explicit_solve_step`
 
 ```python
-def explicit_solve_step(model: CosmosModel) -> None
+def explicit_solve_step() -> None
 ```
 
 One step of explicit coupling:
@@ -90,7 +90,6 @@ One step of explicit coupling:
 
 ```python
 def implicit_solve_step_gauss(
-    model: CosmosModel,
     iter_max: int,
     eps_min: float,
 ) -> tuple[bool, float, int]

@@ -38,10 +38,13 @@ CosmosModel(name: str, parentmesh: Mesh, **kwargs)
 | `samples` | `int` | Number of output snapshots evenly distributed over `[t0, t1]`. Required when `root` is set. |
 | `coupling_type` | `"explicit" \| "implicit"` | Coupling strategy between PDEs and ALE (default `"explicit"`). |
 | `adaptive_timestep` | `bool` | Enable adaptive time-stepping (default `False`). |
-| `volume_ALE` | `str` | Extension method for bulk ALE motion: `"laplace"` (default), `"linel"`, `"linel0"`, `"nonlinel"`. |
-| `surface_ALE` | `str` | Surface redistribution method: `"mdr"` (default), `"gnz"`, `"ms"`, `"ms0"`, `"duanli"`. |
+| `volume_ALE` | `str` | Extension method for bulk ALE motion: `"laplace"` (default), `"linel"`. |
+| `surface_ALE` | `str` | Surface redistribution method: `"mdr"` (default), `"gnz"`, `"ms"`. |
 | `redistribute` | `bool` | Enable tangential mesh redistribution (default `False`). |
 | `output_callables` | `dict[str, callable]` | Extra scalar quantities to append to the step-data log. |
+
+**Raises:** `ValueError` at construction time if `**kwargs` contains any key
+not listed above.
 
 ---
 

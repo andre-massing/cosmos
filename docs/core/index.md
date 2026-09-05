@@ -10,6 +10,7 @@ The `core` subpackage provides the runtime machinery of every Cosmos simulation.
 | [`ale_manager`](ale_manager.md) | `CosmosALEManager`, `CosmosBndALEField`, `CosmosVolALEField` — mesh motion |
 | [`step_manager`](step_manager.md) | `CosmosStepManager` — per-step solve dispatcher |
 | [`time_manager`](time_manager.md) | `CosmosTimeManager`, `CosmosTimeHelper` — time state and advancement |
+| [`io_manager`](io_manager.md) | `CosmosIOManager` — VTK/step-log output |
 | `utils` | `MandBP` — mass and bound-preserving post-processing |
 
 ---
@@ -20,21 +21,25 @@ The `core` subpackage provides the runtime machinery of every Cosmos simulation.
 CosmosModel.initialize()
 │
 │   ← CosmosTimeManager.initialize()
-│   ← CosmosALEManager.initialize(model)
-│   ← CosmosStepManager.initialize(model)
+│   ← CosmosALEManager.initialize()
+│   ← CosmosStepManager.initialize()
 │       └── BasePDEModel.Initialize()  for each pde
-│   ← CosmosIOManager.initialize(model)
+│   ← CosmosIOManager.initialize()
 │
-│   io.save_step_data(model)   ← write t=0 snapshot
+│   io.save_step_data()   ← write t=0 snapshot
 │
 └─ while t <= t1:
-       CosmosStepManager.solve_step(model)
+       CosmosStepManager.solve_step()
        │   ← PreProcess()  for each pde
        │   ← Solve()       for pdes_pre
-       │   ← CosmosALEManager.solve_ale(model)
+       │   ← CosmosALEManager.solve_ale()
        │   ← Solve()       for pdes_post
        │   ← PostProcess() for each pde
        CosmosTimeManager.next()
-       CosmosIOManager.save_step_data(model)
-       CosmosALEManager.finalize(model)
+       CosmosIOManager.save_step_data()
+       CosmosALEManager.finalize()
 ```
+
+Every manager (`CosmosALEManager`, `CosmosStepManager`, `CosmosIOManager`) is
+constructed with a back-reference to its owning `CosmosModel` (stored as
+`self.model`), so none of its methods need `model` passed in again.

@@ -10,12 +10,12 @@ The `pde` subpackage contains the concrete PDE model classes that plug into a
 
 ```
 BasePDEModel (ABC)
-├── ADRBoundarySystemBDF1Model   (adr/boundary — no stabilisation)
-├── ADRBoundarySystemBDF1Model   (adr/boundary — gradient-jump stabilisation)
-├── ADRVolumeSystemBDF1Model     (adr/volume)
-├── DistanceVolumeModel          (distance/volume)
-├── GeometricalFlowModel         (willmore)
-└── GeometricalFlowStationaryModel (willmore)
+├── ADRBoundarySystemBDF1Model       (adr — no stabilisation)
+├── ADRBoundarySystemBDF1StabModel   (adr — gradient-jump stabilisation)
+├── ADRVolumeSystemBDF1Model         (adr)
+├── DistanceVolumeModel              (distance)
+├── GeometricalFlowModel             (geom_flow)
+└── GeometricalFlowStationaryModel   (geom_flow)
 ```
 
 ---
@@ -25,12 +25,15 @@ BasePDEModel (ABC)
 | File | Class | Domain | Description |
 |---|---|---|---|
 | [`pde/base`](base.md) | `BasePDEModel` | — | Abstract lifecycle interface |
-| [`pde/adr/boundary — nostab`](adr_boundary.md#adrboundarysystembdf1model-no-stabilisation) | `ADRBoundarySystemBDF1Model` | surface | ADR system, standard SIPG |
-| [`pde/adr/boundary — stab`](adr_boundary.md#adrboundarysystembdf1model-gradient-jump-stabilisation) | `ADRBoundarySystemBDF1Model` | surface | ADR system, gradient-jump stabilisation |
-| [`pde/adr/volume`](adr_volume.md) | `ADRVolumeSystemBDF1Model` | volume | ADR system, SIP, volume domain |
-| [`pde/distance/volume`](distance.md) | `DistanceVolumeModel` | volume | Smoothed distance function |
-| [`pde/willmore`](willmore.md#geometricalflowmodel) | `GeometricalFlowModel` | surface | Willmore / mean-curvature flow |
-| [`pde/willmore`](willmore.md#geometricalflowstationarymodel) | `GeometricalFlowStationaryModel` | surface | Flow + co-evolved spontaneous curvature |
+| [`pde/adr — nostab`](adr_boundary.md#adrboundarysystembdf1model-no-stabilisation) | `ADRBoundarySystemBDF1Model` | surface | ADR system, standard SIPG |
+| [`pde/adr — stab`](adr_boundary.md#adrboundarysystembdf1stabmodel-gradient-jump-stabilisation) | `ADRBoundarySystemBDF1StabModel` | surface | ADR system, gradient-jump stabilisation |
+| [`pde/adr`](adr_volume.md) | `ADRVolumeSystemBDF1Model` | volume | ADR system, SIP, volume domain |
+| [`pde/distance`](distance.md) | `DistanceVolumeModel` | volume | Smoothed distance function |
+| [`pde/geom_flow`](geom_flow.md#geometricalflowmodel) | `GeometricalFlowModel` | surface | Willmore / mean-curvature flow |
+| [`pde/geom_flow`](geom_flow.md#geometricalflowstationarymodel) | `GeometricalFlowStationaryModel` | surface | Flow + co-evolved spontaneous curvature |
+
+All six classes (plus `BasePDEModel`) are also re-exported directly from
+`cosmos.pde`, e.g. `from cosmos.pde import ADRVolumeSystemBDF1Model`.
 
 ---
 

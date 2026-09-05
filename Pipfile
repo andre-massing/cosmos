@@ -12,8 +12,10 @@ pytest = "*"
 matplotlib = "*"
 meshio = "*"
 ipykernel = "*"
+pyvista = "*"
 
 [dev-packages]
+ruff = "*"
 
 [requires]
 python_version = "3.14"

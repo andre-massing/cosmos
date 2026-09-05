@@ -1,4 +1,5 @@
 import logging
+
 logger = logging.getLogger(__name__)
 
 from collections import Counter
@@ -7,13 +8,15 @@ from ngsolve import *
 from cosmos.core.time_manager import CosmosTimeManager
 from cosmos.core.step_manager import CosmosStepManager
 from cosmos.core.ale_manager import CosmosALEManager, CosmosBndALEField, CosmosVolALEField
-from cosmos.io.io_manager import CosmosIOManager
+from cosmos.core.io_manager import CosmosIOManager
 from cosmos.core.compartment import CosmosCompartment
 
-from typing import Any, Generator, List, Optional, Type, TYPE_CHECKING
+from typing import Any, Generator, List, Type, TYPE_CHECKING
+
 if TYPE_CHECKING:
     from cosmos.pde.base import BasePDEModel
     from cosmos.core.ale_manager import CosmosBndALEField, CosmosVolALEField
+
 
 class CosmosModel:
     """Top-level orchestrator for a time-dependent PDE simulation on an NGSolve mesh.
@@ -34,6 +37,27 @@ class CosmosModel:
         else:
             self.params = {}
 
+        allowed_keys = {
+            "t0",
+            "t1",
+            "dt",
+            "t",
+            "coupling_type",
+            "adaptive_timestep",
+            "redistribute",
+            "root",
+            "samples",
+            "volume_ALE",
+            "surface_ALE",
+            "output_callables",
+        }
+
+        for key in self.params.keys():
+            if key not in allowed_keys:
+                raise ValueError(
+                    f"Parameter {key} is not a valid parameter for CosmosModel. Allowed parameters are: {allowed_keys}"
+                )
+
         # mesh-related properties
         self.dim = self.parentmesh.dim
         self.geo_order = self.parentmesh.GetCurveOrder()
@@ -50,24 +74,24 @@ class CosmosModel:
 
         # model components
         self.compartments: List[CosmosCompartment] = []
-        self.pdes:  List[BasePDEModel] = []
-        self.pdes_init:  List[BasePDEModel] = []
-        self.pdes_pre:  List[BasePDEModel] = []
-        self.pdes_post:  List[BasePDEModel] = []
+        self.pdes: List[BasePDEModel] = []
+        self.pdes_init: List[BasePDEModel] = []
+        self.pdes_pre: List[BasePDEModel] = []
+        self.pdes_post: List[BasePDEModel] = []
         self.ales = []
         self.time = CosmosTimeManager(self.params)
-        self.step = CosmosStepManager(self.params)
+        self.step = CosmosStepManager(self, self.params)
         self.ale = CosmosALEManager(self, self.params)
-        self.io = CosmosIOManager(self.params)
+        self.io = CosmosIOManager(self, self.params)
 
         self.dt = self.time.dt
         self.t = self.time.t
 
     def initialize(self) -> None:
         self.time.initialize()
-        self.ale.initialize(self)
-        self.step.initialize(self)
-        self.io.initialize(self)
+        self.ale.initialize()
+        self.step.initialize()
+        self.io.initialize()
 
     def __call__(self) -> Generator:
         return self._generator()
@@ -75,23 +99,21 @@ class CosmosModel:
     def _generator(self) -> Generator:
 
         with TaskManager():
-
             self.initialize()
-            self.io.save_step_data(self)
+            self.io.save_step_data()
 
             yield
-            
-            while self.t.Get()<= self.time.t1:
 
-                self.step.solve_step(self)
+            while self.t.Get() <= self.time.t1:
+                self.step.solve_step()
                 self.time.next()
-                self.io.save_step_data(self)
-
-                self.ale.finalize(self)
+                self.ale.finalize()
+                
+                self.io.save_step_data()
 
                 yield
 
-            self.io.finalize(self)
+            self.io.finalize()
 
     def run(self) -> None:
         for _ in self():
@@ -100,7 +122,9 @@ class CosmosModel:
     def set_params(self, force: bool = False, **kwargs: Any) -> None:
         for key, value in kwargs.items():
             if key in self.params.keys() and not force:
-                raise ValueError(f'Parameter {key} already set in the model, use flag force = True to force the behavior')
+                raise ValueError(
+                    f"Parameter {key} already set in the model, use flag force = True to force the behavior"
+                )
             elif key in self.params.keys() and force:
                 self.params[key] = value
             else:
@@ -108,7 +132,9 @@ class CosmosModel:
 
     def create_compartment(self, name: str, **kwargs: Any) -> CosmosCompartment:
         if any(name == x.name for x in self.compartments):
-            raise ValueError(f'Unique names must be assigned to compartments, name {name} already used')
+            raise ValueError(
+                f"Unique names must be assigned to compartments, name {name} already used"
+            )
         compartment = CosmosCompartment(name=name, model=self, **kwargs)
         self.compartments.append(compartment)
         return compartment
@@ -121,11 +147,16 @@ class CosmosModel:
         ale_type: int,
         **kwargs: Any,
     ) -> BasePDEModel:
+
         pde = pde_model(name, self, compartment, **kwargs)
         if pde.is_bnd and compartment.is_vol:
-            raise ValueError(f'Boundary PDE {pde_model} is trying to be imposed on a non-boundary domain {compartment.name} or the opposite')
+            raise ValueError(
+                f"Boundary PDE {pde_model} is trying to be imposed on a non-boundary domain {compartment.name} or the opposite"
+            )
         elif pde.is_vol and compartment.is_bnd:
-            raise ValueError(f'Volume PDE {pde_model} is trying to be imposed on a boundary domain {compartment.name} or the opposite')
+            raise ValueError(
+                f"Volume PDE {pde_model} is trying to be imposed on a boundary domain {compartment.name} or the opposite"
+            )
         else:
             compartment.pdes.append(pde)
             if ale_type == -1:
@@ -135,7 +166,7 @@ class CosmosModel:
             elif ale_type == 1:
                 self.pdes_post.append(pde)
             else:
-                raise ValueError('Parameter pde-type must be in the values {-1 ,0, 1}')
+                raise ValueError("Parameter pde-type must be in the values {-1 ,0, 1}")
             self.pdes.append(pde)
         return pde
 
@@ -145,11 +176,26 @@ class CosmosModel:
         compartment: CosmosCompartment,
         **kwargs: Any,
     ):
-        if any(x == y for z in self.ales for x in compartment.domain_id.split('|') for y in z.compartment.boundary_id.split('|')):
-            raise ValueError(f'ALE motion for domain {compartment.domain_id} (or part of it) has already been set')
+
+        if any(
+            x == y
+            for z in self.ales
+            for x in compartment.domain_id.split("|")
+            for y in z.compartment.boundary_id.split("|")
+        ) or any(
+            x == y
+            for z in self.ales
+            for x in compartment.domain_id.split("|")
+            for y in z.compartment.domain_id.split("|")
+        ):
+            raise ValueError(
+                f"ALE motion for domain {compartment.domain_id} (or part of it) has already been set"
+            )
         else:
             if any(name == x.name for x in self.ales):
-                raise ValueError(f'Name {name} for ALE motion has already been used. Names must be unique')
+                raise ValueError(
+                    f"Name {name} for ALE motion has already been used. Names must be unique"
+                )
             else:
                 if compartment.is_bnd:
                     ale = CosmosBndALEField(name, self, compartment)
@@ -160,7 +206,7 @@ class CosmosModel:
         return ale
 
     def print_model_data(self) -> None:
-        self.io.print_model_data(self)
+        self.io.print_model_data()
 
     def print_step_data(self) -> None:
-        self.io.print_step_data(self)
+        self.io.print_step_data()

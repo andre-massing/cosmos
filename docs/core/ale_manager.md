@@ -43,8 +43,6 @@ CosmosALEManager(model: CosmosModel, kwargs: dict)
 |---|---|
 | `"laplace"` *(default)* | Harmonic extension (Laplace equation on the bulk). |
 | `"linel"` | Linear-elasticity extension (mesh-size–dependent Young's modulus). |
-| `"linel0"` | Linear elasticity relative to the initial reference configuration. |
-| `"nonlinel"` | Neo-Hookean nonlinear elasticity. |
 
 ### Key attributes
 
@@ -62,7 +60,7 @@ CosmosALEManager(model: CosmosModel, kwargs: dict)
 #### `initialize`
 
 ```python
-def initialize(model: CosmosModel) -> None
+def initialize() -> None
 ```
 
 Build `BoundaryCF` / `MaterialCF` maps from all registered ALE fields. Must be
@@ -73,7 +71,7 @@ called once before the time loop (done automatically by `CosmosModel.initialize(
 #### `solve_ale`
 
 ```python
-def solve_ale(model: CosmosModel) -> None
+def solve_ale() -> None
 ```
 
 Advance the ALE mesh by one time step:
@@ -88,7 +86,7 @@ Advance the ALE mesh by one time step:
 #### `finalize`
 
 ```python
-def finalize(model: CosmosModel) -> None
+def finalize() -> None
 ```
 
 Commit the current deformation to the NGSolve mesh and advance `Yo`, `Xo`,
@@ -170,7 +168,7 @@ normal/tangential decomposition). When set, `set_normal_velocity` and
 #### `update`
 
 ```python
-def update(model: CosmosModel, redistribute: bool) -> None
+def update(redistribute: bool) -> None
 ```
 
 Compute `ale_displ` and `mat_displ` for the current time step. Called
@@ -218,7 +216,7 @@ Set the domain velocity vector field. `coef` can be any value accepted by
 #### `update`
 
 ```python
-def update(model: CosmosModel, redistribute: bool) -> None
+def update(redistribute: bool) -> None
 ```
 
 Compute `ale_displ` and `mat_displ` for the current step.  

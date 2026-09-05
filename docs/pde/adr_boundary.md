@@ -1,21 +1,22 @@
 # ADR boundary models
 
 **Sources:**
-- `src/cosmos/pde/adr/boundary/adr_boundary_system_bdf1_model_nostab.py`
-- `src/cosmos/pde/adr/boundary/adr_boundary_system_bdf1_model_stab.py`
+- `src/cosmos/pde/adr/adr_boundary_system_bdf1_model_nostab.py` — class `ADRBoundarySystemBDF1Model`
+- `src/cosmos/pde/adr/adr_boundary_system_bdf1_model_stab.py` — class `ADRBoundarySystemBDF1StabModel`
 
-Both files expose a class named `ADRBoundarySystemBDF1Model`; import the one
-that matches the desired stabilisation strategy.
+The two files used to define classes with the *same* name, which made it easy
+to import the wrong variant by mistake. The stabilised variant's class was
+renamed to `ADRBoundarySystemBDF1StabModel` to remove that collision; the
+unstabilised variant kept the original name.
 
 ---
 
 ## `ADRBoundarySystemBDF1Model` — no stabilisation
 
 ```python
-# import path
-from cosmos.pde.adr.boundary.adr_boundary_system_bdf1_model_nostab import (
-    ADRBoundarySystemBDF1Model,
-)
+from cosmos.pde import ADRBoundarySystemBDF1Model
+# or the full path:
+from cosmos.pde.adr.adr_boundary_system_bdf1_model_nostab import ADRBoundarySystemBDF1Model
 ```
 
 BDF1 advection–diffusion–reaction system on a surface compartment (no
@@ -34,12 +35,12 @@ diffusion and upwind terms for advection, both living on the surface mesh (via
 
 ---
 
-## `ADRBoundarySystemBDF1Model` — gradient-jump stabilisation
+## `ADRBoundarySystemBDF1StabModel` — gradient-jump stabilisation
 
 ```python
-from cosmos.pde.adr.boundary.adr_boundary_system_bdf1_model_stab import (
-    ADRBoundarySystemBDF1Model,
-)
+from cosmos.pde import ADRBoundarySystemBDF1StabModel
+# or the full path:
+from cosmos.pde.adr.adr_boundary_system_bdf1_model_stab import ADRBoundarySystemBDF1StabModel
 ```
 
 BDF1 advection–diffusion–reaction system on a surface compartment with
@@ -49,26 +50,31 @@ Augments the standard SIPG bilinear form with gradient-jump penalty terms
 scaled by the local Péclet number, improving robustness in advection-dominated
 regimes. Uses a mixed H1 × NormalFacetSurface finite element space; the
 stabilisation flux unknowns are eliminated locally at assembly time. All other
-features match the unstabilised variant.
+features match the unstabilised variant. The bilinear/linear forms are built
+once in `Initialize()` (not rebuilt on every `Solve()`), matching the
+unstabilised variant.
 
 ---
 
 ## Constructor (both variants)
 
 ```python
-ADRBoundarySystemBDF1Model(
+ADRBoundarySystemBDF1Model(          # or ADRBoundarySystemBDF1StabModel
     name: str = 'ADRBoundarySystemBDF1Model',
-    model: CosmosModel = None,
-    compartment: CosmosCompartment = None,
+    model: Optional[CosmosModel] = None,
+    compartment: Optional[CosmosCompartment] = None,
     **kwargs,
 )
 ```
+
+`is_bnd = True` / `is_vol = False` are declared as class attributes on both
+variants.
 
 | Parameter | Type | Description |
 |---|---|---|
 | `name` | `str` | Identifier shown in VTK output names. |
 | `model` | `CosmosModel` | Owning model. |
-| `compartment` | `CosmosCompartment` | Surface compartment. Must be a boundary compartment (`is_bnd = True`). |
+| `compartment` | `CosmosCompartment` | Surface compartment. Must be a boundary compartment. |
 | `dim` | `int` *(required via kwargs)* | Number of coupled scalar species. |
 
 **Raises:** `Exception` if `dim` is absent or not a number.

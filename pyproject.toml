@@ -29,4 +29,20 @@ markers = [
   "visual: visualization/image-regression tests",
   "convergence: PDE convergence tests",
   "physical: PDE physical property tests",
+  "unit: fast unit tests exercising a single module in isolation",
+  "example: minimal fast end-to-end PDE-solving examples",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = [
+    "F403",   # 'from ngsolve import *' / 'from netgen... import *' used throughout — deliberate
+    "F405",   # name may be undefined from a star import — same reason
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["F401"]
