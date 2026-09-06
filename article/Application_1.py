@@ -1,6 +1,10 @@
 """Application 1 simulations.
 """
 
+
+import logging
+logging.basicConfig(level=logging.INFO)
+
 import numpy as np
 from ngsolve import *
 from cosmos import *

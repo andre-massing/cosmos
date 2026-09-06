@@ -294,6 +294,11 @@ class ADRBoundarySystemBDF1Model(BasePDEModel):
         self.A.Assemble()
         self.invA = self.A.mat.Inverse(freedofs=self.fes.FreeDofs())
 
+        logger.info(
+            f"[Cosmos] PDE '{self.name}' ({type(self).__name__}) initialized "
+            f"on compartment '{self.compartment.name}' (dim={self.sys_dim})"
+        )
+
     def PreProcess(self):
 
         self.gfu_old.vec.data = self.gfu.vec.data

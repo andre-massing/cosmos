@@ -96,24 +96,33 @@ class CosmosStepManager:
                         )
 
                         if eps > eps_max:
-                            dt = self.model.dt.Get()
-                            dt *= 0.6
+                            old_dt = self.model.dt.Get()
+                            dt = old_dt * 0.6
                             self.model.time.modify_dt(dt)
                             for pde in self.model.pdes:
                                 pde.reset()
                             self.model.ale.reset()
-                            logger.info("Control difference is too high, timestep lowered to: ", dt)
+                            logger.info(
+                                f"[Cosmos] Adaptive timestep: error {eps:.2e} > "
+                                f"tolerance {eps_max:.2e}, reducing dt {old_dt:.4g} -> {dt:.4g}"
+                            )
                         elif eps < eps_min:
-                            dt = self.model.dt.Get()
-                            dt *= 1.25
-                            dt = min(dt, self.model.time.dt0)
+                            old_dt = self.model.dt.Get()
+                            dt = min(old_dt * 1.25, self.model.time.dt0)
 
                             self.model.time.helper.params["dt"] = dt
-                            logger.info("Control difference is too low, timestep raised to: ", dt)
+                            logger.info(
+                                f"[Cosmos] Adaptive timestep: error {eps:.2e} < "
+                                f"tolerance {eps_min:.2e}, increasing dt {old_dt:.4g} -> {dt:.4g}"
+                            )
                             break
                         else:
                             dt = self.model.dt.Get()
                             self.model.time.helper.params["dt"] = dt
+                            logger.debug(
+                                f"[Cosmos] Adaptive timestep: error {eps:.2e} within "
+                                f"tolerance, keeping dt {dt:.4g}"
+                            )
                             break
 
                     elif self.coupling_type == "explicit":
@@ -122,7 +131,10 @@ class CosmosStepManager:
                         )
 
                 if self.model.dt.Get() < dt_tol:
-                    logger.info(self.control)
+                    logger.error(
+                        f"[Cosmos] Adaptive timestep collapsed below tolerance "
+                        f"({dt_tol:.1e}) after last error {eps:.2e}; aborting."
+                    )
                     raise RuntimeError("Timestep shrinked to 0!")
 
             else:
@@ -199,10 +211,6 @@ class CosmosStepManager:
             logger.debug(f"Step subiter_bool count: {subiter} | Max error {error_ale:.2e}")
             eps = error_ale
             eps = np.max([np.max(errors_pde), error_ale])
-
-            logger.info("i: ", subiter, ",eps: ", f"{eps:.3e}", end="\r")
-
-        logger.info("\n", end="\r")
 
         if subiter == iter_max:
             return False, eps, subiter

@@ -93,6 +93,13 @@ class CosmosModel:
         self.step.initialize()
         self.io.initialize()
 
+        logger.info(
+            f"[Cosmos] '{self.name}': starting simulation — dim={self.dim}, "
+            f"{len(self.compartments)} compartment(s), {len(self.pdes)} PDE(s), "
+            f"t in [{self.time.t0}, {self.time.t1}], dt0={self.time.dt0}, "
+            f"coupling='{self.step.coupling_type}'"
+        )
+
     def __call__(self) -> Generator:
         return self._generator()
 
@@ -108,11 +115,20 @@ class CosmosModel:
                 self.step.solve_step()
                 self.time.next()
                 self.ale.finalize()
-                
+
                 self.io.save_step_data()
+
+                logger.info(
+                    f"[Cosmos] '{self.name}' step {self.time.iter}: "
+                    f"t={self.t.Get():.4g}, dt={self.dt.Get():.4g}"
+                )
 
                 yield
 
+            logger.info(
+                f"[Cosmos] '{self.name}' finished after {self.time.iter} step(s) "
+                f"at t={self.t.Get():.4g}"
+            )
             self.io.finalize()
 
     def run(self) -> None:

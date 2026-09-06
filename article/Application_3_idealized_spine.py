@@ -1,6 +1,10 @@
 """Application 3 idealized spine simulations.
 """
 
+
+import logging
+logging.basicConfig(level=logging.INFO)
+
 from ngsolve import *
 from cosmos import *
 from dendritic_spine_geom import generate_synapse3d

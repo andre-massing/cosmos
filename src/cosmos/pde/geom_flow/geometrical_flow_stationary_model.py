@@ -229,6 +229,11 @@ class GeometricalFlowStationaryModel(BasePDEModel):
 
         self.F += InnerProduct(self.mu, phi) * ds(deformation=self.model.ale.Yo)
 
+        logger.info(
+            f"[Cosmos] PDE '{self.name}' ({type(self).__name__}) initialized "
+            f"on compartment '{self.compartment.name}'"
+        )
+
     def PreProcess(self):
 
         self.kappa_h_old.vec.data = self.kappa_h.vec.data

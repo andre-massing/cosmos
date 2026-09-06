@@ -13,6 +13,7 @@ matplotlib = "*"
 meshio = "*"
 ipykernel = "*"
 pyvista = "*"
+ffmpeg-python = "*"
 
 [dev-packages]
 ruff = "*"

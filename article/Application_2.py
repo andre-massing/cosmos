@@ -1,6 +1,10 @@
 """Application 2 simulations.
 """
 
+
+import logging
+logging.basicConfig(level=logging.INFO)
+
 import numpy as np
 from ngsolve import *
 import netgen.occ as occ
@@ -57,7 +61,7 @@ model_name = f"Application_2_phi_cap{PHI_CAP}_alpha{GAMMA_CURV}_gamma{GAMMA_TENS
 model = CosmosModel(name=model_name, parentmesh=mesh, t0 = 0, t1 = 100,
                     dt = dt, t = t,
                     coupling_type = 'implicit', adaptive_timestep = False,
-                    redistribute = True, surface_ALE = 'ms', volume_ALE = 'linel',
+                    redistribute = True,
                     root = ROOT, samples = 100)
 
 ################### GRADIENT FLOW  ##################################

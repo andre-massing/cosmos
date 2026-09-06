@@ -99,6 +99,11 @@ class DistanceVolumeModel(BasePDEModel):
         self.F3 = LinearForm(self.fes)
         self.F3 += Trace(Grad(self.gfu2)) * v3 * dx(deformation=self.model.ale.Y)
 
+        logger.info(
+            f"[Cosmos] PDE '{self.name}' ({type(self).__name__}) initialized "
+            f"on compartment '{self.compartment.name}'"
+        )
+
     def PreProcess(self):
 
         pass

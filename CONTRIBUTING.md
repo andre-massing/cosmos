@@ -43,10 +43,12 @@ If you are proposing a feature:
 Ready to contribute? Here's how to set up `cosmos` for local development.
 
 1. Download a copy of `cosmos` locally.
-2. Install `cosmos` using `poetry`:
+2. Install NGSolve/Netgen and the pinned Python dependencies — see
+   [`INSTALL.md`](INSTALL.md) for the full, reproducible setup:
 
     ```console
-    $ poetry install
+    $ pipenv install --dev
+    $ pipenv shell
     ```
 
 3. Use `git` (or similar) to create a branch for local development and make your changes:
