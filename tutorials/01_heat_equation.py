@@ -12,14 +12,8 @@
 # $$\frac{\partial u}{\partial t} + \nabla\cdot(b\,u) - \nabla\cdot(d\,\nabla u) + c\,u = f$$
 #
 # in space with $P_1$ Lagrange finite elements and in time with a first-order
-# backward difference (implicit Euler) scheme. Setting $b = 0$, $c = 0$,
+# midpoint scheme. Setting $b = 0$, $c = 0$,
 # $f = 0$ and $d = D$ recovers pure diffusion.
-#
-# ## Why this problem
-#
-# The heat equation on a square has closed-form eigenfunction solutions, so
-# every number printed below can be checked against exact mathematics rather
-# than against "it looks plausible".
 #
 # **Homogeneous Dirichlet** ($u = 0$ on $\partial\Omega$):
 #
@@ -69,21 +63,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import netgen.occ as occ
 import numpy as np
-from ngsolve import (
-    CF,
-    VOL,
-    Integrate,
-    Mesh,
-    Parameter,
-    cos,
-    exp,
-    pi,
-    sin,
-    sqrt,
-    x,
-    y,
-    InnerProduct,
-)
+from ngsolve import *
 
 from cosmos.core.model import CosmosModel
 from cosmos.pde import ADRVolumeSystemBDF1Model
@@ -230,7 +210,7 @@ DT_CONV = 1e-4
 t0 = time.time()
 errs = []
 for h in HS:
-    _, _, _, e, _ = solve_heat(maxh=h, dt=DT_CONV, bc="dirichlet")
+    _, _, _, e, _ = solve_heat(maxh=h, dt=DT_CONV, bc="neumann")
     errs.append(e)
     print(f"  maxh = {h:.4f}   L2 error = {e:.4e}")
 

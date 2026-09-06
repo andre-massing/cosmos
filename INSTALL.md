@@ -60,8 +60,7 @@ broken NGSolve install is the most common source of confusing failures later.
 ## 3. Install Cosmos and its Python dependencies
 
 This project uses [`pipenv`](https://pipenv.pypa.io/) with a committed
-`Pipfile.lock` for exact, reproducible dependency versions (not `poetry`,
-despite what `CONTRIBUTING.md` used to say).
+`Pipfile.lock` for exact, reproducible dependency versions.
 
 ```bash
 pip install pipenv          # if you don't already have it

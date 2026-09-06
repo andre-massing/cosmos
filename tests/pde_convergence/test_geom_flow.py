@@ -22,227 +22,227 @@ from scipy.integrate import solve_ivp
 pytestmark = pytest.mark.convergence
 pytestmark = pytest.mark.slow
 
-# @pytest.mark.parametrize("redistribute", [False, True])
-# def test_convergence_willmore_flow_sphere(redistribute):
+@pytest.mark.parametrize("redistribute", [False, True])
+def test_convergence_willmore_flow_sphere(redistribute):
 
-#     Tend = 1
-#     def solve(mesh, dt):
+    Tend = 1
+    def solve(mesh, dt):
 
-#         model = CosmosModel(name = 'convergence_willmore_flow_sphere', parentmesh=mesh,
-#                             t0 = 0, t1 = Tend, dt = dt, redistribute = redistribute,
-#                             coupling_type = 'implicit')
+        model = CosmosModel(name = 'convergence_willmore_flow_sphere', parentmesh=mesh,
+                            t0 = 0, t1 = Tend, dt = dt, redistribute = redistribute,
+                            coupling_type = 'implicit')
 
-#         comp1 = model.create_compartment(name = 'compartment', boundary = 'default', bboundary = '')
-#         pde = model.create_pde(name = 'willmore_flow', pde_model=GeometricalFlowModel, compartment=comp1, ale_type = 0)
-#         ale = model.create_ale(name = 'ale', compartment=comp1)
-#         ale.set_normal_velocity(pde.V_h)
-#         ale.set_tangential_velocity(CF((0, 0, 0)))
+        comp1 = model.create_compartment(name = 'compartment', boundary = 'default', bboundary = '')
+        pde = model.create_pde(name = 'willmore_flow', pde_model=GeometricalFlowModel, compartment=comp1, ale_type = 0)
+        ale = model.create_ale(name = 'ale', compartment=comp1)
+        ale.set_normal_velocity(pde.V_h)
+        ale.set_tangential_velocity(CF((0, 0, 0)))
 
-#         errs = []
-#         for _ in model():
-#             errs.append(np.max(np.abs(dt*ale.gfu_norm_vel.vec.FV().NumPy())))
+        errs = []
+        for _ in model():
+            errs.append(np.max(np.abs(dt*ale.gfu_norm_vel.vec.FV().NumPy())))
 
-#         return np.max(np.array(errs))
+        return np.max(np.array(errs))
 
-#     power_t = 1.5
-#     dt0 = 0.1
-#     dt_refs = 3
-#     dts = dt0/(power_t**(np.arange(dt_refs+1)))
+    power_t = 1.5
+    dt0 = 0.1
+    dt_refs = 3
+    dts = dt0/(power_t**(np.arange(dt_refs+1)))
 
-#     power_h= 1.5
-#     dh0 = 0.2
-#     dh_refs = 3
-#     dhs = dh0/(power_h**(np.arange(dh_refs+1)))
+    power_h= 1.5
+    dh0 = 0.2
+    dh_refs = 3
+    dhs = dh0/(power_h**(np.arange(dh_refs+1)))
 
-#     ERRORS_dX = np.zeros((len(dts), len(dhs)))
-#     ERRORS_dX.fill(np.inf)
+    ERRORS_dX = np.zeros((len(dts), len(dhs)))
+    ERRORS_dX.fill(np.inf)
 
-#     true_hs = np.zeros(len(dhs))
-#     for i, dt in enumerate(dts):
-#         for j, dh in enumerate(dhs):
+    true_hs = np.zeros(len(dhs))
+    for i, dt in enumerate(dts):
+        for j, dh in enumerate(dhs):
 
-#             mesh = generate_boundary_sphere(maxh = dh, R = 1)
+            mesh = generate_boundary_sphere(maxh = dh, R = 1)
 
-#             true_h = GridFunction(SurfaceL2(mesh, order = 0))
-#             true_h.Set(get_config().h, definedon = mesh.Boundaries('.*'))
-#             true_h = np.max(true_h.vec.data)
-#             true_hs[j] = true_h
+            true_h = GridFunction(SurfaceL2(mesh, order = 0))
+            true_h.Set(get_config().h, definedon = mesh.Boundaries('.*'))
+            true_h = np.max(true_h.vec.data)
+            true_hs[j] = true_h
 
-#             err = solve(mesh=mesh, dt=dt)
+            err = solve(mesh=mesh, dt=dt)
 
-#             ERRORS_dX[i, j] = err
+            ERRORS_dX[i, j] = err
 
-#     diag = ERRORS_dX.diagonal()
-#     rates = np.log(diag[:-1]/diag[1:])/np.log(true_hs[:-1]/true_hs[1:])
-#     print(rates)
-#     assert all(0.9 <= num for num in rates)
+    diag = ERRORS_dX.diagonal()
+    rates = np.log(diag[:-1]/diag[1:])/np.log(true_hs[:-1]/true_hs[1:])
+    print(rates)
+    assert all(0.9 <= num for num in rates)
 
-# @pytest.mark.parametrize("redistribute", [False, True])
-# def test_convergence_willmore_flow_half_sphere(redistribute):
+@pytest.mark.parametrize("redistribute", [False, True])
+def test_convergence_willmore_flow_half_sphere(redistribute):
 
-#     Tend = 1
-#     def solve(mesh, dt):
+    Tend = 1
+    def solve(mesh, dt):
 
-#         model = CosmosModel(name = 'convergence_willmore_flow_half_sphere', parentmesh=mesh,
-#                             t0 = 0, t1 = Tend, dt = dt, redistribute = redistribute,
-#                             coupling_type = 'implicit')
+        model = CosmosModel(name = 'convergence_willmore_flow_half_sphere', parentmesh=mesh,
+                            t0 = 0, t1 = Tend, dt = dt, redistribute = redistribute,
+                            coupling_type = 'implicit')
 
-#         comp1 = model.create_compartment(name = 'compartment', boundary = 'default', bboundary = 'bboundary',
-#                                          clamped_bbnd = 'bboundary')
-#         pde = model.create_pde(name = 'willmore_flow', pde_model=GeometricalFlowModel, compartment=comp1, ale_type = 0)
-#         ale = model.create_ale(name = 'ale', compartment=comp1)
-#         ale.set_normal_velocity(pde.V_h)
-#         ale.set_tangential_velocity(CF((0, 0, 0)))
+        comp1 = model.create_compartment(name = 'compartment', boundary = 'default', bboundary = 'bboundary',
+                                         clamped_bbnd = 'bboundary')
+        pde = model.create_pde(name = 'willmore_flow', pde_model=GeometricalFlowModel, compartment=comp1, ale_type = 0)
+        ale = model.create_ale(name = 'ale', compartment=comp1)
+        ale.set_normal_velocity(pde.V_h)
+        ale.set_tangential_velocity(CF((0, 0, 0)))
 
-#         errs = []
-#         for _ in model():
-#             errs.append(np.max(np.abs(dt*ale.gfu_norm_vel.vec.FV().NumPy())))
+        errs = []
+        for _ in model():
+            errs.append(np.max(np.abs(dt*ale.gfu_norm_vel.vec.FV().NumPy())))
 
-#         return np.max(np.array(errs))
+        return np.max(np.array(errs))
 
-#     power_t = 1.5
-#     dt0 = 0.1
-#     dt_refs = 3
-#     dts = dt0/(power_t**(np.arange(dt_refs+1)))
+    power_t = 1.5
+    dt0 = 0.1
+    dt_refs = 3
+    dts = dt0/(power_t**(np.arange(dt_refs+1)))
 
-#     power_h= 1.5
-#     dh0 = 0.2
-#     dh_refs = 3
-#     dhs = dh0/(power_h**(np.arange(dh_refs+1)))
+    power_h= 1.5
+    dh0 = 0.2
+    dh_refs = 3
+    dhs = dh0/(power_h**(np.arange(dh_refs+1)))
 
-#     ERRORS_dX = np.zeros((len(dts), len(dhs)))
-#     ERRORS_dX.fill(np.inf)
+    ERRORS_dX = np.zeros((len(dts), len(dhs)))
+    ERRORS_dX.fill(np.inf)
 
-#     true_hs = np.zeros(len(dhs))
-#     for i, dt in enumerate(dts):
-#         for j, dh in enumerate(dhs):
+    true_hs = np.zeros(len(dhs))
+    for i, dt in enumerate(dts):
+        for j, dh in enumerate(dhs):
 
-#             mesh = generate_boundary_half_sphere(maxh = dh, R = 1)
+            mesh = generate_boundary_half_sphere(maxh = dh, R = 1)
 
-#             true_h = GridFunction(SurfaceL2(mesh, order = 0))
-#             true_h.Set(get_config().h, definedon = mesh.Boundaries('.*'))
-#             true_h = np.max(true_h.vec.data)
-#             true_hs[j] = true_h
+            true_h = GridFunction(SurfaceL2(mesh, order = 0))
+            true_h.Set(get_config().h, definedon = mesh.Boundaries('.*'))
+            true_h = np.max(true_h.vec.data)
+            true_hs[j] = true_h
 
-#             err = solve(mesh=mesh, dt=dt)
+            err = solve(mesh=mesh, dt=dt)
 
-#             ERRORS_dX[i, j] = err
+            ERRORS_dX[i, j] = err
 
-#     diag = ERRORS_dX.diagonal()
-#     rates = np.log(diag[:-1]/diag[1:])/np.log(true_hs[:-1]/true_hs[1:])
-#     print(rates)
-#     assert all(0.9 <= num for num in rates)
+    diag = ERRORS_dX.diagonal()
+    rates = np.log(diag[:-1]/diag[1:])/np.log(true_hs[:-1]/true_hs[1:])
+    print(rates)
+    assert all(0.9 <= num for num in rates)
 
-# @pytest.mark.parametrize("redistribute", [False, True])
-# def test_convergence_willmore_flow_clifford_torus(redistribute):
+@pytest.mark.parametrize("redistribute", [False, True])
+def test_convergence_willmore_flow_clifford_torus(redistribute):
 
-#     Tend = 1
-#     def solve(mesh, dt):
+    Tend = 1
+    def solve(mesh, dt):
 
-#         model = CosmosModel(name = 'convergence_willmore_flow_clifford_torus', parentmesh=mesh,
-#                             t0 = 0, t1 = Tend, dt = dt, redistribute = redistribute,
-#                             coupling_type = 'implicit')
+        model = CosmosModel(name = 'convergence_willmore_flow_clifford_torus', parentmesh=mesh,
+                            t0 = 0, t1 = Tend, dt = dt, redistribute = redistribute,
+                            coupling_type = 'implicit')
 
-#         comp1 = model.create_compartment(name = 'compartment', boundary = 'default', bboundary = '')
-#         pde = model.create_pde(name = 'willmore_flow', pde_model=GeometricalFlowModel, compartment=comp1, ale_type = 0)
-#         ale = model.create_ale(name = 'ale', compartment=comp1)
-#         ale.set_normal_velocity(pde.V_h)
-#         ale.set_tangential_velocity(CF((0, 0, 0)))
+        comp1 = model.create_compartment(name = 'compartment', boundary = 'default', bboundary = '')
+        pde = model.create_pde(name = 'willmore_flow', pde_model=GeometricalFlowModel, compartment=comp1, ale_type = 0)
+        ale = model.create_ale(name = 'ale', compartment=comp1)
+        ale.set_normal_velocity(pde.V_h)
+        ale.set_tangential_velocity(CF((0, 0, 0)))
 
-#         errs = []
-#         for _ in model():
-#             errs.append(np.max(np.abs(dt*ale.gfu_norm_vel.vec.FV().NumPy())))
+        errs = []
+        for _ in model():
+            errs.append(np.max(np.abs(dt*ale.gfu_norm_vel.vec.FV().NumPy())))
 
-#         return np.max(np.array(errs))
+        return np.max(np.array(errs))
 
-#     power_t = 1.5
-#     dt0 = 0.1
-#     dt_refs = 3
-#     dts = dt0/(power_t**(np.arange(dt_refs+1)))
+    power_t = 1.5
+    dt0 = 0.1
+    dt_refs = 3
+    dts = dt0/(power_t**(np.arange(dt_refs+1)))
 
-#     power_h= 1.5
-#     dh0 = 0.2
-#     dh_refs = 3
-#     dhs = dh0/(power_h**(np.arange(dh_refs+1)))
+    power_h= 1.5
+    dh0 = 0.2
+    dh_refs = 3
+    dhs = dh0/(power_h**(np.arange(dh_refs+1)))
 
-#     ERRORS_dX = np.zeros((len(dts), len(dhs)))
-#     ERRORS_dX.fill(np.inf)
+    ERRORS_dX = np.zeros((len(dts), len(dhs)))
+    ERRORS_dX.fill(np.inf)
 
-#     true_hs = np.zeros(len(dhs))
-#     for i, dt in enumerate(dts):
-#         for j, dh in enumerate(dhs):
+    true_hs = np.zeros(len(dhs))
+    for i, dt in enumerate(dts):
+        for j, dh in enumerate(dhs):
 
-#             mesh = generate_boundary_torus(maxh = dh, R = sqrt(2), r=1)
+            mesh = generate_boundary_torus(maxh = dh, R = sqrt(2), r=1)
 
-#             true_h = GridFunction(SurfaceL2(mesh, order = 0))
-#             true_h.Set(get_config().h, definedon = mesh.Boundaries('.*'))
-#             true_h = np.max(true_h.vec.data)
-#             true_hs[j] = true_h
+            true_h = GridFunction(SurfaceL2(mesh, order = 0))
+            true_h.Set(get_config().h, definedon = mesh.Boundaries('.*'))
+            true_h = np.max(true_h.vec.data)
+            true_hs[j] = true_h
 
-#             err = solve(mesh=mesh, dt=dt)
+            err = solve(mesh=mesh, dt=dt)
 
-#             ERRORS_dX[i, j] = err
+            ERRORS_dX[i, j] = err
 
-#     diag = ERRORS_dX.diagonal()
-#     rates = np.log(diag[:-1]/diag[1:])/np.log(true_hs[:-1]/true_hs[1:])
-#     print(rates)
-#     assert all(0.9 <= num for num in rates)
+    diag = ERRORS_dX.diagonal()
+    rates = np.log(diag[:-1]/diag[1:])/np.log(true_hs[:-1]/true_hs[1:])
+    print(rates)
+    assert all(0.9 <= num for num in rates)
 
-# @pytest.mark.parametrize("redistribute", [False, True])
-# def test_convergence_willmore_flow_half_clifford_torus(redistribute):
+@pytest.mark.parametrize("redistribute", [False, True])
+def test_convergence_willmore_flow_half_clifford_torus(redistribute):
 
-#     Tend = 1
-#     def solve(mesh, dt):
+    Tend = 1
+    def solve(mesh, dt):
 
-#         model = CosmosModel(name = 'convergence_willmore_flow_half_clifford_torus', parentmesh=mesh,
-#                             t0 = 0, t1 = Tend, dt = dt, redistribute = redistribute,
-#                             coupling_type = 'implicit')
+        model = CosmosModel(name = 'convergence_willmore_flow_half_clifford_torus', parentmesh=mesh,
+                            t0 = 0, t1 = Tend, dt = dt, redistribute = redistribute,
+                            coupling_type = 'implicit')
 
-#         comp1 = model.create_compartment(name = 'compartment', boundary = 'default', bboundary = 'bboundary',
-#                                          clamped_bbnd = 'bboundary')
-#         pde = model.create_pde(name = 'willmore_flow', pde_model=GeometricalFlowModel, compartment=comp1, ale_type = 0)
-#         ale = model.create_ale(name = 'ale', compartment=comp1)
-#         ale.set_normal_velocity(pde.V_h)
-#         ale.set_tangential_velocity(CF((0, 0, 0)))
+        comp1 = model.create_compartment(name = 'compartment', boundary = 'default', bboundary = 'bboundary',
+                                         clamped_bbnd = 'bboundary')
+        pde = model.create_pde(name = 'willmore_flow', pde_model=GeometricalFlowModel, compartment=comp1, ale_type = 0)
+        ale = model.create_ale(name = 'ale', compartment=comp1)
+        ale.set_normal_velocity(pde.V_h)
+        ale.set_tangential_velocity(CF((0, 0, 0)))
 
-#         errs = []
-#         for _ in model():
-#             errs.append(np.max(np.abs(dt*ale.gfu_norm_vel.vec.FV().NumPy())))
+        errs = []
+        for _ in model():
+            errs.append(np.max(np.abs(dt*ale.gfu_norm_vel.vec.FV().NumPy())))
 
-#         return np.max(np.array(errs))
+        return np.max(np.array(errs))
 
-#     power_t = 1.5
-#     dt0 = 0.1
-#     dt_refs = 3
-#     dts = dt0/(power_t**(np.arange(dt_refs+1)))
+    power_t = 1.5
+    dt0 = 0.1
+    dt_refs = 3
+    dts = dt0/(power_t**(np.arange(dt_refs+1)))
 
-#     power_h= 1.5
-#     dh0 = 0.2
-#     dh_refs = 3
-#     dhs = dh0/(power_h**(np.arange(dh_refs+1)))
+    power_h= 1.5
+    dh0 = 0.2
+    dh_refs = 3
+    dhs = dh0/(power_h**(np.arange(dh_refs+1)))
 
-#     ERRORS_dX = np.zeros((len(dts), len(dhs)))
-#     ERRORS_dX.fill(np.inf)
+    ERRORS_dX = np.zeros((len(dts), len(dhs)))
+    ERRORS_dX.fill(np.inf)
 
-#     true_hs = np.zeros(len(dhs))
-#     for i, dt in enumerate(dts):
-#         for j, dh in enumerate(dhs):
+    true_hs = np.zeros(len(dhs))
+    for i, dt in enumerate(dts):
+        for j, dh in enumerate(dhs):
 
-#             mesh = generate_boundary_half_torus(maxh = dh, R = sqrt(2), r=1)
+            mesh = generate_boundary_half_torus(maxh = dh, R = sqrt(2), r=1)
 
-#             true_h = GridFunction(SurfaceL2(mesh, order = 0))
-#             true_h.Set(get_config().h, definedon = mesh.Boundaries('.*'))
-#             true_h = np.max(true_h.vec.data)
-#             true_hs[j] = true_h
+            true_h = GridFunction(SurfaceL2(mesh, order = 0))
+            true_h.Set(get_config().h, definedon = mesh.Boundaries('.*'))
+            true_h = np.max(true_h.vec.data)
+            true_hs[j] = true_h
 
-#             err = solve(mesh=mesh, dt=dt)
+            err = solve(mesh=mesh, dt=dt)
 
-#             ERRORS_dX[i, j] = err
+            ERRORS_dX[i, j] = err
 
-#     diag = ERRORS_dX.diagonal()
-#     rates = np.log(diag[:-1]/diag[1:])/np.log(true_hs[:-1]/true_hs[1:])
-#     print(rates)
-#     assert all(0.9 <= num for num in rates)
+    diag = ERRORS_dX.diagonal()
+    rates = np.log(diag[:-1]/diag[1:])/np.log(true_hs[:-1]/true_hs[1:])
+    print(rates)
+    assert all(0.9 <= num for num in rates)
 
 @pytest.mark.parametrize("redistribute", [False, True])
 def test_convergence_willmore_flow_sphere_with_spontaneous_curvature(redistribute):

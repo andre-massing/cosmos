@@ -67,7 +67,7 @@ class DistanceVolumeModel(BasePDEModel):
 
     def Initialize(self):
 
-        dt = specialcf.mesh_size**2
+        delta = specialcf.mesh_size**2
 
         fes1 = H1(
             self.model.parentmesh,
@@ -78,7 +78,7 @@ class DistanceVolumeModel(BasePDEModel):
 
         u1, v1 = fes1.TnT()
         self.A1 = BilinearForm(fes1)
-        self.A1 += (u1 * v1 + dt * grad(u1) * grad(v1)) * dx(deformation=self.model.ale.Y)
+        self.A1 += (u1 * v1 + delta * grad(u1) * grad(v1)) * dx(deformation=self.model.ale.Y)
         self.A1.Assemble()
         self.invA1 = self.A1.mat.Inverse(freedofs=fes1.FreeDofs())
         self.gfu1 = GridFunction(fes1)

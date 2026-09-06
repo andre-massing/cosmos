@@ -2,12 +2,12 @@
 # # Mean curvature flow: a sphere collapsing to a round point
 #
 # Under **mean curvature flow (MCF)** a closed surface moves with normal
-# velocity equal to minus its mean curvature,
+# velocity equal to its mean curvature,
 #
-# $$V = -H,$$
+# $$V = H,$$
 #
 # where $H$ is the *sum* of the principal curvatures. For a sphere of radius
-# $R$ in $\mathbb{R}^3$ we have $H = 2/R$, so the radius obeys the ODE
+# $R$ in $\mathbb{R}^3$ we have $H = -2/R$, so the radius obeys the ODE
 #
 # $$\frac{dR}{dt} = -\frac{2}{R}, \qquad\Longrightarrow\qquad R(t)^2 = R_0^2 - 4t.$$
 #

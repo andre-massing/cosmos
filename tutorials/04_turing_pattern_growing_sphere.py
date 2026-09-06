@@ -5,30 +5,16 @@
 # reaction–diffusion system on the surface of a sphere spontaneously breaks
 # symmetry into a spotty *Turing pattern*, and the concentration of one of the
 # two species is then fed back into a geometric flow so that the surface grows
-# *locally*, faster where the activator is high.
-#
-# It is a deliberately crude proxy for pattern-driven tumour/tissue growth: a
-# chemically patterned membrane that bulges outward where the signalling
-# molecule accumulates. It is **not** a validated biological model — see the
-# closing section.
-#
-# ## Turing instability in one paragraph
-#
-# Take two species, a slowly diffusing *activator* `u` that promotes both itself
-# and its inhibitor, and a fast diffusing *inhibitor* `v` that suppresses `u`.
-# Without diffusion the well-mixed state is stable. Add diffusion with
-# `Dv >> Du` and it can become *unstable*: a local bump in `u` reinforces itself
-# before the inhibitor it produces can build up locally, while that inhibitor
-# spreads far enough to suppress neighbouring bumps. The result is
-# *short-range activation, long-range inhibition* — a finite, intrinsic
-# wavelength selected by the kinetics and the diffusivities, not by the domain.
-#
-# We use the **Schnakenberg** system (Schnakenberg 1979; Murray,
-# *Mathematical Biology* II, ch. 2–3), one of the standard textbook models:
+# *locally*, faster where the activator is high. 
+# 
+# The model is taken from B. Kovács, B. Li, C. Lubich, C.A. Power Guerra, 
+# Convergence of finite elements on an evolving surface driven by diffusion
+#  on the surface, Numer. Math. 137 (3) (2017) 643–689, doi:10/gh4xvx. and
+# reads as follows:
 #
 # ```
-# du/dt = Du * Lap_S u + gamma * (a - u + u^2 v)
-# dv/dt = Dv * Lap_S v + gamma * (b - u^2 v)
+# du/dt + u\nabla\cdot\mathbf{v} - Du * Lap_S u = gamma * (a - u + u^2 v)
+# dv/dt + v\nabla\cdot\mathbf{v} - Dv * Lap_S v = gamma * (b - u^2 v)
 # ```
 #
 # where `Lap_S` is the Laplace–Beltrami operator on the surface. The spatially
@@ -42,13 +28,17 @@
 # `maxh = 0.2` mesh can resolve.
 #
 # **Parameters here were tuned empirically for this mesh and timescale.** The
-# kinetic constants `a, b` are textbook; `gamma`, `dt`, `maxh` and the growth
-# coefficients below were found by running the script, not derived.
+# kinetic constants `a, b` are textbook. Following the cited example, the model
+# is run for 3 s without feedback between the pattern and the flow, then for
+# 2 s with the activator driving the normal velocity.
 
 # %%
 import time
 
 import matplotlib
+import logging 
+
+logging.basicConfig(level=logging.INFO)
 
 matplotlib.use("Agg")
 
@@ -56,7 +46,8 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
-from ngsolve import CF
+from ngsolve import *
+from ngsolve.webgui import Draw
 
 from cosmos.core.model import CosmosModel
 from cosmos.pde import ADRBoundarySystemBDF1Model, GeometricalFlowModel
@@ -68,11 +59,9 @@ os.makedirs(FIGDIR, exist_ok=True)
 # Schnakenberg kinetics
 A_K, B_K = 0.1, 0.9
 GAMMA = 80.0  # reaction scaling -> pattern wavelength
-DU, DV = 1.0, 20.0  # Dv/Du = 20 is comfortably above the Turing threshold
-
+DU, DV = 1.0, 20.0  # Dv/Du = 10 is comfortably above the Turing threshold
 MAXH = 0.2
 DT = 0.004
-T_PATTERN = 1.5
 
 U_STAR = A_K + B_K
 V_STAR = B_K / (A_K + B_K) ** 2
@@ -106,167 +95,6 @@ print(f"Dv*f_u + Du*g_v = {turing_lhs:.3f} > 2*sqrt(Du*Dv*detJ) = {turing_rhs:.3
       f"  -> {turing_lhs > turing_rhs}")
 print(f"critical k_c^2 = {k_c2:.1f}  ->  expected spherical-harmonic degree l ~ "
       f"{0.5 * (np.sqrt(1 + 4 * k_c2) - 1):.1f}")
-
-# %% [markdown]
-# ## Part A — the Turing system alone
-#
-# One `ADRBoundarySystemBDF1Model` with `dim=2` holds both species as a single
-# coupled system on the sphere's surface.
-#
-# The model assembles
-# `(u - u_old)/dt + c*u - div(d grad u) = rhs - <nonlinearity>`,
-# so the reaction terms are split as follows:
-#
-# * `c_1 = gamma` gives the `-gamma*u` decay **implicitly**;
-# * `rhs_1 = gamma*a`, `rhs_2 = gamma*b` are the constant sources;
-# * `c_2 = gamma*u^2` (a callable `Field`, re-evaluated from the current `u`
-#   each step) gives the `-gamma*u^2 v` sink **semi-implicitly in `v`**, which
-#   is what keeps `v` positive at this `dt`;
-# * only the autocatalytic `+gamma*u^2 v` term is left to `add_nonlinearity`.
-#   That term is evaluated at the *previous* step's solution (IMEX), which is
-#   what sets the `dt` restriction: `dt * gamma * O(1) < 1`. `dt = 0.004` with
-#   `gamma = 80` is a factor ~3 inside that.
-#
-# `add_nonlinearity` contributes with a **minus** sign, hence the explicit
-# `-1*` in the expression string. Inside the expression, `u1`/`u2` are the two
-# solution components and `map` supplies any extra coefficients.
-#
-# A perfectly uniform initial condition is an exact steady state and would
-# never break symmetry, so we seed a small (1%) random perturbation into the
-# nodal values right after `model.initialize()`.
-
-# %%
-def build_turing(model, comp):
-    pde = model.create_pde("turing", ADRBoundarySystemBDF1Model, comp, ale_type=1, dim=2)
-    pde.set_params(
-        d_1=CF(DU),
-        d_2=CF(DV),
-        c_1=CF(GAMMA),
-        c_2=lambda: GAMMA * pde.sol[0] ** 2,
-        rhs_1=CF(GAMMA * A_K),
-        rhs_2=CF(GAMMA * B_K),
-        u0_1=CF(U_STAR),
-        u0_2=CF(V_STAR),
-    )
-    pde.add_nonlinearity(target=1, expression="-1*g*u1**2*u2", map={"g": CF(GAMMA)})
-    return pde
-
-
-def seed_perturbation(pde, amp=0.01, seed=SEED):
-    rng = np.random.default_rng(seed)
-    n = len(pde.sol[0].vec)
-    pde.sol[0].vec.FV().NumPy()[:] = U_STAR + amp * rng.standard_normal(n)
-    pde.sol[1].vec.FV().NumPy()[:] = V_STAR + amp * rng.standard_normal(n)
-
-
-def vertex_points(model):
-    c = model.ale.X.vec.FV().NumPy()
-    return c.reshape((len(c) // 3, 3), order="F")
-
-
-# %%
-mesh_a = generate_boundary_sphere(maxh=MAXH, R=1.0)
-model_a = CosmosModel("turing_only", mesh_a, t0=0.0, t1=T_PATTERN, dt=DT,
-                      coupling_type="explicit")
-comp_a = model_a.create_compartment("surface", boundary="default", bboundary="")
-turing_a = build_turing(model_a, comp_a)
-
-print(f"surface mesh: {mesh_a.nv} vertices, {mesh_a.nface} faces")
-
-t_start = time.time()
-gen = model_a()
-next(gen)  # runs initialize(); the solution now holds the uniform state
-seed_perturbation(turing_a)
-
-times, u_range = [], []
-for _ in gen:
-    u = turing_a.sol[0].vec.FV().NumPy()
-    times.append(model_a.t.Get())
-    u_range.append(u.max() - u.min())
-
-print(f"Part A: {len(times)} steps in {time.time() - t_start:.1f} s")
-print(f"max(u)-min(u): {u_range[0]:.4f} (start) -> {u_range[-1]:.4f} (end)")
-
-pts_a = vertex_points(model_a)
-u_a = turing_a.sol[0].vec.FV().NumPy().copy()
-
-# %% [markdown]
-# ### Is it really a pattern, or just noise?
-#
-# A quick check: project `u` onto real spherical harmonics up to `l = 8` and
-# look at where the power sits. Noise spreads across all degrees; a genuine
-# Turing mode concentrates in the band predicted by `k_c`.
-
-# %%
-from scipy.special import sph_harm_y
-
-r_a = np.linalg.norm(pts_a, axis=1)
-theta = np.arccos(pts_a[:, 2] / r_a)
-phi = np.arctan2(pts_a[:, 1], pts_a[:, 0])
-
-cols, degs = [], []
-for l in range(9):
-    for m in range(-l, l + 1):
-        Y = sph_harm_y(l, abs(m), theta, phi)
-        cols.append(np.real(Y) if m >= 0 else np.imag(Y))
-        degs.append(l)
-basis, degs = np.array(cols).T, np.array(degs)
-coef, *_ = np.linalg.lstsq(basis, u_a - u_a.mean(), rcond=None)
-power = np.array([np.sum(coef[degs == l] ** 2) for l in range(9)])
-power /= power.sum()
-
-print("spherical-harmonic power by degree l = 0..8:")
-print("  " + "  ".join(f"l={l}:{p:5.1%}" for l, p in enumerate(power)))
-print(f"dominant degree l = {power.argmax()}")
-
-# %%
-def sphere_views(fig, gs_ids, pts, values, cmap="inferno", label=""):
-    """Two hidden-surface-removed 3D scatters + one Mollweide map."""
-    r = np.linalg.norm(pts, axis=1)
-    lat, lon = np.arcsin(pts[:, 2] / r), np.arctan2(pts[:, 1], pts[:, 0])
-    vmin, vmax = values.min(), values.max()
-    for gid, (el, az) in zip(gs_ids[:2], [(20, 30), (20, 210)]):
-        ax = fig.add_subplot(*gid, projection="3d")
-        e, a = np.radians(el), np.radians(az)
-        view = np.array([np.cos(e) * np.cos(a), np.cos(e) * np.sin(a), np.sin(e)])
-        m = pts @ view > 0.0
-        ax.scatter(pts[m, 0], pts[m, 1], pts[m, 2], c=values[m], cmap=cmap,
-                   s=55, vmin=vmin, vmax=vmax, depthshade=False)
-        ax.view_init(elev=el, azim=az)
-        lim = 1.05 * np.abs(pts).max()
-        ax.set_xlim(-lim, lim); ax.set_ylim(-lim, lim); ax.set_zlim(-lim, lim)
-        ax.set_box_aspect((1, 1, 1), zoom=1.45); ax.set_axis_off()
-        ax.set_title(f"azim {az}deg", fontsize=9)
-    ax = fig.add_subplot(*gs_ids[2], projection="mollweide")
-    s = ax.tripcolor(lon, lat, values, cmap=cmap, shading="gouraud")
-    ax.grid(alpha=0.25, lw=0.4)
-    ax.set_xticklabels([]); ax.set_yticklabels([])
-    ax.set_title("lon/lat (Mollweide)", fontsize=9)
-    fig.colorbar(s, ax=ax, shrink=0.75, label=label)
-
-
-fig = plt.figure(figsize=(13, 6.5))
-sphere_views(fig, [(2, 3, 1), (2, 3, 2), (2, 3, 3)], pts_a, u_a, label="u")
-
-ax = fig.add_subplot(2, 3, (4, 5))
-ax.plot(times, u_range, lw=1.8)
-ax.set_xlabel("t"); ax.set_ylabel("max(u) - min(u)")
-ax.set_title("pattern amplitude: growth from the noisy IC, then saturation", fontsize=9)
-ax.grid(alpha=0.3)
-
-ax = fig.add_subplot(2, 3, 6)
-ax.bar(np.arange(9), power)
-ax.set_xlabel("spherical-harmonic degree l"); ax.set_ylabel("fraction of power")
-ax.set_title(f"spectrum of u (predicted l ~ "
-             f"{0.5 * (np.sqrt(1 + 4 * k_c2) - 1):.1f})", fontsize=9)
-ax.grid(alpha=0.3, axis="y")
-
-fig.suptitle(f"Schnakenberg Turing pattern on a sphere "
-             f"(a={A_K}, b={B_K}, gamma={GAMMA}, Du={DU}, Dv={DV})")
-fig.tight_layout()
-fig.savefig(os.path.join(FIGDIR, "turing_pattern.png"), dpi=110)
-plt.close(fig)
-print("saved figures/turing_pattern.png")
 
 # %% [markdown]
 # ## Part B — coupling the pattern to surface growth
@@ -306,14 +134,69 @@ print("saved figures/turing_pattern.png")
 # internally (its advection field carries a `- ale.W` correction).
 
 # %%
+def build_turing(model, comp):
+    pde = model.create_pde("turing", ADRBoundarySystemBDF1Model, comp, ale_type=1, dim=2)
+    pde.set_params(
+        b_1=lambda: model.ale.V,
+        b_2=lambda: model.ale.V,
+        d_1=CF(DU),
+        d_2=CF(DV),
+        c_1=CF(GAMMA),
+        rhs_1=CF(GAMMA * A_K),
+        rhs_2=CF(GAMMA * B_K),
+        u0_1=CF(U_STAR),
+        u0_2=CF(V_STAR),
+    )
+    pde.add_nonlinearity(target=1, expression="-1*g*u1**2*u2", map={"g": CF(GAMMA)})
+    pde.add_nonlinearity(target=2, expression="g*u1**2*u2", map={"g": CF(GAMMA)})
+    return pde
+
+
+def seed_perturbation(pde, amp=0.01, seed=SEED):
+    rng = np.random.default_rng(seed)
+    n = len(pde.sol[0].vec)
+    pde.sol[0].vec.FV().NumPy()[:] = U_STAR + amp * rng.standard_normal(n)
+    pde.sol[1].vec.FV().NumPy()[:] = V_STAR + amp * rng.standard_normal(n)
+
+
+def vertex_points(model):
+    c = model.ale.X.vec.FV().NumPy()
+    return c.reshape((len(c) // 3, 3), order="F")
+
+# %%
+def sphere_views(fig, gs_ids, pts, values, cmap="inferno", label=""):
+    """Two hidden-surface-removed 3D scatters + one Mollweide map."""
+    r = np.linalg.norm(pts, axis=1)
+    lat, lon = np.arcsin(pts[:, 2] / r), np.arctan2(pts[:, 1], pts[:, 0])
+    vmin, vmax = values.min(), values.max()
+    for gid, (el, az) in zip(gs_ids[:2], [(20, 30), (20, 210)]):
+        ax = fig.add_subplot(*gid, projection="3d")
+        e, a = np.radians(el), np.radians(az)
+        view = np.array([np.cos(e) * np.cos(a), np.cos(e) * np.sin(a), np.sin(e)])
+        m = pts @ view > 0.0
+        ax.scatter(pts[m, 0], pts[m, 1], pts[m, 2], c=values[m], cmap=cmap,
+                   s=55, vmin=vmin, vmax=vmax, depthshade=False)
+        ax.view_init(elev=el, azim=az)
+        lim = 1.05 * np.abs(pts).max()
+        ax.set_xlim(-lim, lim); ax.set_ylim(-lim, lim); ax.set_zlim(-lim, lim)
+        ax.set_box_aspect((1, 1, 1), zoom=1.45); ax.set_axis_off()
+        ax.set_title(f"azim {az}deg", fontsize=9)
+    ax = fig.add_subplot(*gs_ids[2], projection="mollweide")
+    s = ax.tripcolor(lon, lat, values, cmap=cmap, shading="gouraud")
+    ax.grid(alpha=0.25, lw=0.4)
+    ax.set_xticklabels([]); ax.set_yticklabels([])
+    ax.set_title("lon/lat (Mollweide)", fontsize=9)
+    fig.colorbar(s, ax=ax, shrink=0.75, label=label)
+
+# %%
 G_GROW = 0.15  # normal velocity per unit of u
 ALPHA_F = 0.0  # Willmore/bending: off (see above)
 GAMMA_F = 0.075  # mean-curvature flow: regularises + balances mean growth
-T_GROW = 2.5
 
 mesh_b = generate_boundary_sphere(maxh=MAXH, R=1.0)
-model_b = CosmosModel("turing_growth", mesh_b, t0=0.0, t1=T_GROW, dt=DT,
-                      coupling_type="explicit")
+model_b = CosmosModel("turing_growth", mesh_b, t0=0.0, t1=3, dt=DT,
+                      t = Parameter(0.0), coupling_type="implicit",
+                      redistribute = True)
 comp_b = model_b.create_compartment("surface", boundary="default", bboundary="")
 
 flow = model_b.create_pde("flow", GeometricalFlowModel, comp_b, ale_type=0)
@@ -331,8 +214,10 @@ gen = model_b()
 next(gen)
 seed_perturbation(turing_b)
 
+plot = Draw(turing_b.sol[0], mesh=model_b.parentmesh)
 t_b, rng_u, r_min, r_mean, r_max = [], [], [], [], []
 for _ in gen:
+    plot.Redraw()
     u = turing_b.sol[0].vec.FV().NumPy()
     r = np.linalg.norm(vertex_points(model_b), axis=1)
     t_b.append(model_b.t.Get())

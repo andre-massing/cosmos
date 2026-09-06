@@ -1,7 +1,7 @@
 # cosmos
 
 Cosmos, the Continuum Surface Mechanics Simulator, provides a number of finite element based
-solvers for the numerical solution of PDE problems related to membrane dynamics: coupled
+solvers for the numerical solution of PDE problems related to cell membrane dynamics: coupled
 advection-diffusion-reaction systems on volumes and surfaces, geometrical (Willmore /
 mean-curvature) flow, and an Arbitrary Lagrangian-Eulerian (ALE) framework for moving-domain
 and moving-surface problems, all built on top of [NGSolve](https://ngsolve.org/).

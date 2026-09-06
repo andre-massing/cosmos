@@ -27,18 +27,29 @@
 # zero on the boundary circle and positive inside — which is the sign convention
 # this model produces (verified numerically below).
 #
-# ## A caveat worth stating up front: the solution is *not* smooth
+# ## A caveat worth stating up front: the solution is *not* smooth and the algorithm is *not* convergent
 #
 # $\sqrt{x^2+y^2}$ has a **cone-point singularity at the origin**. It is Lipschitz
 # but not differentiable there: $|\nabla d| = 1$ everywhere except at $r = 0$,
 # where the gradient jumps direction by $180°$ across the point, and
 # $\Delta d = -1/r$ blows up. This is the interior analogue of the classical
 # corner singularity in elliptic problems, and it means we should *not* walk into
-# this study expecting the textbook $O(h^{p+1})$ rate of a smooth solution. We
-# will measure whatever rate actually comes out and then explain it.
+# this study expecting the textbook $O(h^{p+1})$ rate of a smooth solution.
+#
+# In `Initialize()` the regularisation parameter is set as
+#
+# ```python
+# delta = specialcf.mesh_size**2
+# ```
+# The variable `delta` is the penalty/regularisation coefficient $\delta$ of step 1, and it
+# has units of *length squared*. So the width of the boundary layer in step 1 is
+# $\sqrt{\delta} = h$, the **local element size**. That choice is the single most 
+# important thing to understand about this model, because the smoothing length is 
+# tied to $h$. Refining the mesh shrinks the layer *in lockstep* with the elements, 
+# so the layer is always resolved by about one element — no better on a fine mesh than on a coarse one.
 
 # %% [markdown]
-# ## How the model works, and what `dt` really is
+# ## How the model works, and what `delta` really is
 #
 # `DistanceVolumeModel.Solve()` is three linear solves, not a time loop
 # (the model is fully stationary — registering it with `ale_type=-1` puts it in
@@ -54,23 +65,6 @@
 # 3. **Poisson recovery.** Solve $-\Delta d_h = \nabla\!\cdot\!\texttt{gfu2}$ with
 #    $d_h = 0$ on the boundary, which undoes the gradient and returns the
 #    distance itself.
-#
-# In `Initialize()` the regularisation parameter is set as
-#
-# ```python
-# dt = specialcf.mesh_size**2
-# ```
-#
-# The name `dt` is a **red herring**: there is no time evolution anywhere in this
-# model. It is the penalty/regularisation coefficient $\delta$ of step 1, and it
-# has units of *length squared*. So the width of the boundary layer in step 1 is
-# $\sqrt{\delta} = h$, the **local element size**.
-#
-# That choice is the single most important thing to understand about this model,
-# and we will come back to it after the refinement study: because the smoothing
-# length is tied to $h$, refining the mesh shrinks the layer *in lockstep* with
-# the elements, so the layer is always resolved by about one element — no better
-# on a fine mesh than on a coarse one.
 
 # %%
 import os
@@ -81,32 +75,14 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-from ngsolve import (
-    CF,
-    VOL,
-    BilinearForm,
-    GridFunction,
-    Grad,
-    H1,
-    IfPos,
-    InnerProduct,
-    Integrate,
-    LinearForm,
-    Normalize,
-    Trace,
-    dx,
-    grad,
-    sqrt,
-    x,
-    y,
-)
+from ngsolve import *
 
 from cosmos.core.model import CosmosModel
 from cosmos.pde import DistanceVolumeModel
 from cosmos.utils.generate_meshes import generate_volume_circle
 
 R = 1.0
-GEO_ORDER = 3
+GEO_ORDER = 1
 FIGDIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "figures")
 os.makedirs(FIGDIR, exist_ok=True)
 
@@ -251,8 +227,7 @@ print(f"ratio (centre / bulk)       : {(e_in / np.sqrt(a_in)) / (e_out / np.sqrt
 # %% [markdown]
 # ## Refinement study
 #
-# We refine a single base mesh uniformly (`mesh.Refine()`, followed by
-# `Curve()` so the new boundary nodes are projected back onto the circle). A
+# We refine a single base mesh uniformly (`mesh.Refine()`). A
 # *nested* family is used deliberately: independently generated Netgen meshes at
 # `maxh = 0.4 / 1.5**k` give the same error magnitudes but with ±50 % mesh-to-mesh
 # scatter, which at these rates is as large as the signal and makes successive
@@ -260,9 +235,9 @@ print(f"ratio (centre / bulk)       : {(e_in / np.sqrt(a_in)) / (e_out / np.sqrt
 # whatever trend is left is real.
 #
 # Alongside the shipped model we run a variant that is identical except that the
-# regularisation $\delta$ is held **fixed** instead of being tied to $h^2$. That
-# is the controlled experiment for the "`dt` is a mesh-scaled smoothing length"
-# claim above.
+# regularisation $\delta$ is held **fixed** instead of being tied to $h^2$.
+# Since the boundary layer is fixed, the mesh eventually resolves the boundary
+# layer and the convergence rate becomes visible with refinement.
 
 # %%
 DELTA_FIXED = 0.15**2
@@ -378,58 +353,7 @@ print(f"\ntotal runtime: {time.time() - t_start:.1f} s")
 # distance field is *accurate to a fixed few percent* — it just stops getting
 # better.
 #
-# ### Why: `delta = mesh_size**2` is a mesh-scaled smoothing length
-#
-# The green curve is the controlled experiment. The *only* change is holding the
-# regularisation $\delta$ fixed instead of tying it to $h^2$. With $\delta$ fixed
-# the same three-solve algorithm converges cleanly at very nearly $O(h^2)$ over
-# three orders of magnitude, because the boundary layer of step 1 now has a fixed
-# physical width and the mesh eventually resolves it. (The first level is
-# pre-asymptotic: there $h > \sqrt{\delta}$, the layer is not resolved at all, and
-# the error is large.)
-#
-# With $\delta = h(x)^2$ the layer width is *identically the local element size*.
-# Refining shrinks the layer exactly as fast as it shrinks the elements, so the
-# layer is perpetually resolved by about one element and the relative
-# discretisation error of step 1 is frozen. Worse, `specialcf.mesh_size` varies
-# from element to element, so $\delta$ is a discontinuous, element-wise
-# coefficient: neighbouring elements give the layer slightly different decay
-# lengths, which tilts its level sets away from the true offset curves. Step 2
-# normalises that gradient, so those tilts become $O(1)$-in-$h$ direction errors
-# in `pde.sol[1]`, and step 3 integrates them into the distance. That is the
-# mechanism behind the plateau, and it is why the plateau level depends on mesh
-# quality (independently meshed families plateau anywhere between ~1 % and ~4 %).
-#
-# This is a deliberate engineering trade-off, not a bug: the field is meant to be
-# a *smoothed* distance, cheap (three SPD solves, no iteration, no reinitialisation)
-# and robust on any mesh, whose smoothing scale automatically follows the mesh.
-# For its actual job — extending a boundary normal into the bulk to drive an ALE
-# velocity — a few percent is fine. It is simply not a converging approximation of
-# the exact distance, and should not be used as one.
-#
-# ### And the cone singularity
-#
-# The point singularity at $r = 0$ is a real, separate effect, and it is what
-# limits the green curve. Three pieces of evidence:
-#
-# * The error-density split printed above: the RMS error in $r < R/4$ is about
-#   **3x** the RMS error in the bulk, even though that disk holds only ~6 % of the
-#   area. The error is concentrated at the cone point.
-# * The radial-profile panel shows the computed field rounding off the kink of
-#   $R - r$ at the origin — the computed $d_h(0,0)$ undershoots by several percent
-#   while $d_h(0.5, 0)$ is accurate to $10^{-4}$.
-# * The green curve converges at $O(h^2)$, one full order short of the $O(h^3)$
-#   that continuous $P_2$ elements give for a smooth solution. Verified separately:
-#   raising `fes_order` to 3 or 4 lowers the error constant but leaves the rate at
-#   $\approx 2$. The cap is therefore a property of the solution, not of the
-#   discretisation order — exactly the signature of a point singularity, the
-#   interior analogue of the corner singularities that cap rates in elliptic
-#   problems on non-convex polygons. Recovering a higher rate would require
-#   grading the mesh towards the origin.
-#
-# So $O(h^2)$, not $O(h^{p+1})$, is the best this test case can do — and even that
-# is only visible once the regularisation is decoupled from $h$.
-#
-# The practical takeaway: **the singularity caps the achievable rate at $O(h^2)$,
-# but with the shipped $\delta = h^2$ it never gets the chance — the $h$-scaled
-# regularisation freezes the accuracy at a few percent first.**
+# Although it is not a convergent algorithm, the model is still useful: it gives 
+# a smooth distance field and smooth outward direction field that is accurate to 
+# a few percent in a fast, simple way. For many applications,
+# like the one we are interesed in for now, that is enough.
