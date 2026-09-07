@@ -81,6 +81,7 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 from ngsolve import CF
+from ngsolve.webgui import Draw
 
 from cosmos.core.model import CosmosModel
 from cosmos.pde import GeometricalFlowModel
@@ -117,12 +118,14 @@ def run_mcf(maxh, dt, t1, R0=R0):
 
     ts, means, stds = [0.0], [vertex_radii(model).mean()], [vertex_radii(model).std()]
     t = 0.0
+    plot = Draw(pde.kappa_h, mesh)
     for _ in model():
         t += dt
         r = vertex_radii(model)
         ts.append(t)
         means.append(r.mean())
         stds.append(r.std())
+        plot.Redraw()
 
     return {
         "maxh": maxh,

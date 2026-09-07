@@ -64,6 +64,7 @@ import matplotlib.pyplot as plt
 import netgen.occ as occ
 import numpy as np
 from ngsolve import *
+from ngsolve.webgui import Draw
 
 from cosmos.core.model import CosmosModel
 from cosmos.pde import ADRVolumeSystemBDF1Model
@@ -112,7 +113,9 @@ def solve_heat(maxh, dt, t_end=T_END, bc="dirichlet"):
     if bc == "dirichlet":
         pde.set_params(Dir_bnd="boundary", u_bnd_1=u_exact_t)
 
-    model.run()
+    plot = Draw(pde.sol[0], mesh)
+    for _ in model():
+        plot.Redraw()
 
     t_final = model.t.Get()
     u_exact = shape * math.exp(-DECAY * t_final)

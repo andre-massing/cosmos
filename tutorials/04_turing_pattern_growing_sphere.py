@@ -9,7 +9,7 @@
 # 
 # The model is taken from B. Kovács, B. Li, C. Lubich, C.A. Power Guerra, 
 # Convergence of finite elements on an evolving surface driven by diffusion
-#  on the surface, Numer. Math. 137 (3) (2017) 643–689, doi:10/gh4xvx. and
+# on the surface, Numer. Math. 137 (3) (2017) 643–689, doi:10/gh4xvx. and
 # reads as follows:
 #
 # ```
@@ -28,9 +28,7 @@
 # `maxh = 0.2` mesh can resolve.
 #
 # **Parameters here were tuned empirically for this mesh and timescale.** The
-# kinetic constants `a, b` are textbook. Following the cited example, the model
-# is run for 3 s without feedback between the pattern and the flow, then for
-# 2 s with the activator driving the normal velocity.
+# kinetic constants `a, b` are textbook.
 
 # %%
 import time
@@ -59,7 +57,7 @@ os.makedirs(FIGDIR, exist_ok=True)
 # Schnakenberg kinetics
 A_K, B_K = 0.1, 0.9
 GAMMA = 80.0  # reaction scaling -> pattern wavelength
-DU, DV = 1.0, 20.0  # Dv/Du = 10 is comfortably above the Turing threshold
+DU, DV = 1.0, 20.0  # Dv/Du = 20 is comfortably above the Turing threshold
 MAXH = 0.2
 DT = 0.004
 
@@ -97,9 +95,10 @@ print(f"critical k_c^2 = {k_c2:.1f}  ->  expected spherical-harmonic degree l ~ 
       f"{0.5 * (np.sqrt(1 + 4 * k_c2) - 1):.1f}")
 
 # %% [markdown]
-# ## Part B — coupling the pattern to surface growth
+# ## Coupling the pattern to surface growth
 #
-# Now put a `GeometricalFlowModel` on the *same* compartment and drive its
+# Put `GeometricalFlowModel` and `ADRBoundarySystemBDF1Model` on the
+# same compartment and drive its
 # normal velocity with the activator via the additive `rhs` forcing term. In
 # `GeometricalFlowModel.Initialize()` the velocity row of the saddle-point
 # system reads
@@ -132,6 +131,10 @@ print(f"critical k_c^2 = {k_c2:.1f}  ->  expected spherical-harmonic degree l ~ 
 # the right way round — the reaction–diffusion problem should see the surface
 # it actually lives on, and the ADR model already handles the ALE mesh velocity
 # internally (its advection field carries a `- ale.W` correction).
+#
+# Note that surface redistribution is on, so the mesh is not fixed to the material points. 
+# The ALE moves the mesh to follow the flow, and then the redistribution step repositions 
+# the mesh nodes to maintain the mesh quality.
 
 # %%
 def build_turing(model, comp):
@@ -193,41 +196,41 @@ G_GROW = 0.15  # normal velocity per unit of u
 ALPHA_F = 0.0  # Willmore/bending: off (see above)
 GAMMA_F = 0.075  # mean-curvature flow: regularises + balances mean growth
 
-mesh_b = generate_boundary_sphere(maxh=MAXH, R=1.0)
-model_b = CosmosModel("turing_growth", mesh_b, t0=0.0, t1=3, dt=DT,
+mesh = generate_boundary_sphere(maxh=MAXH, R=1.0)
+model = CosmosModel("turing_growth", mesh, t0=0.0, t1=3, dt=DT,
                       t = Parameter(0.0), coupling_type="implicit",
                       redistribute = True)
-comp_b = model_b.create_compartment("surface", boundary="default", bboundary="")
+comp = model.create_compartment("surface", boundary="default", bboundary="")
 
-flow = model_b.create_pde("flow", GeometricalFlowModel, comp_b, ale_type=0)
-turing_b = build_turing(model_b, comp_b)
+flow = model.create_pde("flow", GeometricalFlowModel, comp, ale_type=0)
+turing = build_turing(model, comp)
 
-flow.set_params(rhs=lambda: G_GROW * turing_b.sol[0], alpha=CF(ALPHA_F),
+flow.set_params(rhs=lambda: G_GROW * turing.sol[0], alpha=CF(ALPHA_F),
                 beta=CF(0.0), gamma=CF(GAMMA_F))
 
-ale = model_b.create_ale("ale", compartment=comp_b)
+ale = model.create_ale("ale", compartment=comp)
 ale.set_normal_velocity(lambda: flow.V_h)
 ale.set_tangential_velocity(CF((0.0, 0.0, 0.0)))
 
 t_start = time.time()
-gen = model_b()
+gen = model()
 next(gen)
-seed_perturbation(turing_b)
+seed_perturbation(turing)
 
-plot = Draw(turing_b.sol[0], mesh=model_b.parentmesh)
+plot = Draw(turing.sol[0], mesh=model.parentmesh)
 t_b, rng_u, r_min, r_mean, r_max = [], [], [], [], []
 for _ in gen:
     plot.Redraw()
-    u = turing_b.sol[0].vec.FV().NumPy()
-    r = np.linalg.norm(vertex_points(model_b), axis=1)
-    t_b.append(model_b.t.Get())
+    u = turing.sol[0].vec.FV().NumPy()
+    r = np.linalg.norm(vertex_points(model), axis=1)
+    t_b.append(model.t.Get())
     rng_u.append(u.max() - u.min())
     r_min.append(r.min()); r_mean.append(r.mean()); r_max.append(r.max())
 
 print(f"Part B: {len(t_b)} steps in {time.time() - t_start:.1f} s")
 
-pts_b = vertex_points(model_b)
-u_b = turing_b.sol[0].vec.FV().NumPy().copy()
+pts_b = vertex_points(model)
+u_b = turing.sol[0].vec.FV().NumPy().copy()
 r_b = np.linalg.norm(pts_b, axis=1)
 corr = np.corrcoef(u_b, r_b)[0, 1]
 
@@ -269,15 +272,7 @@ print("saved figures/turing_growth_coupling.png")
 # %% [markdown]
 # ## What actually happened
 #
-# **Part A.** From a 1% random perturbation the uniform state is unstable, the
-# amplitude `max(u) - min(u)` grows roughly exponentially over `t ~ 0.3–0.6`
-# and then saturates on a nonlinear plateau near 2.7. Around 95% of the
-# spectral power ends up in a single spherical-harmonic degree — four sharp,
-# well-separated activator spots around the equator plus polar structure. That
-# is a genuine wavelength-selected Turing mode, not noise: the observed degree
-# matches the `k_c` predicted by linear theory to within one.
-#
-# **Part B.** With `V = 0.15*u + 0.075*kappa` the surface bulges outward under
+# With `V = 0.15*u + 0.075*kappa` the surface bulges outward under
 # every spot and pulls in between them. The mean radius barely moves (growth
 # and surface tension balance), while the peak-to-valley radius spread reaches
 # roughly 0.28 on an `R = 1` sphere — clearly visible lobes. The final scatter
@@ -290,7 +285,7 @@ print("saved figures/turing_growth_coupling.png")
 # * **This is a proxy, not biology.** There is no cell population, no
 #   mechanics, no nutrient limitation, no volume constraint. Growth is an
 #   ad-hoc normal velocity proportional to a chemical concentration. Nothing
-#   here is validated against a real system, and Part B has no closed-form
+#   here is validated against a real system, and the experiment has no closed-form
 #   solution to check against — the success criterion is purely qualitative.
 # * **`alpha = 1` (Willmore) destroys the effect.** The bending relaxation of
 #   the selected mode is orders of magnitude faster than the growth forcing, so
@@ -299,8 +294,7 @@ print("saved figures/turing_growth_coupling.png")
 #   outward growth the sphere inflates; `k_c` is fixed, so as `R` increases the
 #   surface admits a higher harmonic degree and the pattern *reorganises*
 #   mid-run. The bumps then record where the spots *used to be*, and the
-#   correlation drops (measured `rho ~ 0.55` for a run that grew to
-#   `mean r ~ 1.22`). Balancing the mean growth against surface tension keeps
+#   correlation drops. Balancing the mean growth against surface tension keeps
 #   the domain size — and therefore the selected mode — fixed. This is a real
 #   effect of growing-domain pattern formation, not a numerical artefact, but
 #   it does mean the tidy `rho ~ 0.99` here is partly a consequence of choosing
