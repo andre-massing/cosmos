@@ -35,22 +35,22 @@ front/back symmetry -- the standard way to seed spontaneous polarization in
 this class of model rather than relying on numerical noise alone.
 """
 
-
 import logging
+
 logging.basicConfig(level=logging.INFO)
 
 import numpy as np
 from ngsolve import *
-from cosmos import *
-from cosmos.utils.generate_meshes import generate_boundary_1D_circle
-from cosmos.core.model import CosmosModel
-from cosmos.pde import (
-    ADRBoundarySystemBDF1Model,
-    ADRBoundarySystemBDF1StabModel
-)
 
-SOLVER = ADRBoundarySystemBDF1StabModel  # gradient-jump stabilisation for the feedback-free sweep below
-ROOT = '.'
+from cosmos import *
+from cosmos.core.model import CosmosModel
+from cosmos.pde import ADRBoundarySystemBDF1Model, ADRBoundarySystemBDF1StabModel
+from cosmos.utils.generate_meshes import generate_boundary_1D_circle
+
+SOLVER = (
+    ADRBoundarySystemBDF1StabModel  # gradient-jump stabilisation for the feedback-free sweep below
+)
+ROOT = "."
 
 # 20x20 grid of cross-inhibition strengths (A inhibiting B, B inhibiting A);
 # endpoint 0 is dropped since a12=a21=0 decouples the two species entirely.

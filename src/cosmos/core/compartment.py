@@ -15,8 +15,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-from ngsolve import *
 from typing import TYPE_CHECKING
+
+from ngsolve import *
 
 if TYPE_CHECKING:
     from cosmos.core.model import CosmosModel

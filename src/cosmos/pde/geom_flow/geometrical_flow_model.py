@@ -32,12 +32,12 @@ logger = logging.getLogger(__name__)
 from typing import Optional
 
 import numpy as np
-
 from ngsolve import *
-from cosmos.pde.base import BasePDEModel
-from cosmos.core.field import Field
+
 from cosmos.core.compartment import CosmosCompartment
+from cosmos.core.field import Field
 from cosmos.core.model import CosmosModel
+from cosmos.pde.base import BasePDEModel
 
 
 class GeometricalFlowModel(BasePDEModel):

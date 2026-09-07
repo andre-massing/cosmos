@@ -18,14 +18,13 @@ model with a genuine bulk compartment.
 # to be used for testing purposes, especially convergence studies.
 # ----------------------------------------------
 
-from ngsolve import *
 import netgen.csg as csg
 import netgen.occ as occ
-from netgen.meshing import MeshingStep
-from netgen import stl
-from netgen.meshing import Element0D, Element1D, MeshPoint, Pnt
-from netgen.meshing import Mesh as NetGenMesh
 import numpy as np
+from netgen import stl
+from netgen.meshing import Element0D, Element1D, MeshingStep, MeshPoint, Pnt
+from netgen.meshing import Mesh as NetGenMesh
+from ngsolve import *
 
 """
 Auxiliary function to allowing to mesh, switching between volume and surface mesh

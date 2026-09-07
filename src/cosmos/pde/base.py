@@ -26,13 +26,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, TYPE_CHECKING
-from cosmos.core.field import Field
+from typing import TYPE_CHECKING, Any, Dict, Optional
+
 from cosmos.config.parameters import get_config
+from cosmos.core.field import Field
 
 if TYPE_CHECKING:
-    from cosmos.core.model import CosmosModel
     from cosmos.core.compartment import CosmosCompartment
+    from cosmos.core.model import CosmosModel
 
 
 class BasePDEModel(ABC):

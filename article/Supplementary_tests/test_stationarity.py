@@ -13,20 +13,17 @@ main applications actually use.
 """
 
 import logging
+
 logging.basicConfig(level=logging.INFO)
 
-import numpy as np
 from ngsolve import *
-from cosmos import *
-from cosmos.utils.generate_meshes import generate_boundary_cigar
-from cosmos.core.model import CosmosModel
-from cosmos.pde import (
-    GeometricalFlowStationaryModel,
-    GeometricalFlowModel
-)
 
-DT = 0.1 # 0.01, 0.001
-ROOT = '.'
+from cosmos import *
+from cosmos.core.model import CosmosModel
+from cosmos.pde import GeometricalFlowStationaryModel
+
+DT = 0.1  # 0.01, 0.001
+ROOT = "."
 
 # --- Closed membrane: no boundary at all ------------------------------------
 model_name = f"test_realistic_closed_mesh_is_stationary_dt_{DT}"

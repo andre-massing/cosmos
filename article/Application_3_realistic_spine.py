@@ -20,21 +20,18 @@ geometry above.
 """
 
 import logging
+
 logging.basicConfig(level=logging.INFO)
 
 from ngsolve import *
-from cosmos import *
-from dendritic_spine_geom import generate_synapse3d
-from cosmos.core.model import CosmosModel
-from cosmos.pde import (
-    ADRVolumeSystemBDF1Model,
-    DistanceVolumeModel,
-    GeometricalFlowStationaryModel
-)
 
-INITIAL_TIMESTEP = 0.01 # INITIAL_TIMESTEP = 0.001
-T1 = 70 # T1 = -59.75 or T1 = -59.999
-ROOT = '.'
+from cosmos import *
+from cosmos.core.model import CosmosModel
+from cosmos.pde import ADRVolumeSystemBDF1Model, DistanceVolumeModel, GeometricalFlowStationaryModel
+
+INITIAL_TIMESTEP = 0.01  # INITIAL_TIMESTEP = 0.001
+T1 = 70  # T1 = -59.75 or T1 = -59.999
+ROOT = "."
 
 # Real, segmented dendritic-spine geometry (see article/vol/ for the mesh
 # repair pipeline that produced this file from raw segmentation data).
@@ -65,11 +62,8 @@ N = 3
 dt = Parameter(INITIAL_TIMESTEP)
 t = Parameter(-60)
 
-from cosmos.core.model import CosmosModel
 
-model_name = (
-    f"Application_3_NE_{mesh.ne}_DT_{INITIAL_TIMESTEP}_T1_{T1}"
-)
+model_name = f"Application_3_NE_{mesh.ne}_DT_{INITIAL_TIMESTEP}_T1_{T1}"
 model = CosmosModel(
     parentmesh=mesh,
     dt=dt,
@@ -157,10 +151,7 @@ adr_sys.set_params(
     # see Application_3_idealized_spine.py for the sinh/cosh explanation.
     b_2=lambda: (
         model.ale.V
-        + dist_fct.sol[1]
-        * 1e-3
-        * sinh(50 * dist_fct.sol[0])
-        / cosh(50 * dist_fct.sol[0])
+        + dist_fct.sol[1] * 1e-3 * sinh(50 * dist_fct.sol[0]) / cosh(50 * dist_fct.sol[0])
     ),
     rhs_2=psi0 * (I_B + I_SB * impulse),
     gradu_bnd_2=CF((0, 0, 0)),

@@ -1,5 +1,5 @@
 # %% [markdown]
-# # 04 — Distance function on a disk
+# # 3 — Distance function on a disk
 #
 # `cosmos.pde.DistanceVolumeModel` computes a *smoothed approximation to the
 # distance from a prescribed boundary* on a volume compartment. In a
@@ -43,9 +43,9 @@
 # ```
 # The variable `delta` is the penalty/regularisation coefficient $\delta$ of step 1, and it
 # has units of *length squared*. So the width of the boundary layer in step 1 is
-# $\sqrt{\delta} = h$, the **local element size**. That choice is the single most 
-# important thing to understand about this model, because the smoothing length is 
-# tied to $h$. Refining the mesh shrinks the layer *in lockstep* with the elements, 
+# $\sqrt{\delta} = h$, the **local element size**. That choice is the single most
+# important thing to understand about this model, because the smoothing length is
+# tied to $h$. Refining the mesh shrinks the layer *in lockstep* with the elements,
 # so the layer is always resolved by about one element — no better on a fine mesh than on a coarse one.
 
 # %% [markdown]
@@ -100,6 +100,7 @@ t_start = time.time()
 # advances past `t1`), which is all a stationary model needs. `ale_type=-1`
 # registers the PDE in `pdes_init`, solved at the top of that single step.
 
+
 # %%
 def solve_distance(mesh, pde_class=DistanceVolumeModel, name="dist"):
     model = CosmosModel(name, mesh, t0=0.0, t1=0.0, dt=1.0)
@@ -134,8 +135,10 @@ print(f"  d_h(0,0)   = {gfu(mesh(0.0, 0.0)):.5f}   (exact 1.00000)")
 print(f"  d_h(0.5,0) = {gfu(mesh(0.5, 0.0)):.5f}   (exact 0.50000)")
 print(f"  d_h(0,-0.9)= {gfu(mesh(0.0, -0.9)):.5f}   (exact 0.10000)")
 print(f"  L2 error   = {err:.4e}  ({100 * err / l2_norm_exact(mesh):.2f} % relative)")
-print(f"  || |grad-field| - 1 ||_L2 = "
-      f"{np.sqrt(Integrate((sqrt(InnerProduct(gvel, gvel)) - 1) ** 2, mesh, VOL)):.4e}")
+print(
+    f"  || |grad-field| - 1 ||_L2 = "
+    f"{np.sqrt(Integrate((sqrt(InnerProduct(gvel, gvel)) - 1) ** 2, mesh, VOL)):.4e}"
+)
 
 # %% [markdown]
 # The field is positive inside and vanishes on the boundary, confirming the sign
@@ -145,6 +148,7 @@ print(f"  || |grad-field| - 1 ||_L2 = "
 #
 # The mesh only covers the disk, so we sample `gfu(mesh(px, py))` on a Cartesian
 # grid masked to $r < 0.97R$ and leave the rest as `nan`.
+
 
 # %%
 def sample(gf, n=220, rmax=0.97, comp=None):
@@ -283,8 +287,10 @@ NLEV = 5
 rmesh = generate_volume_circle(maxh=0.35, order_g=GEO_ORDER, R=R, bnd_name="boundary")
 
 hs, errs_h2, errs_fix = [], [], []
-print(f"\n{'h':>8}{'ne':>8}{'L2 err (delta=h^2)':>22}{'rel %':>9}"
-      f"{'|grad|-1':>12}{'L2 err (delta fixed)':>23}")
+print(
+    f"\n{'h':>8}{'ne':>8}{'L2 err (delta=h^2)':>22}{'rel %':>9}"
+    f"{'|grad|-1':>12}{'L2 err (delta fixed)':>23}"
+)
 for lev in range(NLEV):
     if lev:
         rmesh.Refine()
@@ -310,13 +316,15 @@ errs_fix = np.array(errs_fix)
 
 rates_h2 = np.log(errs_h2[:-1] / errs_h2[1:]) / np.log(2.0)
 rates_fix = np.log(errs_fix[:-1] / errs_fix[1:]) / np.log(2.0)
-print("\nfitted two-level rates, delta = h^2 (shipped): "
-      + "  ".join(f"{r:+.2f}" for r in rates_h2))
-print("fitted two-level rates, delta fixed         : "
-      + "  ".join(f"{r:+.2f}" for r in rates_fix))
+print(
+    "\nfitted two-level rates, delta = h^2 (shipped): " + "  ".join(f"{r:+.2f}" for r in rates_h2)
+)
+print("fitted two-level rates, delta fixed         : " + "  ".join(f"{r:+.2f}" for r in rates_fix))
 print(f"least-squares slope, delta = h^2 : {np.polyfit(np.log(hs), np.log(errs_h2), 1)[0]:+.2f}")
-print(f"least-squares slope, delta fixed : "
-      f"{np.polyfit(np.log(hs[1:]), np.log(errs_fix[1:]), 1)[0]:+.2f}   (levels 1..4)")
+print(
+    f"least-squares slope, delta fixed : "
+    f"{np.polyfit(np.log(hs[1:]), np.log(errs_fix[1:]), 1)[0]:+.2f}   (levels 1..4)"
+)
 
 # %%
 fig, ax = plt.subplots(figsize=(7.2, 5.6))
@@ -353,7 +361,7 @@ print(f"\ntotal runtime: {time.time() - t_start:.1f} s")
 # distance field is *accurate to a fixed few percent* — it just stops getting
 # better.
 #
-# Although it is not a convergent algorithm, the model is still useful: it gives 
-# a smooth distance field and smooth outward direction field that is accurate to 
+# Although it is not a convergent algorithm, the model is still useful: it gives
+# a smooth distance field and smooth outward direction field that is accurate to
 # a few percent in a fast, simple way. For many applications,
 # like the one we are interesed in for now, that is enough.

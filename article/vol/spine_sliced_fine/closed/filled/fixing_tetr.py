@@ -2,13 +2,14 @@
 
 from ngsolve import *
 from ngsolve.webgui import Draw
+
 from cosmos.utils.mesh_fixing import CosmosAliasMesh
 
-name = './spine_refined_cut_fixed.vol'
-mesh1 = Mesh('./spine_refined_cut.vol')
+name = "./spine_refined_cut_fixed.vol"
+mesh1 = Mesh("./spine_refined_cut.vol")
 
 
-mesh1 = CosmosAliasMesh('./spine_refined_cut.vol')
+mesh1 = CosmosAliasMesh("./spine_refined_cut.vol")
 mesh1.build_surface_from_volume()
 mesh1.reorient_surface_triangles_consistently()
 mesh1.export_mesh(name)
@@ -25,7 +26,7 @@ print(mesh2.GetBBBoundaries())
 Draw(mesh2)
 
 
-mesh2 = Mesh('../../open/spine_refined_sliced_PM_fixed.vol')
+mesh2 = Mesh("../../open/spine_refined_sliced_PM_fixed.vol")
 print(mesh2.ne)
 print(mesh2.nv)
 print(mesh2.nface)
@@ -38,7 +39,7 @@ Draw(mesh2)
 
 mesh1 = CosmosAliasMesh(name)
 
-aux_mesh = CosmosAliasMesh('../../open/spine_refined_sliced_PM_fixed.vol')
+aux_mesh = CosmosAliasMesh("../../open/spine_refined_sliced_PM_fixed.vol")
 mesh1.mark_cd_elements(aux_mesh)
 mesh1.export_mesh(name)
 
@@ -52,7 +53,7 @@ print(post_mesh.GetMaterials())
 print(post_mesh.GetBoundaries())
 print(post_mesh.GetBBoundaries())
 
-vtk = VTKOutput(post_mesh, filename = 'spine_refined_cut_fixed')
+vtk = VTKOutput(post_mesh, filename="spine_refined_cut_fixed")
 vtk.Do()
 
 # %%

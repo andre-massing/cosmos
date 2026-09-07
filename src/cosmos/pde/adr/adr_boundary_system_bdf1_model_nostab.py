@@ -11,18 +11,18 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+import numbers
 from typing import Optional
 
 import numpy as np
 import scipy.sparse as sp
-
 from ngsolve import *
-from cosmos.pde.base import BasePDEModel
-from cosmos.core.field import Field
+
 from cosmos.core.compartment import CosmosCompartment
+from cosmos.core.field import Field
 from cosmos.core.model import CosmosModel
 from cosmos.core.utils import MandBP
-import numbers
+from cosmos.pde.base import BasePDEModel
 
 
 class ADRBoundarySystemBDF1Model(BasePDEModel):

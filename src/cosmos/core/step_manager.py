@@ -16,9 +16,10 @@ import logging
 logger = logging.getLogger(__name__)
 
 import time
-from ngsolve import *
 from typing import TYPE_CHECKING
+
 import numpy as np
+from ngsolve import *
 
 if TYPE_CHECKING:
     from cosmos.core.model import CosmosModel
@@ -73,7 +74,6 @@ class CosmosStepManager:
 
                 while self.model.dt.Get() > dt_tol:
                     if self.coupling_type == "implicit":
-
                         eps_target = 1e-7
                         eps_max = 5e-7
                         eps_min = 5e-8
@@ -82,9 +82,7 @@ class CosmosStepManager:
                         if eps_max < eps_target or eps_target < eps_min:
                             raise ValueError("Wrong parameters for adaptive algorithm!!")
 
-                        success, eps, subiter = self.implicit_solve_step_gauss(
-                            iter_max, eps_min
-                        )
+                        success, eps, subiter = self.implicit_solve_step_gauss(iter_max, eps_min)
 
                         if eps > eps_max:
                             old_dt = self.model.dt.Get()
@@ -139,7 +137,7 @@ class CosmosStepManager:
                 elif self.coupling_type == "explicit":
                     self.explicit_solve_step()
 
-            logger.debug(f"Subiter solved successfully")
+            logger.debug("Subiter solved successfully")
 
             for pde in self.model.pdes:
                 pde.PostProcess()

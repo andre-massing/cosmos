@@ -30,9 +30,10 @@ logger = logging.getLogger(__name__)
 from typing import Optional
 
 from ngsolve import *
-from cosmos.pde.base import BasePDEModel
+
 from cosmos.core.compartment import CosmosCompartment
 from cosmos.core.model import CosmosModel
+from cosmos.pde.base import BasePDEModel
 
 
 class DistanceVolumeModel(BasePDEModel):

@@ -17,9 +17,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-from typing import Callable, Union
-from ngsolve import *
 import numbers
+from typing import Callable, Union
+
+from ngsolve import *
 
 
 class Field:

@@ -6,10 +6,10 @@ Deliberately excludes ``CosmosTimeManager``/``CosmosStepManager``/
 so they stay reachable only via their full module path.
 """
 
-from cosmos.core.model import CosmosModel
+from cosmos.core.ale_manager import CosmosALEManager, CosmosBndALEField, CosmosVolALEField
 from cosmos.core.compartment import CosmosCompartment
 from cosmos.core.field import Field
-from cosmos.core.ale_manager import CosmosALEManager, CosmosBndALEField, CosmosVolALEField
+from cosmos.core.model import CosmosModel
 
 __all__ = [
     "CosmosModel",

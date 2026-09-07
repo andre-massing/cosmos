@@ -17,19 +17,19 @@ import logging
 logger = logging.getLogger(__name__)
 
 from collections import Counter
+from typing import TYPE_CHECKING, Any, Generator, List, Type
+
 from ngsolve import *
 
-from cosmos.core.time_manager import CosmosTimeManager
-from cosmos.core.step_manager import CosmosStepManager
 from cosmos.core.ale_manager import CosmosALEManager, CosmosBndALEField, CosmosVolALEField
-from cosmos.core.io_manager import CosmosIOManager
 from cosmos.core.compartment import CosmosCompartment
-
-from typing import Any, Generator, List, Type, TYPE_CHECKING
+from cosmos.core.io_manager import CosmosIOManager
+from cosmos.core.step_manager import CosmosStepManager
+from cosmos.core.time_manager import CosmosTimeManager
 
 if TYPE_CHECKING:
-    from cosmos.pde.base import BasePDEModel
     from cosmos.core.ale_manager import CosmosBndALEField, CosmosVolALEField
+    from cosmos.pde.base import BasePDEModel
 
 
 class CosmosModel:

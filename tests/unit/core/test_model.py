@@ -43,13 +43,15 @@ def test_create_ale_rejects_a_second_ale_on_the_same_domain(sphere_mesh):
     with pytest.raises(ValueError, match="already been set"):
         model.create_ale("ale2", comp)
 
+
 def test_create_ale_rejects_a_second_ale_on_the_boundary_domain(disk_mesh):
     model = CosmosModel("m", disk_mesh, t0=0, t1=1, dt=0.1)
     comp = model.create_compartment("bulk", material="default", boundary="boundary")
-    comp1 = model.create_compartment("surface", boundary="boundary", bboundary = "default")
+    comp1 = model.create_compartment("surface", boundary="boundary", bboundary="default")
     model.create_ale("ale1", comp)
     with pytest.raises(ValueError, match="already been set"):
         model.create_ale("ale2", comp1)
+
 
 def test_print_model_data_and_print_step_data_do_not_raise_bulk(disk_mesh):
     model = CosmosModel("m", disk_mesh, t0=0, t1=0.1, dt=0.1)
@@ -58,6 +60,7 @@ def test_print_model_data_and_print_step_data_do_not_raise_bulk(disk_mesh):
     model.initialize()
     model.io.save_step_data()
     model.print_step_data()
+
 
 def test_print_model_data_and_print_step_data_do_not_raise_surface(sphere_mesh):
     model = CosmosModel("m", sphere_mesh, t0=0, t1=0.1, dt=0.1)

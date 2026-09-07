@@ -15,9 +15,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-from ngsolve import *
-import numpy as np
 import numbers
+
+import numpy as np
+from ngsolve import *
 
 
 class CosmosTimeManager:

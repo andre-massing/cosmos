@@ -15,21 +15,19 @@ which use implicit) -- exercising that code path too.
 """
 
 import logging
+
 logging.basicConfig(level=logging.INFO)
 
-import numpy as np
 from ngsolve import *
-from cosmos import *
-from cosmos.utils.generate_meshes import generate_boundary_torus
-from cosmos.core.model import CosmosModel
-from cosmos.pde import (
-    GeometricalFlowStationaryModel,
-    GeometricalFlowModel
-)
 
-ROOT = '.'
+from cosmos import *
+from cosmos.core.model import CosmosModel
+from cosmos.pde import GeometricalFlowModel
+from cosmos.utils.generate_meshes import generate_boundary_torus
+
+ROOT = "."
 MAXH = 0.2
-SOLVER = GeometricalFlowModel # GeometricalFlowStationaryModel
+SOLVER = GeometricalFlowModel  # GeometricalFlowStationaryModel
 
 t = Parameter(0)
 model_name = f"test_torus_evolution_is_energy_decaying_maxh_{MAXH}"
@@ -46,15 +44,15 @@ model = CosmosModel(
     redistribute=True,
     root=ROOT,
     samples=100,
-    coupling_type="explicit"
+    coupling_type="explicit",
 )
 
 comp1 = model.create_compartment(name="comp1", boundary="default", bboundary="")
-geom_flow = model.create_pde(
-    name="geom_flow", pde_model=SOLVER, compartment=comp1, ale_type=0
-)
+geom_flow = model.create_pde(name="geom_flow", pde_model=SOLVER, compartment=comp1, ale_type=0)
 ns = specialcf.normal(3)
-geom_flow.set_params(printing=True, volume_preserving=True)  # alpha=1 (default): pure bending, no tension term
+geom_flow.set_params(
+    printing=True, volume_preserving=True
+)  # alpha=1 (default): pure bending, no tension term
 
 ale1 = model.create_ale("ale1", compartment=comp1)
 ale1.set_normal_velocity(lambda: geom_flow.V_h)

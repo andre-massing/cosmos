@@ -1,7 +1,7 @@
 """cosmos.core.time_manager: CosmosTimeManager / CosmosTimeHelper."""
 
-import pytest
 import numpy as np
+import pytest
 
 from cosmos.core.time_manager import CosmosTimeHelper
 
@@ -17,13 +17,16 @@ def test_a_non_numeric_t0_raises_type_error():
     with pytest.raises(TypeError):
         CosmosTimeHelper(t0="0", t1=1, dt=0.1)
 
+
 def test_a_non_numeric_t1_raises_type_error():
     with pytest.raises(TypeError):
         CosmosTimeHelper(t0=0, t1="1", dt=0.1)
 
+
 def test_a_non_positive_dt_raises_value_error():
     with pytest.raises(ValueError):
         CosmosTimeHelper(t0=0, t1=1, dt=-0.1)
+
 
 @pytest.mark.parametrize(
     "timestep_list",

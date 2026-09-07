@@ -42,25 +42,21 @@ alternative T1 values were used to stop right at/before t=0, to inspect the
 pre-stimulus equilibrium on its own.)
 """
 
-
 import logging
+
 logging.basicConfig(level=logging.INFO)
 
-from ngsolve import *
-from cosmos import *
 from dendritic_spine_geom import generate_synapse3d
+from ngsolve import *
+
+from cosmos import *
 from cosmos.core.model import CosmosModel
-from cosmos.pde import (
-    ADRVolumeSystemBDF1Model,
-    DistanceVolumeModel,
-    GeometricalFlowStationaryModel
-)
+from cosmos.pde import ADRVolumeSystemBDF1Model, DistanceVolumeModel, GeometricalFlowStationaryModel
 
-
-INITIAL_TIMESTEP = 0.01 # INITIAL_TIMESTEP = 0.001
-T1 = 70 # T1 = -59.75 or T1 = -59.999
-MAXH = 0.02 # MAXH = 0.04
-ROOT = '.'
+INITIAL_TIMESTEP = 0.01  # INITIAL_TIMESTEP = 0.001
+T1 = 70  # T1 = -59.75 or T1 = -59.999
+MAXH = 0.02  # MAXH = 0.04
+ROOT = "."
 
 mesh = generate_synapse3d(maxh=MAXH)
 
@@ -88,11 +84,8 @@ N = 3  # Hill coefficient (cooperativity) of the severing reaction
 dt = Parameter(INITIAL_TIMESTEP)
 t = Parameter(-60)
 
-from cosmos.core.model import CosmosModel
 
-model_name = (
-    f"Application_3_MAXH_{MAXH}_DT_{INITIAL_TIMESTEP}_T1_{T1}"
-)
+model_name = f"Application_3_MAXH_{MAXH}_DT_{INITIAL_TIMESTEP}_T1_{T1}"
 model = CosmosModel(
     parentmesh=mesh,
     dt=dt,
@@ -192,10 +185,7 @@ adr_sys.set_params(
     # affecting bulk diffusion far from it.
     b_2=lambda: (
         model.ale.V
-        + dist_fct.sol[1]
-        * 1e-3
-        * sinh(50 * dist_fct.sol[0])
-        / cosh(50 * dist_fct.sol[0])
+        + dist_fct.sol[1] * 1e-3 * sinh(50 * dist_fct.sol[0]) / cosh(50 * dist_fct.sol[0])
     ),
     rhs_2=psi0 * (I_B + I_SB * impulse),
     gradu_bnd_2=CF((0, 0, 0)),

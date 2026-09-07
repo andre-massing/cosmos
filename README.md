@@ -13,7 +13,7 @@ and moving-surface problems, all built on top of [NGSolve](https://ngsolve.org/)
 - **API reference:** see [`docs/index.md`](docs/index.md).
 - **Tutorials:** see [`tutorials/`](tutorials/) for worked, runnable examples —
   a heat equation convergence study, mean-curvature flow of a shrinking sphere,
-  a Turing pattern coupled to surface growth, and a distance-function solve —
+  a distance-function solve, and a Turing pattern coupled to surface growth —
   each demonstrating the core API and validated against known analytical or
   qualitative results.
 - **Paper simulations:** see [`article/`](article/) for the applications and

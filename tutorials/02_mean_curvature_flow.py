@@ -157,7 +157,7 @@ base = run_mcf(maxh=0.4, dt=0.01, t1=0.22)
 slope, intercept, T_sim = extinction_time(base)
 
 print(f"vertices                 : {base['nv']}")
-print(f"initial discrete kappa   : {base['kappa0']:.4f}   (exact -2/R0 = {-2/R0:.4f})")
+print(f"initial discrete kappa   : {base['kappa0']:.4f}   (exact -2/R0 = {-2 / R0:.4f})")
 print(f"final radius R/R0        : {base['R'][-1] / R0:.4f}")
 print(f"radius std dev at end    : {base['R_std'][-1]:.2e}   (stays round)")
 print(f"fitted slope of R^2(t)   : {slope:.4f}      (exact -4)")
@@ -176,7 +176,9 @@ ax.axhline(0.0, color="0.7", lw=0.8)
 ax.plot([T_EXACT], [0], "k*", ms=12, label=f"$T^*$ exact = {T_EXACT:.4f}")
 ax.plot([T_sim], [0], "r*", ms=12, label=f"$T^*$ fitted = {T_sim:.4f}")
 ax.axvspan(base["t"][-1], t_line[-1], color="0.9", zorder=0)
-ax.text(base["t"][-1] * 1.02, 0.55, "not simulated\n(mesh would degenerate)", fontsize=8, color="0.4")
+ax.text(
+    base["t"][-1] * 1.02, 0.55, "not simulated\n(mesh would degenerate)", fontsize=8, color="0.4"
+)
 
 ax.set_xlabel("time $t$")
 ax.set_ylabel("$R^2$")
@@ -205,10 +207,14 @@ for maxh, dt in levels:
 print(f"(refinement study took {time.time() - t_start:.1f} s)")
 
 print()
-print(f"{'maxh':>6} {'dt':>8} {'nv':>5} {'kappa_0':>9} {'slope':>8} {'T*_sim':>9} {'|err|':>9} {'rel %':>7}")
+print(
+    f"{'maxh':>6} {'dt':>8} {'nv':>5} {'kappa_0':>9} {'slope':>8} {'T*_sim':>9} {'|err|':>9} {'rel %':>7}"
+)
 for maxh, dt, nv, k0, s, T, e in rows:
-    print(f"{maxh:>6.3f} {dt:>8.5f} {nv:>5d} {k0:>9.4f} {s:>8.4f} {T:>9.5f} {e:>9.5f} {e / T_EXACT * 100:>7.2f}")
-print(f"\nexact: kappa_0 = {-2/R0:.4f}, slope = -4.0000, T* = {T_EXACT:.5f}")
+    print(
+        f"{maxh:>6.3f} {dt:>8.5f} {nv:>5d} {k0:>9.4f} {s:>8.4f} {T:>9.5f} {e:>9.5f} {e / T_EXACT * 100:>7.2f}"
+    )
+print(f"\nexact: kappa_0 = {-2 / R0:.4f}, slope = -4.0000, T* = {T_EXACT:.5f}")
 
 errs = np.array([r[6] for r in rows])
 hs = np.array([r[0] for r in rows])

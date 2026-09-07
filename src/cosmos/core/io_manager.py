@@ -21,17 +21,18 @@ import logging
 logger = logging.getLogger(__name__)
 
 import os
-from ngsolve import *
-import numpy as np
 from contextlib import redirect_stdout
-import meshio
-
-import xml.etree.ElementTree as ET
-from xml.dom import minidom
 from pathlib import Path
-from typing import Sequence, Optional, Union
+from typing import TYPE_CHECKING, Optional, Sequence, Union
+from xml.dom import minidom
 
-from typing import TYPE_CHECKING
+import meshio
+import numpy as np
+from ngsolve import *
+
+# Must come after `from ngsolve import *`: NGSolve exports its own `ET`
+# (an element-type enum), which would otherwise shadow this stdlib alias.
+import xml.etree.ElementTree as ET  # isort: skip
 
 if TYPE_CHECKING:
     from cosmos.core.model import CosmosModel
@@ -142,7 +143,6 @@ class CosmosIOManager:
         if self.root is not None:
             dt_save = (self.model.time.t1 - self.model.time.t0) / self.samples
             if (self.model.time.t.Get() - self.model.time.t0) // dt_save >= self.N:
-
                 with open(self.output_step_data, "a") as f:
                     self.print_step_data(file=f)
 

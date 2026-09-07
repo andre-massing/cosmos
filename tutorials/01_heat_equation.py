@@ -98,6 +98,7 @@ def unit_square_mesh(maxh):
 # simulation clock (on this particular solution it is identically zero on
 # $\partial\Omega$ anyway, but this is the pattern for a general datum).
 
+
 # %%
 def solve_heat(maxh, dt, t_end=T_END, bc="dirichlet"):
     mesh = unit_square_mesh(maxh)
@@ -167,8 +168,12 @@ t0 = time.time()
 mesh_d, gfu_d, uex_d, err_d, tf_d = solve_heat(maxh=0.1, dt=1e-3, bc="dirichlet")
 print(f"Dirichlet: t_final = {tf_d:.4f}, decay factor = {math.exp(-DECAY * tf_d):.4f}")
 print(f"Dirichlet: L2 error at T = {err_d:.4e}   ({time.time() - t0:.1f} s)")
-print("saved", compare_plot(mesh_d, gfu_d, uex_d, "Heat equation, homogeneous Dirichlet",
-                            "heat_equation_dirichlet.png"))
+print(
+    "saved",
+    compare_plot(
+        mesh_d, gfu_d, uex_d, "Heat equation, homogeneous Dirichlet", "heat_equation_dirichlet.png"
+    ),
+)
 
 # %% [markdown]
 # ## 2. Neumann boundary conditions
@@ -184,8 +189,12 @@ t0 = time.time()
 mesh_n, gfu_n, uex_n, err_n, tf_n = solve_heat(maxh=0.1, dt=1e-3, bc="neumann")
 print(f"Neumann: t_final = {tf_n:.4f}, decay factor = {math.exp(-DECAY * tf_n):.4f}")
 print(f"Neumann: L2 error at T = {err_n:.4e}   ({time.time() - t0:.1f} s)")
-print("saved", compare_plot(mesh_n, gfu_n, uex_n, "Heat equation, homogeneous Neumann",
-                            "heat_equation_neumann.png"))
+print(
+    "saved",
+    compare_plot(
+        mesh_n, gfu_n, uex_n, "Heat equation, homogeneous Neumann", "heat_equation_neumann.png"
+    ),
+)
 
 # %% [markdown]
 # ## 3. Mesh-refinement convergence study

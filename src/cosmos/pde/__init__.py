@@ -7,11 +7,10 @@ full submodule path. All seven names below are ``BasePDEModel`` subclasses
 (or ``BasePDEModel`` itself) -- see that module for the shared lifecycle.
 """
 
-from cosmos.pde.base import BasePDEModel
-
-from cosmos.pde.adr.adr_volume_system_bdf1_model import ADRVolumeSystemBDF1Model
 from cosmos.pde.adr.adr_boundary_system_bdf1_model_nostab import ADRBoundarySystemBDF1Model
 from cosmos.pde.adr.adr_boundary_system_bdf1_model_stab import ADRBoundarySystemBDF1StabModel
+from cosmos.pde.adr.adr_volume_system_bdf1_model import ADRVolumeSystemBDF1Model
+from cosmos.pde.base import BasePDEModel
 from cosmos.pde.distance.distance_volume_model import DistanceVolumeModel
 from cosmos.pde.geom_flow.geometrical_flow_model import GeometricalFlowModel
 from cosmos.pde.geom_flow.geometrical_flow_stationary_model import GeometricalFlowStationaryModel

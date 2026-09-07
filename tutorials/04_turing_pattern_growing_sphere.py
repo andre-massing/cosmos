@@ -5,9 +5,9 @@
 # reaction–diffusion system on the surface of a sphere spontaneously breaks
 # symmetry into a spotty *Turing pattern*, and the concentration of one of the
 # two species is then fed back into a geometric flow so that the surface grows
-# *locally*, faster where the activator is high. 
-# 
-# The model is taken from B. Kovács, B. Li, C. Lubich, C.A. Power Guerra, 
+# *locally*, faster where the activator is high.
+#
+# The model is taken from B. Kovács, B. Li, C. Lubich, C.A. Power Guerra,
 # Convergence of finite elements on an evolving surface driven by diffusion
 # on the surface, Numer. Math. 137 (3) (2017) 643–689, doi:10/gh4xvx. and
 # reads as follows:
@@ -31,10 +31,10 @@
 # kinetic constants `a, b` are textbook.
 
 # %%
+import logging
 import time
 
 import matplotlib
-import logging 
 
 logging.basicConfig(level=logging.INFO)
 
@@ -89,10 +89,14 @@ k_c2 = GAMMA * turing_lhs / (2.0 * DU * DV)
 
 print(f"tr J  = {trJ:+.3f}  (must be < 0)")
 print(f"det J = {detJ:+.3f}  (must be > 0)")
-print(f"Dv*f_u + Du*g_v = {turing_lhs:.3f} > 2*sqrt(Du*Dv*detJ) = {turing_rhs:.3f}"
-      f"  -> {turing_lhs > turing_rhs}")
-print(f"critical k_c^2 = {k_c2:.1f}  ->  expected spherical-harmonic degree l ~ "
-      f"{0.5 * (np.sqrt(1 + 4 * k_c2) - 1):.1f}")
+print(
+    f"Dv*f_u + Du*g_v = {turing_lhs:.3f} > 2*sqrt(Du*Dv*detJ) = {turing_rhs:.3f}"
+    f"  -> {turing_lhs > turing_rhs}"
+)
+print(
+    f"critical k_c^2 = {k_c2:.1f}  ->  expected spherical-harmonic degree l ~ "
+    f"{0.5 * (np.sqrt(1 + 4 * k_c2) - 1):.1f}"
+)
 
 # %% [markdown]
 # ## Coupling the pattern to surface growth
@@ -132,9 +136,10 @@ print(f"critical k_c^2 = {k_c2:.1f}  ->  expected spherical-harmonic degree l ~ 
 # it actually lives on, and the ADR model already handles the ALE mesh velocity
 # internally (its advection field carries a `- ale.W` correction).
 #
-# Note that surface redistribution is on, so the mesh is not fixed to the material points. 
-# The ALE moves the mesh to follow the flow, and then the redistribution step repositions 
+# Note that surface redistribution is on, so the mesh is not fixed to the material points.
+# The ALE moves the mesh to follow the flow, and then the redistribution step repositions
 # the mesh nodes to maintain the mesh quality.
+
 
 # %%
 def build_turing(model, comp):
@@ -166,6 +171,7 @@ def vertex_points(model):
     c = model.ale.X.vec.FV().NumPy()
     return c.reshape((len(c) // 3, 3), order="F")
 
+
 # %%
 def sphere_views(fig, gs_ids, pts, values, cmap="inferno", label=""):
     """Two hidden-surface-removed 3D scatters + one Mollweide map."""
@@ -177,19 +183,33 @@ def sphere_views(fig, gs_ids, pts, values, cmap="inferno", label=""):
         e, a = np.radians(el), np.radians(az)
         view = np.array([np.cos(e) * np.cos(a), np.cos(e) * np.sin(a), np.sin(e)])
         m = pts @ view > 0.0
-        ax.scatter(pts[m, 0], pts[m, 1], pts[m, 2], c=values[m], cmap=cmap,
-                   s=55, vmin=vmin, vmax=vmax, depthshade=False)
+        ax.scatter(
+            pts[m, 0],
+            pts[m, 1],
+            pts[m, 2],
+            c=values[m],
+            cmap=cmap,
+            s=55,
+            vmin=vmin,
+            vmax=vmax,
+            depthshade=False,
+        )
         ax.view_init(elev=el, azim=az)
         lim = 1.05 * np.abs(pts).max()
-        ax.set_xlim(-lim, lim); ax.set_ylim(-lim, lim); ax.set_zlim(-lim, lim)
-        ax.set_box_aspect((1, 1, 1), zoom=1.45); ax.set_axis_off()
+        ax.set_xlim(-lim, lim)
+        ax.set_ylim(-lim, lim)
+        ax.set_zlim(-lim, lim)
+        ax.set_box_aspect((1, 1, 1), zoom=1.45)
+        ax.set_axis_off()
         ax.set_title(f"azim {az}deg", fontsize=9)
     ax = fig.add_subplot(*gs_ids[2], projection="mollweide")
     s = ax.tripcolor(lon, lat, values, cmap=cmap, shading="gouraud")
     ax.grid(alpha=0.25, lw=0.4)
-    ax.set_xticklabels([]); ax.set_yticklabels([])
+    ax.set_xticklabels([])
+    ax.set_yticklabels([])
     ax.set_title("lon/lat (Mollweide)", fontsize=9)
     fig.colorbar(s, ax=ax, shrink=0.75, label=label)
+
 
 # %%
 G_GROW = 0.15  # normal velocity per unit of u
@@ -197,16 +217,24 @@ ALPHA_F = 0.0  # Willmore/bending: off (see above)
 GAMMA_F = 0.075  # mean-curvature flow: regularises + balances mean growth
 
 mesh = generate_boundary_sphere(maxh=MAXH, R=1.0)
-model = CosmosModel("turing_growth", mesh, t0=0.0, t1=3, dt=DT,
-                      t = Parameter(0.0), coupling_type="implicit",
-                      redistribute = True)
+model = CosmosModel(
+    "turing_growth",
+    mesh,
+    t0=0.0,
+    t1=3,
+    dt=DT,
+    t=Parameter(0.0),
+    coupling_type="implicit",
+    redistribute=True,
+)
 comp = model.create_compartment("surface", boundary="default", bboundary="")
 
 flow = model.create_pde("flow", GeometricalFlowModel, comp, ale_type=0)
 turing = build_turing(model, comp)
 
-flow.set_params(rhs=lambda: G_GROW * turing.sol[0], alpha=CF(ALPHA_F),
-                beta=CF(0.0), gamma=CF(GAMMA_F))
+flow.set_params(
+    rhs=lambda: G_GROW * turing.sol[0], alpha=CF(ALPHA_F), beta=CF(0.0), gamma=CF(GAMMA_F)
+)
 
 ale = model.create_ale("ale", compartment=comp)
 ale.set_normal_velocity(lambda: flow.V_h)
@@ -225,7 +253,9 @@ for _ in gen:
     r = np.linalg.norm(vertex_points(model), axis=1)
     t_b.append(model.t.Get())
     rng_u.append(u.max() - u.min())
-    r_min.append(r.min()); r_mean.append(r.mean()); r_max.append(r.max())
+    r_min.append(r.min())
+    r_mean.append(r.mean())
+    r_max.append(r.max())
 
 print(f"Part B: {len(t_b)} steps in {time.time() - t_start:.1f} s")
 
@@ -234,8 +264,10 @@ u_b = turing.sol[0].vec.FV().NumPy().copy()
 r_b = np.linalg.norm(pts_b, axis=1)
 corr = np.corrcoef(u_b, r_b)[0, 1]
 
-print(f"final radius: min {r_b.min():.4f}, mean {r_b.mean():.4f}, max {r_b.max():.4f}"
-      f"  (peak-to-valley {r_b.max() - r_b.min():.4f})")
+print(
+    f"final radius: min {r_b.min():.4f}, mean {r_b.mean():.4f}, max {r_b.max():.4f}"
+    f"  (peak-to-valley {r_b.max() - r_b.min():.4f})"
+)
 print(f"final u:      min {u_b.min():.4f}, max {u_b.max():.4f}")
 print(f"Pearson correlation between vertex u and vertex radius: {corr:+.4f}")
 
@@ -247,19 +279,23 @@ ax = fig.add_subplot(2, 3, 4)
 ax.plot(t_b, r_min, label="min r")
 ax.plot(t_b, r_mean, label="mean r")
 ax.plot(t_b, r_max, label="max r")
-ax.set_xlabel("t"); ax.set_ylabel("vertex radius")
+ax.set_xlabel("t")
+ax.set_ylabel("vertex radius")
 ax.set_title("the sphere becomes lobed, not bigger", fontsize=9)
-ax.legend(fontsize=8); ax.grid(alpha=0.3)
+ax.legend(fontsize=8)
+ax.grid(alpha=0.3)
 
 ax = fig.add_subplot(2, 3, 5)
 ax.plot(t_b, rng_u, lw=1.8, color="C3")
-ax.set_xlabel("t"); ax.set_ylabel("max(u) - min(u)")
+ax.set_xlabel("t")
+ax.set_ylabel("max(u) - min(u)")
 ax.set_title("pattern amplitude under growth", fontsize=9)
 ax.grid(alpha=0.3)
 
 ax = fig.add_subplot(2, 3, 6)
 ax.scatter(u_b, r_b - r_b.mean(), s=12, alpha=0.65)
-ax.set_xlabel("u at vertex"); ax.set_ylabel("r - mean(r) at vertex")
+ax.set_xlabel("u at vertex")
+ax.set_ylabel("r - mean(r) at vertex")
 ax.set_title(f"local activator vs. local bulge (rho = {corr:+.3f})", fontsize=9)
 ax.grid(alpha=0.3)
 

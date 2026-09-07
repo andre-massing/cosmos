@@ -1,33 +1,31 @@
 """Convergence study: Convergence tests for a diffusion-driven
-    mean curvature flow of a sphere.
+mean curvature flow of a sphere.
 """
 
 import numpy as np
 import pytest
 from ngsolve import *
-from cosmos import *
 from ngsolve.webgui import Draw
-from cosmos.utils.generate_meshes import generate_boundary_sphere
-from cosmos.utils.tools import gradient
+
+from cosmos import *
 from cosmos.core.model import CosmosModel
 from cosmos.pde import (
+    ADRBoundarySystemBDF1Model,
+    ADRBoundarySystemBDF1StabModel,
     GeometricalFlowModel,
     GeometricalFlowStationaryModel,
-    ADRBoundarySystemBDF1Model,
-    ADRBoundarySystemBDF1StabModel
 )
+from cosmos.utils.generate_meshes import generate_boundary_sphere
+from cosmos.utils.tools import gradient
 
 pytestmark = pytest.mark.convergence
 pytestmark = pytest.mark.slow
 
+
 @pytest.mark.parametrize("redistribute", [False, True])
 @pytest.mark.parametrize("adr_solver", [ADRBoundarySystemBDF1Model, ADRBoundarySystemBDF1StabModel])
 @pytest.mark.parametrize("geom_flow_sovler", [GeometricalFlowModel, GeometricalFlowStationaryModel])
-def test_convergence_coupling_adr_geom_flow(
-    redistribute,
-    adr_solver,
-    geom_flow_sovler
-    ):
+def test_convergence_coupling_adr_geom_flow(redistribute, adr_solver, geom_flow_sovler):
 
     R0 = 1
     R1 = 2
@@ -124,6 +122,6 @@ def test_convergence_coupling_adr_geom_flow(
             ERRORS_dX[i, j] = err
 
     diag = ERRORS_dX.diagonal()
-    rates = np.log(diag[:-1]/diag[1:])/np.log(true_hs[:-1]/true_hs[1:])
+    rates = np.log(diag[:-1] / diag[1:]) / np.log(true_hs[:-1] / true_hs[1:])
     print(rates)
     assert all(0.9 <= num for num in rates)

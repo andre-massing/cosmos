@@ -18,23 +18,24 @@ depends on tube length, as expected physically.
 """
 
 import logging
+
 logging.basicConfig(level=logging.INFO)
 
-import numpy as np
 from ngsolve import *
+
 from cosmos import *
-from cosmos.utils.generate_meshes import generate_boundary_cigar
 from cosmos.core.model import CosmosModel
 from cosmos.pde import GeometricalFlowStationaryModel
+from cosmos.utils.generate_meshes import generate_boundary_cigar
 
-MAXH = 0.25 # 0.125
+MAXH = 0.25  # 0.125
 REDISTRIBUTE = True
-ROOT = '.'
+ROOT = "."
 SOLVER = GeometricalFlowStationaryModel
 
 # --- Two-pearl case: shorter tube (h=3) -------------------------------------
 mesh = generate_boundary_cigar(maxh=MAXH, r=1, h=3)
-model_name = f'test_two_pearls_example_ne_{mesh.nfacet}'
+model_name = f"test_two_pearls_example_ne_{mesh.nfacet}"
 model = CosmosModel(
     name=model_name,
     parentmesh=mesh,
@@ -49,10 +50,10 @@ model = CosmosModel(
 )
 
 comp1 = model.create_compartment(name="comp1", boundary="default", bboundary="")
-geom_flow = model.create_pde(
-    name="geom_flow", pde_model=SOLVER, compartment=comp1, ale_type=0
-)
-geom_flow.set_params(printing=True, kappa0=CF(-2))  # mismatched vs. the tube's own curvature -> instability
+geom_flow = model.create_pde(name="geom_flow", pde_model=SOLVER, compartment=comp1, ale_type=0)
+geom_flow.set_params(
+    printing=True, kappa0=CF(-2)
+)  # mismatched vs. the tube's own curvature -> instability
 
 ale1 = model.create_ale("ale1", compartment=comp1)
 ale1.set_normal_velocity(lambda: geom_flow.V_h)
@@ -69,9 +70,7 @@ model.set_params(
             VOL_or_BND=BND,
         ),
         "area": lambda: Integrate(1, mesh, VOL_or_BND=BND),
-        "volume": lambda: Integrate(
-            CF((x, 0, 0)) * specialcf.normal(3), mesh, VOL_or_BND=BND
-        ),
+        "volume": lambda: Integrate(CF((x, 0, 0)) * specialcf.normal(3), mesh, VOL_or_BND=BND),
     }
 )
 
@@ -96,9 +95,7 @@ model = CosmosModel(
 )
 
 comp1 = model.create_compartment(name="comp1", boundary="default", bboundary="")
-geom_flow = model.create_pde(
-    name="geom_flow", pde_model=SOLVER, compartment=comp1, ale_type=0
-)
+geom_flow = model.create_pde(name="geom_flow", pde_model=SOLVER, compartment=comp1, ale_type=0)
 geom_flow.set_params(printing=True, kappa0=CF(-3))
 
 ale1 = model.create_ale("ale1", compartment=comp1)
@@ -113,9 +110,7 @@ model.set_params(
             VOL_or_BND=BND,
         ),
         "area": lambda: Integrate(1, mesh, VOL_or_BND=BND),
-        "volume": lambda: Integrate(
-            CF((x, 0, 0)) * specialcf.normal(3), mesh, VOL_or_BND=BND
-        ),
+        "volume": lambda: Integrate(CF((x, 0, 0)) * specialcf.normal(3), mesh, VOL_or_BND=BND),
     }
 )
 

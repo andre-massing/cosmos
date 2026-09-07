@@ -15,17 +15,17 @@ real segmented data rather than a smooth analytic surface.
 """
 
 import logging
+
 logging.basicConfig(level=logging.INFO)
 
-import numpy as np
 from ngsolve import *
+
 from cosmos import *
-from cosmos.utils.generate_meshes import generate_boundary_cigar
 from cosmos.core.model import CosmosModel
 from cosmos.pde import GeometricalFlowStationaryModel
 
-DT = 0.01 # 0.001
-ROOT = '.'
+DT = 0.01  # 0.001
+ROOT = "."
 
 t = Parameter(0)
 model_name = f"test_realistic_mesh_under_external_force_dt_{DT}"

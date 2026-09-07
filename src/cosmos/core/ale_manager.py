@@ -27,10 +27,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 import time
-from ngsolve import *
-from cosmos.core.field import Field
-from cosmos.core.compartment import CosmosCompartment
 from typing import TYPE_CHECKING
+
+from ngsolve import *
+
+from cosmos.core.compartment import CosmosCompartment
+from cosmos.core.field import Field
 
 if TYPE_CHECKING:
     from cosmos.core.model import CosmosModel

@@ -13,12 +13,13 @@ that hand-built geometries from ``generate_meshes.py`` never violate. See
 this module is used for.
 """
 
-from ngsolve import *
-import netgen as ngen
-from collections import defaultdict, deque, Counter
-import numpy as np
-import math
 import copy
+import math
+from collections import Counter, defaultdict, deque
+
+import netgen as ngen
+import numpy as np
+from ngsolve import *
 
 SECTION_HEADERS = [
     "",

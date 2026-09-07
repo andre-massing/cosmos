@@ -1,9 +1,11 @@
 from __future__ import annotations
+
 import os
-import numpy as np
-import pytest
 import re
 from pathlib import Path
+
+import numpy as np
+import pytest
 
 
 @pytest.fixture(autouse=True)
