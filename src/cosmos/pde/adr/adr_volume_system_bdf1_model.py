@@ -1,3 +1,21 @@
+"""Volume ADR system -- part of ``cosmos.pde.adr`` alongside the two
+boundary variants in this same package
+(``adr_boundary_system_bdf1_model_{nostab,stab}.py``). All three share the
+same per-species parameter naming (``d_i``/``c_i``/``b_i``/``rhs_i``/...,
+one full set per species ``i`` = 1..dim) and the same two package-wide
+conventions worth knowing before reading the weak form below:
+
+- The advection field actually assembled is ``b_i - model.ale.W``, not
+  ``b_i`` alone -- ``W`` is the ALE mesh velocity (``cosmos.core.ale_manager``),
+  so this is the species' velocity *relative to the moving mesh*, which is
+  what an ALE-frame advection-diffusion equation requires.
+- ``add_nonlinearity`` extends the linear form with a term evaluated by
+  ``eval()`` against a small whitelist (``_base_env``) plus the caller's own
+  ``map``; the resulting term is subtracted from the linear form (see the
+  ``-1*eval(...)`` in ``Initialize()``), which is why an expression meant to
+  *add* to the right-hand side needs an explicit leading ``-1*``.
+"""
+
 import logging
 
 logger = logging.getLogger(__name__)

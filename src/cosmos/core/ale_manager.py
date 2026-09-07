@@ -1,3 +1,27 @@
+"""Arbitrary Lagrangian-Eulerian (ALE) mesh motion.
+
+Three classes collaborate here, at two different levels of the package:
+
+- ``CosmosALEManager`` -- one per ``CosmosModel`` (built and owned by it,
+  like the other core managers), responsible for the *mesh-wide* state:
+  the deformation actually handed to NGSolve (``Y``), the mesh velocity
+  (``W``) that every ADR model's advection term subtracts off
+  (``b - model.ale.W``, see ``cosmos.pde.adr``), and extending a
+  boundary-only displacement into the bulk when the model has a volume
+  (the ``volume_ALE`` choice: ``"laplace"``/``"linel"``).
+- ``CosmosBndALEField`` / ``CosmosVolALEField`` -- one per compartment that
+  has ALE motion (created via ``CosmosModel.create_ale``, never directly),
+  responsible for turning a user-supplied velocity into that
+  compartment's contribution to the mesh-wide displacement, which the
+  manager above then collects from every registered field each step.
+
+The distinction matters for where a bug or a new feature belongs: mesh-wide
+bookkeeping (assembly, the volume extension, applying the deformation to
+NGSolve) goes in ``CosmosALEManager``; how a *particular* compartment's
+prescribed velocity turns into a displacement (the ``surface_ALE`` choice:
+``"mdr"``/``"gnz"``/``"duanli"``) goes in ``CosmosBndALEField``.
+"""
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -52,6 +76,19 @@ class CosmosALEManager:
             gfu = GridFunction(self.fes)
             self.model.parentmesh.SetDeformation(gfu)
 
+        # These names recur across every cosmos.pde model, since forms are
+        # assembled with `dx(deformation=...)`/`ds(deformation=...)`:
+        #   Y / Yo   -- ALE mesh deformation at the new / old time level;
+        #               "new" forms use Y, forms referencing the previous
+        #               step's solution (e.g. the BDF1 mass term) use Yo.
+        #   X / Xo   -- ALE (spatial) position field, new / old.
+        #   W        -- ALE mesh velocity dY/dt; ADR models subtract this
+        #               from their own advection field (b - W) since the
+        #               mesh itself is moving under the material.
+        #   V / Vo   -- "material" velocity/position counterpart to W/X,
+        #               used where a model needs the true material motion
+        #               rather than the (possibly redistributed) mesh motion.
+        #   dY       -- this step's ALE displacement, Y - Yo.
         self.dY = GridFunction(self.fes)
         self.Y = GridFunction(self.fes)
         self.Yo = GridFunction(self.fes)
@@ -121,7 +158,13 @@ class CosmosALEManager:
         self.vtk_names = ["ale_dY", "ale_Y", "ale_X", "ale_W", "ale_V"]
 
     def initialize(self):
-
+        # Gather every registered ALE field's per-compartment displacement
+        # into one mesh-wide {region name: displacement} map, then let
+        # NGSolve's BoundaryCF/MaterialCF stitch them into a single
+        # coefficient function over the whole mesh (zero on any region with
+        # no ALE field). This is what lets several independently-defined
+        # CosmosBndALEField/CosmosVolALEField compartments coexist on one
+        # mesh without solve_ale needing to know how many there are.
         self.bnd_ales = {}
         self.bnd_mats = {}
         self.vol_ales = {}

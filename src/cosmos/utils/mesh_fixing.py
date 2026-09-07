@@ -1,4 +1,17 @@
 # %%
+"""Repairing real (segmented/imported) meshes for use in ``CosmosModel``.
+
+Unlike ``generate_meshes.py`` (which builds clean meshes from analytic
+geometry), this module edits an existing Netgen ``.vol`` file's raw text
+sections directly -- fixing inconsistent surface-triangle winding, deriving
+a surface from a volume mesh, or copying boundary tags from one mesh onto a
+geometrically-matching one. It exists because meshes produced outside
+Cosmos (e.g. from image segmentation) commonly fail assumptions
+``CosmosModel``/NGSolve rely on (a consistent outward normal in particular)
+that hand-built geometries from ``generate_meshes.py`` never violate. See
+``article/vol/README.md`` for a worked example of the full repair pipeline
+this module is used for.
+"""
 
 from ngsolve import *
 import netgen as ngen

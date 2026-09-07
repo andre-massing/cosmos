@@ -1,3 +1,12 @@
+"""Boundary ADR system, no stabilisation -- see ``adr_volume_system_bdf1_model.py``
+in this same package for the shared per-species parameter naming, the
+``b_i - model.ale.W`` ALE-relative advection convention, and the
+``add_nonlinearity`` sign convention, all identical here. The gradient-jump
+stabilised counterpart lives in ``adr_boundary_system_bdf1_model_stab.py``
+as ``ADRBoundarySystemBDF1StabModel`` -- a different class name on purpose,
+so importing one can never silently shadow the other.
+"""
+
 import logging
 
 logger = logging.getLogger(__name__)

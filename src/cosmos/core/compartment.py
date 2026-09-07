@@ -1,3 +1,16 @@
+"""``CosmosCompartment``: the domain a PDE model or ALE field is attached to.
+
+Compartments are the glue between a ``CosmosModel``'s mesh and everything
+that operates on part of it: ``CosmosModel.create_pde``/``create_ale`` both
+take a compartment rather than a raw NGSolve region, and use its
+``is_bnd``/``is_vol`` flag to validate that a PDE or ALE field is being
+placed somewhere it can actually run. A model typically has one volume
+compartment (material + its bounding surface) and/or one surface
+compartment (a boundary + its co-dimension-2 edge) per named region; see
+``CosmosModel.create_compartment`` for how these are constructed (never
+directly).
+"""
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -22,11 +35,17 @@ class CosmosCompartment:
 
         self.name = name
         self.model = model
-        self.dim_emd = model.dim
+        self.dim_emd = model.dim  # ambient dimension, unlike self.dim below (surface dim < ambient)
         self.parentmesh = model.parentmesh
         self.pdes = []
         self.ale = None
 
+        # Exactly one of these two kwarg pairs must be given -- which one
+        # decides everything downstream (is_bnd/is_vol, self.dim, and which
+        # NGSolve region self.domain resolves to). domain_id/boundary_id are
+        # the raw name strings PDE models reuse directly when they need to
+        # name their own boundary conditions (e.g. Dir_bnd/Neu_bnd) relative
+        # to this compartment.
         if {"material", "boundary"} <= kwargs.keys():
             if all(x in self.model.vol_ids for x in kwargs["material"].split("|")):
                 self.domain_id = kwargs["material"]

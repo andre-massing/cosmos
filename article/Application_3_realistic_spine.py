@@ -1,4 +1,22 @@
-"""Application 3 realistic spine simulations.
+"""Application 3 (realistic geometry): actin remodeling on a real spine mesh.
+
+Same three-species actin nucleation/severing model coupled to Willmore-flow
+shape evolution as ``Application_3_idealized_spine.py`` -- see that file for
+the full explanation of the species (A/B/C), the reaction network, the
+membrane forcing, and the equilibration/stimulus/relaxation time protocol.
+This file swaps the synthetic axisymmetric spine profile for a real
+geometry reconstructed from segmented image data (see ``article/vol/`` and
+the ``fixing*.py`` mesh-repair scripts that produced the ``*_fixed.vol``
+files loaded below): a "sliced" spine head/neck volume, closed and filled to
+give it a bulk cytoplasmic compartment, at an intermediate mesh resolution.
+
+Being a real segmented mesh, region names are the generic ones the fixing
+pipeline assigns (``cd0_1``, ``boundary2|default``, ``bboundary1``) rather
+than the friendly ``default``/``membrane``/``membrane_bnd`` names of the
+idealized geometry -- the model logic below is otherwise identical. This is
+the paper's demonstration that the complex, irregular shape of a real spine
+produces localized actin-remodeling regimes not seen with the idealized
+geometry above.
 """
 
 import logging
@@ -18,9 +36,13 @@ INITIAL_TIMESTEP = 0.01 # INITIAL_TIMESTEP = 0.001
 T1 = 70 # T1 = -59.75 or T1 = -59.999
 ROOT = '.'
 
+# Real, segmented dendritic-spine geometry (see article/vol/ for the mesh
+# repair pipeline that produced this file from raw segmentation data).
 mesh = Mesh("./vol/spine_sliced_intermed/closed/filled/spine_intermed_cut_fixed.vol")
-# mesh = Mesh("./vol/spine_sliced_fine/closed/filled/spine_refined_cut_fixed.vol")
+# mesh = Mesh("./vol/spine_sliced_fine/closed/filled/spine_refined_cut_fixed.vol")  # higher-resolution alternative
 
+# Same actin nucleation/severing parameters as the idealized-geometry case;
+# see Application_3_idealized_spine.py for what each one represents.
 A0 = 20
 B0 = 3000 * 3.6
 C0 = 40
@@ -64,6 +86,10 @@ model = CosmosModel(
 
 model.print_model_data()
 
+# Region names here (cd0_1, boundary2, bboundary1) come from the mesh-fixing
+# pipeline in article/vol/, not from a hand-authored geometry -- they play
+# exactly the same roles as "default"/"membrane"/"membrane_bnd" in the
+# idealized-geometry version (bulk cytoplasm, membrane, clamped rim).
 comp1 = model.create_compartment("bulk", material="cd0_1", boundary="boundary2|default")
 dist_fct = model.create_pde(
     "distance_function",
@@ -83,6 +109,10 @@ comp2 = model.create_compartment(
 geom_flow = model.create_pde(
     "willmore", pde_model=GeometricalFlowStationaryModel, compartment=comp2, ale_type=0
 )
+# Same B-driven forcing as the idealized case; the coupling strength here is
+# 10x smaller (1e-3 vs 1e-2) to compensate for the real mesh's different
+# absolute length/curvature scale so the two cases produce comparable
+# deformation magnitudes.
 geom_flow.set_params(rhs=lambda: adr_sys.sol[1] * 1e-3, alpha=1, printing=True)
 
 ale = model.create_ale("ale", compartment=comp2)
@@ -108,11 +138,13 @@ adr_sys.add_nonlinearity(
 model.initialize()
 dist_fct.Initialize()
 dist_fct.Solve()
+# Same head/neck confinement as the idealized case, with a threshold (0.5
+# instead of 0.4) recalibrated to this mesh's own z-coordinate range.
 id_funct = IfPos(dist_fct.sol[0] - 0.02, 1, 0) * IfPos(z - 0.5, 1, 0)
 impulse = IfPos(t, 1, 0) * IfPos(60 - t, 1, 0)
 
 adr_sys.set_params(
-    Neu_bnd="membrane|default",
+    Neu_bnd="boundary2|default",
     u0_1=A0 * id_funct,
     b_1=lambda: model.ale.V,
     c_1=K_A,
@@ -121,6 +153,8 @@ adr_sys.set_params(
     bounds_1=[0, 1e100],
     u0_2=B0 * id_funct,
     c_2=K_B,
+    # Bias B's transport toward the membrane within a thin boundary layer;
+    # see Application_3_idealized_spine.py for the sinh/cosh explanation.
     b_2=lambda: (
         model.ale.V
         + dist_fct.sol[1]
@@ -144,6 +178,8 @@ output_callables = {
     "mass_A": lambda: Integrate(adr_sys.sol[0], mesh),
     "mass_B": lambda: Integrate(adr_sys.sol[1], mesh),
     "mass_C": lambda: Integrate(adr_sys.sol[2], mesh),
+    # Bending energy relative to the spine's own evolving spontaneous
+    # curvature -- see Application_3_idealized_spine.py.
     "energy": lambda: Integrate(
         0.5 * (geom_flow.kappa_h - geom_flow.sp_curv_h) ** 2, mesh, VOL_or_BND=BND
     ),

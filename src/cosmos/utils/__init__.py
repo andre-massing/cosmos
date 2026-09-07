@@ -1,3 +1,10 @@
+"""Re-exports the generic, simulation-independent geometry/mesh helpers.
+
+Everything here (``cosmos.utils.tools``, ``.generate_meshes``,
+``.mesh_fixing``) has no dependency on ``cosmos.core``/``cosmos.pde`` and is
+usable on its own, outside of any ``CosmosModel``.
+"""
+
 from cosmos.utils.tools import gradient
 from cosmos.utils.mesh_fixing import CosmosAliasMesh, fill_mesh
 from cosmos.utils.generate_meshes import (

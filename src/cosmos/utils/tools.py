@@ -1,3 +1,15 @@
+"""Standalone NGSolve helper -- no dependency on ``cosmos.core``/``cosmos.pde``.
+
+Despite living next to the PDE models conceptually, ``gradient`` is not
+actually called anywhere inside ``cosmos.pde`` itself -- it's a convenience
+for *user* scripts that need to build a surface (or volume) gradient
+against an explicit projector ``P`` (``Id(dim)`` for a plain volume
+gradient, a tangential projector ``Id(dim) - OuterProduct(n, n)`` for a
+surface one), typically to construct manufactured boundary/right-hand-side
+data by hand. See ``tutorials/01_heat_equation.py`` or
+``article/Application_1.py`` for real uses.
+"""
+
 from ngsolve import *
 from ngsolve.solvers import *
 

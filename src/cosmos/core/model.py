@@ -1,3 +1,17 @@
+"""``CosmosModel``: the single object every Cosmos script constructs.
+
+Everything else in ``cosmos.core`` exists to be owned by a ``CosmosModel``:
+it builds one ``CosmosTimeManager``, one ``CosmosStepManager``, one
+``CosmosALEManager``, and one ``CosmosIOManager`` in its own constructor
+(see below) and never expects a second model to share them. PDE models
+(``cosmos.pde``) and ALE fields, by contrast, are created *through* this
+model (``create_pde``/``create_ale``) and attached to a
+``CosmosCompartment`` (``create_compartment``) rather than constructed
+directly by user code -- that indirection is what lets ``create_pde``
+validate a PDE's ``is_bnd``/``is_vol`` against its compartment before
+anything is assembled.
+"""
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -75,10 +89,18 @@ class CosmosModel:
         # model components
         self.compartments: List[CosmosCompartment] = []
         self.pdes: List[BasePDEModel] = []
+        # These three lists are populated by create_pde's `ale_type` argument
+        # and read back by CosmosStepManager.solve_step: pdes_init are solved
+        # once at t0 only, pdes_pre before the ALE mesh update, pdes_post
+        # after it -- this ordering is what lets a PDE see either the old or
+        # the newly-moved geometry within the same time step.
         self.pdes_init: List[BasePDEModel] = []
         self.pdes_pre: List[BasePDEModel] = []
         self.pdes_post: List[BasePDEModel] = []
         self.ales = []
+        # Every manager below is owned exclusively by this model and stores
+        # a back-reference to it (self.model), so none of their methods need
+        # `model` passed in again once constructed.
         self.time = CosmosTimeManager(self.params)
         self.step = CosmosStepManager(self, self.params)
         self.ale = CosmosALEManager(self, self.params)
@@ -104,7 +126,14 @@ class CosmosModel:
         return self._generator()
 
     def _generator(self) -> Generator:
-
+        # The whole simulation lifecycle in one place: initialize every
+        # manager and PDE, yield once per completed step (including the very
+        # first, pre-solve state) so callers can drive it with a for-loop
+        # (via __call__) or exhaust it in one call (via run()), and finalize
+        # once the requested time range is covered. step.solve_step() is
+        # where CosmosStepManager actually dispatches to the PDEs' four-phase
+        # lifecycle and the ALE mesh update; ale.finalize() then commits that
+        # step's mesh motion before the next one begins.
         with TaskManager():
             self.initialize()
             self.io.save_step_data()
@@ -164,6 +193,11 @@ class CosmosModel:
         **kwargs: Any,
     ) -> BasePDEModel:
 
+        # pde_model is any concrete cosmos.pde subclass of BasePDEModel; its
+        # is_bnd/is_vol class attributes (set once per PDE type, not per
+        # instance -- see pde/base.py) are cross-checked here against the
+        # compartment's own is_bnd/is_vol so a surface-only model can never
+        # silently end up assembled on a volume compartment or vice versa.
         pde = pde_model(name, self, compartment, **kwargs)
         if pde.is_bnd and compartment.is_vol:
             raise ValueError(
@@ -175,6 +209,9 @@ class CosmosModel:
             )
         else:
             compartment.pdes.append(pde)
+            # ale_type slots this PDE into one of the three lists CosmosStepManager
+            # walks in solve_step(): -1 = init-only (e.g. a one-shot distance
+            # function), 0 = solved before the ALE mesh update, 1 = solved after.
             if ale_type == -1:
                 self.pdes_init.append(pde)
             elif ale_type == 0:
@@ -213,6 +250,12 @@ class CosmosModel:
                     f"Name {name} for ALE motion has already been used. Names must be unique"
                 )
             else:
+                # Which ALE field class gets built follows the same
+                # is_bnd/is_vol split used throughout: a surface compartment
+                # gets a CosmosBndALEField (normal + tangential velocity),
+                # a volume compartment a CosmosVolALEField (a single domain
+                # velocity) -- both live in core/ale_manager.py and report
+                # back to the one CosmosALEManager the model already owns.
                 if compartment.is_bnd:
                     ale = CosmosBndALEField(name, self, compartment)
                 else:

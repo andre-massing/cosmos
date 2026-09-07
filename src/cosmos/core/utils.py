@@ -1,3 +1,14 @@
+"""Post-processing correction shared by every ADR model.
+
+``MandBP`` is a pure numpy function with no NGSolve/CosmosModel dependency
+at all -- it's called at the end of each ``cosmos.pde.adr`` model's
+``Solve()``, once the linear system for the step has been solved, whenever
+a species' bounds/mass-preservation parameters (``bounds_i``/
+``mass_preserving_i`` in ``set_params``) request a correction. It operates
+directly on that species' raw DOF vector rather than through any FE
+abstraction.
+"""
+
 import numpy as np
 
 

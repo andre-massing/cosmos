@@ -1,3 +1,16 @@
+"""``Field``: the type behind every runtime-settable PDE parameter.
+
+Every per-species/per-model parameter that a concrete ``cosmos.pde`` class
+exposes through ``set_params`` (diffusion coefficients, boundary values,
+right-hand sides, ALE velocities, ...) is stored as a ``Field``, not a raw
+NGSolve object -- that is what lets ``BasePDEModel.set_params`` update a
+parameter's *value* in place (``field.cf = new_value``) after a model has
+already assembled its forms, and what lets a parameter be given as a plain
+number, a ``CoefficientFunction``/``GridFunction``, or a zero-argument
+callable (re-evaluated fresh on every access, e.g. ``lambda: model.ale.V``)
+without every PDE model needing its own type-dispatch logic.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -22,6 +35,10 @@ class Field:
         self,
         coef: Union[int, float, CoefficientFunction, GridFunction, Callable],
     ) -> None:
+        # Tracked for introspection (e.g. by a caller wanting to know
+        # whether re-evaluating `field()` can return something different
+        # each time); nothing inside cosmos.core/cosmos.pde currently reads
+        # this flag back.
         self.is_callable: bool = False
 
         if isinstance(coef, numbers.Number):

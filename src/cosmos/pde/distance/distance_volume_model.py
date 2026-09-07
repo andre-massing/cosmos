@@ -1,3 +1,28 @@
+"""Distance-to-boundary field -- a geometric utility PDE, not a physics one.
+
+The only ``cosmos.pde`` model in ``cosmos.pde.distance``. Typically
+registered with ``ale_type=-1`` (solved once via ``CosmosModel.create_pde``,
+not every step -- see the ``pdes_init`` list in ``cosmos.core.model``),
+since the geometry it measures against is usually fixed for the run. Its
+two outputs, ``sol[0]`` (the distance itself) and ``sol[1]`` (the
+normalised gradient, i.e. direction away from the boundary), are meant to
+be read by *other* PDE models registered on the same compartment -- e.g. an
+ADR model biasing a species' advection velocity to be directed toward or
+away from a boundary within a thin layer (``sinh(50*d)/cosh(50*d)``, a
+smoothed sign of the distance, is the pattern used for this in the
+``article/`` scripts).
+
+Note: the regularisation length scale in ``Initialize()`` (``dt =
+specialcf.mesh_size**2``, i.e. tied to the local mesh size) means the
+smoothing boundary layer around the zero-set shrinks at the same rate as
+the mesh under refinement -- so refining ``h`` alone does not by itself
+improve the accuracy of ``sol[0]`` near the boundary; the layer width and
+the mesh resolution both shrinking together caps the achievable convergence
+rate. See ``tutorials/04_distance_function.py`` for a worked demonstration
+of this and of the O(h^2) rate achievable when the regularisation is
+decoupled from ``h``.
+"""
+
 import logging
 
 logger = logging.getLogger(__name__)

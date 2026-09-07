@@ -1,3 +1,30 @@
+"""Surface shape evolution -- the model that actually drives ALE motion in
+most Cosmos simulations, unlike the ADR/distance models which only ever
+read the mesh velocity. Its output ``V_h`` (normal velocity) is what a
+script hands to ``ale.set_normal_velocity`` after calling
+``CosmosModel.create_ale`` on the same compartment; this file has no
+awareness of the ALE manager itself, the wiring is done entirely by the
+calling script/application.
+
+Two things worth knowing before changing ``alpha``/``beta``/``gamma``:
+
+- Setting only ``alpha`` (pure Willmore/bending energy, the class default)
+  does *not* shrink a sphere -- a sphere is already the global Willmore-
+  energy minimiser, so it's a steady state of that flow on its own (see
+  ``tests/pde_examples/test_curvature_flow_on_a_sphere.py``). Classical
+  *mean-curvature* flow (shrink-to-a-point behaviour) comes from the
+  ``gamma`` (area-elasticity) term instead, with ``alpha=beta=0``.
+- The sign convention: both ``InnerProduct(V, phi)`` and
+  ``-gamma*InnerProduct(kappa, phi)`` are added to the *bilinear* form
+  (``self.A``, the left-hand side) in ``Initialize()``, not the linear form,
+  so with ``alpha=beta=0`` the assembled equation is ``V - gamma*kappa =
+  0``, i.e. ``V = +gamma*kappa`` -- ``gamma`` needs to be *positive* to
+  shrink a shape whose mean curvature ``kappa`` is negative (this package's
+  sign convention for a sphere, see ``GeometricalFlowStationaryModel``'s
+  own ``Initialize()``). Getting this sign backwards produces the
+  ill-posed *expanding* flow, not merely a slower one.
+"""
+
 import logging
 
 logger = logging.getLogger(__name__)

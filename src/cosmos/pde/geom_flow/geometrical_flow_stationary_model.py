@@ -1,3 +1,18 @@
+"""``GeometricalFlowModel``'s variant with a co-evolving spontaneous curvature.
+
+See ``geometrical_flow_model.py`` in this same package for the shared
+mechanics (``V_h`` is what drives ALE motion, the ``alpha``/``beta``/
+``gamma`` energy terms and their sign convention). The one substantive
+difference: where ``GeometricalFlowModel`` treats ``sp_curv`` as a fixed
+``CoefficientFunction`` parameter, this model advects it as a genuine third
+unknown (``sp_curv_h``) alongside ``V_h``/``kappa_h`` -- used when the
+target curvature itself depends on something that changes with the surface
+(e.g. a chemical species transported by the ALE motion, as in
+``article/Application_3_*.py``, rather than a fixed geometric target).
+Both compartments still need ``clamped_bbnd``/``navier_bbnd`` set on
+creation (``CosmosModel.create_compartment``) if the surface has a boundary.
+"""
+
 import logging
 
 logger = logging.getLogger(__name__)

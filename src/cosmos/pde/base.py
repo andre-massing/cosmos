@@ -1,3 +1,24 @@
+"""The contract every concrete ``cosmos.pde`` model must satisfy.
+
+``BasePDEModel`` is what makes ``CosmosStepManager`` able to drive an
+arbitrary mix of PDE models without knowing anything about their physics:
+``solve_step`` only ever calls ``Initialize``/``PreProcess``/``Solve``/
+``PostProcess`` on each one, in that order, so any new model dropped into
+``cosmos.pde`` slots into the same loop automatically. Two conventions the
+concrete subclasses (``cosmos.pde.adr``, ``cosmos.pde.distance``,
+``cosmos.pde.geom_flow``) all follow, but that live in the subclasses
+rather than being enforced here:
+
+- ``is_bnd``/``is_vol`` are declared as *class* attributes (not set in
+  ``__init__``), since whether a given model type lives on a surface or a
+  volume never varies between instances -- ``CosmosModel.create_pde``
+  checks these against the target compartment before assembling anything.
+- Symbolic forms (``BilinearForm``/``LinearForm``) are built once in
+  ``Initialize()`` and only re-assembled (not rebuilt) in ``Solve()``; the
+  cost of rebuilding them every step is the reason to keep this pattern
+  when adding a new model.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -54,6 +75,14 @@ class BasePDEModel(ABC):
         raise NotImplementedError("Base class PostProcess is being called")
 
     def set_params(self, **kwargs: Any) -> None:
+        # A concrete model pre-populates self.params in its own __init__
+        # with a mix of plain values (fes_order, Dir_bnd, ...) and Field-
+        # wrapped ones (diffusion coefficients, boundary data, ...); this
+        # dispatch is what makes set_params(d_1=...) update the existing
+        # Field in place (so any form already built against it stays valid)
+        # while set_params(fes_order=...) just replaces the plain value.
+        # Only keys the model itself already declared can be set -- this is
+        # deliberately not a place to introduce new parameters.
         for key, value in kwargs.items():
             if key in self.params.keys():
                 if isinstance(self.params[key], Field):

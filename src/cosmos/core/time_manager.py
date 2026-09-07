@@ -1,3 +1,16 @@
+"""Time-stepping state for a ``CosmosModel``.
+
+Split into two classes for a reason: ``CosmosTimeManager`` is the long-lived
+object ``CosmosModel`` owns and exposes as ``model.time`` (it's what
+``CosmosStepManager``'s adaptive-timestep logic calls back into via
+``modify_dt``/``helper.params["dt"]``), while ``CosmosTimeHelper`` is a
+disposable parameter-parsing/validation object recreated fresh in every
+``initialize()`` call. ``t``/``dt`` themselves are plain NGSolve
+``Parameter`` objects (not Python floats) specifically so they can be
+embedded directly inside a PDE's coefficient functions and automatically
+reflect the current time/step size without re-assembling anything.
+"""
+
 import logging
 
 logger = logging.getLogger(__name__)

@@ -1,3 +1,12 @@
+"""Every concrete PDE model, flattened to one import level.
+
+The underlying files are nested by family (``cosmos.pde.adr``,
+``.distance``, ``.geom_flow``); this module exists purely so a script can
+write ``from cosmos.pde import ADRVolumeSystemBDF1Model`` instead of the
+full submodule path. All seven names below are ``BasePDEModel`` subclasses
+(or ``BasePDEModel`` itself) -- see that module for the shared lifecycle.
+"""
+
 from cosmos.pde.base import BasePDEModel
 
 from cosmos.pde.adr.adr_volume_system_bdf1_model import ADRVolumeSystemBDF1Model

@@ -16,4 +16,8 @@ and moving-surface problems, all built on top of [NGSolve](https://ngsolve.org/)
   a Turing pattern coupled to surface growth, and a distance-function solve —
   each demonstrating the core API and validated against known analytical or
   qualitative results.
+- **Paper simulations:** see [`article/`](article/) for the applications and
+  supplementary validation tests from the associated publication (single-cell
+  migration, neutrophil protrusion, and dendritic-spine remodeling, on both
+  idealized and real segmented geometries).
 - **Citing this software:** see [`CITATION.cff`](CITATION.cff).

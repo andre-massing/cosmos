@@ -1,3 +1,11 @@
+"""Boundary ADR system with gradient-jump stabilisation -- the counterpart
+to ``ADRBoundarySystemBDF1Model`` in
+``adr_boundary_system_bdf1_model_nostab.py`` (see that file for the shared
+per-species parameter naming, the ``b_i - model.ale.W`` ALE-relative
+advection convention, and the ``add_nonlinearity`` sign convention, all
+identical here).
+"""
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -308,7 +316,7 @@ class ADRBoundarySystemBDF1StabModel(BasePDEModel):
                 * test[2 * i]
                 * ds(deformation=self.model.ale.Yo)
             )
-            
+
         for nonlin in self.nonlinearities:
             env = {"__builtins__": {}}
             env.update(self._base_env())

@@ -1,3 +1,16 @@
+"""Per-time-step orchestration: the one place that calls into every PDE.
+
+``CosmosStepManager`` is where the four separate concerns of a Cosmos
+simulation actually meet each step: the PDE lifecycle (``PreProcess`` /
+``Solve`` / ``PostProcess``, defined by ``cosmos.pde.base.BasePDEModel``),
+the ``pdes_pre``/``pdes_post`` scheduling relative to the ALE mesh update
+(populated by ``CosmosModel.create_pde``'s ``ale_type`` argument), the mesh
+motion itself (``self.model.ale.solve_ale()``), and, when
+``coupling_type="implicit"``, a Gauss-Seidel fixed-point iteration between
+all three. Everything else in ``cosmos.core`` sets state up; this is what
+actually advances it.
+"""
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -44,28 +57,6 @@ class CosmosStepManager:
 
         for pde in self.model.pdes:
             pde.Initialize()
-
-        self.len = 0
-        self.positions = []
-        for i, pde in enumerate(self.model.pdes_pre):
-            self.positions.append(self.len)
-            self.len += len(pde.gfu.vec)
-        for j, pde in enumerate(self.model.pdes_post):
-            self.positions.append(self.len)
-            self.len += len(pde.gfu.vec)
-        self.positions.append(self.len)
-
-        ns = specialcf.normal(self.model.dim)
-        Ps = Id(self.model.dim) - OuterProduct(ns, ns)
-        V = VectorH1(self.model.parentmesh, definedon=self.model.parentmesh.Boundaries(".*"))
-        kappa, xsi = V.TnT()
-        self.A = BilinearForm(V)
-        self.A += InnerProduct(kappa, xsi) * ds(deformation=self.model.ale.Y)
-        self.A.Assemble()
-        self.invA = self.A.mat.Inverse(freedofs=V.FreeDofs())
-        self.F = LinearForm(V)
-        self.F += -1 * InnerProduct(Ps, Grad(xsi).Trace()) * ds(deformation=self.model.ale.Y)
-        self.kappa_h = GridFunction(V)
 
     def solve_step(self):
 
@@ -157,7 +148,12 @@ class CosmosStepManager:
         self.step_elasped_time = stop - start
 
     def explicit_solve_step(self):
-
+        # The one-shot version of the pdes_pre -> ALE -> pdes_post ordering
+        # every coupling mode follows: PDEs registered with ale_type=0 see
+        # the mesh as it was left at the end of the previous step, then the
+        # mesh itself moves (solve_ale), then ale_type=1 PDEs see the new
+        # geometry. implicit_solve_step_gauss below repeats this same triple
+        # to convergence instead of doing it once.
         for i, pde in enumerate(self.model.pdes_pre):
             pde.Solve()
         self.model.ale.solve_ale()

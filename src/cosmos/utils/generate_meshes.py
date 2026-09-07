@@ -1,4 +1,16 @@
 # %%
+"""Mesh factories -- inputs to ``CosmosModel``, independent of it otherwise.
+
+Every function here returns a plain NGSolve ``Mesh``, with no cosmos-specific
+state attached; the connection to the rest of the package is purely by
+convention, in the boundary/co-boundary region *names* each geometry
+assigns (``bnd_name``/``bbnd_name`` parameters), since those are exactly the
+strings ``CosmosModel.create_compartment`` expects for its own
+``material``/``boundary``/``bboundary`` kwargs. A ``generate_boundary_*``
+mesh has zero volume elements (``mesh.ne == 0``) and is meant for a
+surface-only ``CosmosModel``; a ``generate_volume_*`` mesh has both, for a
+model with a genuine bulk compartment.
+"""
 # ----------------------------------------------
 # Geometries for Testing
 # ----------------------------------------------

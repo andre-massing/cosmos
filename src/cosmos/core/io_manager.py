@@ -1,3 +1,21 @@
+"""Output: one manager owned by ``CosmosModel``, plus standalone writers.
+
+``CosmosIOManager`` is entirely optional -- if ``root`` isn't passed to
+``CosmosModel``, ``self.root`` stays ``None`` and every method here becomes
+a no-op (see the ``if self.root is not None`` guard in ``save_step_data``),
+so a script that never sets ``root=`` pays essentially nothing for this
+manager existing. It pulls its VTK field lists from two places: every
+compartment's own ``vtk_gfu``/``vtk_names`` (``cosmos.core.compartment``)
+and every PDE's, gated on that PDE's own ``params["printing"]`` flag -- so
+"is this field written to disk" is a per-PDE setting
+(``pde.set_params(printing=True)``), not something this manager decides.
+
+``write_pvd``/``write_curve_meshio`` at the bottom are plain, stateless
+helpers with no dependency on ``CosmosModel``; they're only used by
+``save_step_data`` here in the 2D-boundary-mesh case (where NGSolve's own
+``VTKOutput`` doesn't apply), but are exported for standalone use too.
+"""
+
 import logging
 
 logger = logging.getLogger(__name__)
